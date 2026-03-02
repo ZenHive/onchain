@@ -19,6 +19,7 @@ end
 | Module | Purpose |
 |--------|---------|
 | `Onchain.Hex` | Hex encoding/decoding (hex<->binary, hex<->integer, 0x prefix) |
+| `Onchain.ABI` | ABI encoding/decoding (encode_call, decode_response for contract calls) |
 
 ## Discovery
 

@@ -10,6 +10,7 @@ defmodule Onchain.MixProject do
       version: @version,
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
+      aliases: aliases(),
       deps: deps(),
       dialyzer: dialyzer(),
       description: description(),
@@ -71,6 +72,14 @@ defmodule Onchain.MixProject do
       main: "Onchain",
       source_ref: "v#{@version}",
       source_url: @source_url
+    ]
+  end
+
+  defp aliases do
+    [
+      tidewave: [
+        "run --no-halt -e 'Agent.start(fn -> Bandit.start_link(plug: Tidewave, port: 4007) end)'"
+      ]
     ]
   end
 

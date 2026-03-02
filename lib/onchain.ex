@@ -17,5 +17,5 @@ defmodule Onchain do
   - **ccxt_ex** — Exchange trading (DEX signing)
   """
 
-  use Descripex.Discoverable, modules: [Onchain.Hex]
+  use Descripex.Discoverable, modules: [Onchain.Hex, Onchain.ABI]
 end
