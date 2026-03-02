@@ -16,7 +16,7 @@
 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
-| 1 | Hex utilities (hex↔binary, hex↔integer, 0x prefix) | ⬜ | 3 | 9 | 8 | 2.83 🎯 | `Onchain.Hex` |
+| 1 | Hex utilities (hex↔binary, hex↔integer, 0x prefix) | ✅ | 3 | 9 | 8 | 2.83 🎯 | `Onchain.Hex` |
 | 2 | ABI helpers (wrapping signet's `abi` pkg) | ⬜ | 3 | 9 | 8 | 2.83 🎯 | `Onchain.ABI` |
 | 3 | Decimal precision helpers (to_decimal, div_pow10) | ⬜ | 3 | 8 | 7 | 2.50 🎯 | `Onchain.Decimal` |
 | 4 | RPC wrapper (signet's RPC client) | ⬜ | 4 | 9 | 9 | 2.25 🚀 | `Onchain.RPC` |
@@ -24,7 +24,7 @@
 
 ### Priority Order
 
-1. `Onchain.Hex` [Eff:2.83] — everything depends on hex conversion
+1. ~~`Onchain.Hex` [Eff:2.83] — everything depends on hex conversion~~
 2. `Onchain.ABI` [Eff:2.83] — needed for all contract calls
 3. `Onchain.Decimal` [Eff:2.50] — needed for all value conversions
 4. `Onchain.RPC` [Eff:2.25] — needed for any on-chain read/write
@@ -74,6 +74,7 @@
 5. **Path dependency** — `{:onchain, path: "../onchain"}` in consumers
 6. **Read-first, write-ready** — Phase 1-2 are read-only, Phase 3 adds write
 7. **Descripex from day one** — All public modules use `api()` macro for self-describing functions. Not a separate task — built into each module as it's created. Enables `Onchain.describe/0-2` progressive discovery for agent consumers.
+8. **Always update docs after completing a task** — Update ROADMAP.md (⬜→✅, strikethrough in priority list), CHANGELOG.md (add entry with what was done), and README.md (if the new module adds user-facing functionality). This is part of every task, not a separate step.
 
 ## Module Structure
 

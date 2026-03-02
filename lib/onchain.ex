@@ -5,10 +5,17 @@ defmodule Onchain do
   Uses `signet` as the sole Ethereum dependency for RPC calls, ABI encoding,
   transaction signing, and cryptographic operations.
 
+  ## Discovery
+
+  Use `Onchain.describe/0` for a module overview, `Onchain.describe/1` for
+  function listings, and `Onchain.describe/2` for full function details.
+
   ## Consumers
 
   - **blockwatch** — Aave position monitoring
   - **aave_sim** — Aave position simulation
   - **ccxt_ex** — Exchange trading (DEX signing)
   """
+
+  use Descripex.Discoverable, modules: [Onchain.Hex]
 end

@@ -1,21 +1,38 @@
 # Onchain
 
-**TODO: Add description**
+Shared Ethereum/blockchain library for the portfolio. Provides read (`eth_call`) and write (transaction signing) capabilities using `signet` as the sole Ethereum dependency.
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `onchain` to your list of dependencies in `mix.exs`:
+Path dependency in consumer projects:
 
 ```elixir
 def deps do
   [
-    {:onchain, "~> 0.1.0"}
+    {:onchain, path: "../onchain"}
   ]
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/onchain>.
+## Modules
+
+| Module | Purpose |
+|--------|---------|
+| `Onchain.Hex` | Hex encoding/decoding (hex<->binary, hex<->integer, 0x prefix) |
+
+## Discovery
+
+All modules use [descripex](https://hex.pm/packages/descripex) for self-describing APIs:
+
+```elixir
+Onchain.describe()                  # Module overview
+Onchain.describe(:hex)              # Function list
+Onchain.describe(:hex, :decode)     # Full function details
+```
+
+## Consumers
+
+- **blockwatch** -- Aave position monitoring (read-only)
+- **aave_sim** -- Aave position simulation (read-only)
+- **ccxt_ex** -- Exchange trading (DEX signing planned)
 
