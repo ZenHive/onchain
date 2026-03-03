@@ -28,6 +28,10 @@ defmodule Onchain do
       Onchain.Aave.Contracts,
       Onchain.Aave.Math,
       Onchain.Aave.Pool,
-      Onchain.Aave.Types.UserAccountData
+      Onchain.Aave.UiPoolDataProvider,
+      Onchain.Aave.Types.UserAccountData,
+      Onchain.Aave.Types.AggregatedReserveData,
+      Onchain.Aave.Types.BaseCurrencyInfo,
+      Onchain.Aave.Types.UserReserveData
     ]
 end

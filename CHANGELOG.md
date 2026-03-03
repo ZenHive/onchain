@@ -6,6 +6,34 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 2: Aave Core (Read)
 
+### Task 10: UiPoolDataProvider + Type Structs
+**Completed** | [D:5/B:8/U:7 → Eff:1.50]
+
+**What was done:**
+- Created `Onchain.Aave.UiPoolDataProvider` with 6-function API: `get_reserves_list/1`, `get_reserves_data/1`, `get_user_reserves_data/2` + bang variants
+- Each function composes Contracts → Address → ABI → RPC → decode → type struct pipeline (same pattern as Pool)
+- Created 3 type structs (40-field AggregatedReserveData, 4-field BaseCurrencyInfo, 4-field UserReserveData)
+- Verified deployed contract (`0x56b7...`) returns 40-field layout via Tidewave: no stable borrow fields, no e-mode fields, includes `virtualUnderlyingBalance` and `deficit`
+- Conversion philosophy: fixed-scale fields converted (basis points → `to_ltv`, rays → `to_ray`, USD → `to_usd`), context-dependent fields stay raw (token amounts, prices, caps)
+- Addresses checksummed via `Address.checksum!/1`, booleans and timestamps passed through
+- `getUserReservesData` returns `{[UserReserveData.t()], e_mode_category_id}` — the uint8 e-mode ID is a separate return value
+- All functions use `Onchain.ABI.decode_response/2` with string type signatures (no need for `ABI.TypeDecoder`)
+
+**Key discovery:** The [Aave Address Book](https://aave-dao.github.io/aave-address-book/) confirms `0x56b7...` as the official `UI_POOL_DATA_PROVIDER` for AaveV3Ethereum (serves all 4 Ethereum pools). It returns a 40-field AggregatedReserveData. Blockwatch uses a different contract (`0x3F78...`) not in the official address book, with a 41-field layout (has `unbacked` + `virtual_acc_active`, lacks `deficit`). Field differences will need handling during Task 17 migration.
+
+**Files:**
+- `lib/onchain/aave/ui_pool_data_provider.ex` (created)
+- `lib/onchain/aave/types/aggregated_reserve_data.ex` (created)
+- `lib/onchain/aave/types/base_currency_info.ex` (created)
+- `lib/onchain/aave/types/user_reserve_data.ex` (created)
+- `test/onchain/aave/types/aggregated_reserve_data_test.exs` (created)
+- `test/onchain/aave/types/base_currency_info_test.exs` (created)
+- `test/onchain/aave/types/user_reserve_data_test.exs` (created)
+- `test/onchain/aave/ui_pool_data_provider_integration_test.exs` (created)
+- `lib/onchain.ex` (added 4 modules to Discoverable)
+
+---
+
 ### Task 9: UserAccountData Response Struct
 **Completed** | [D:5/B:8/U:7 → Eff:1.50]
 

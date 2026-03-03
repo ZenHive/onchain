@@ -34,6 +34,7 @@ Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) a
 - **blockwatch** — Aave position monitoring (read-only)
 - **aave_sim** — Aave position simulation (read-only)
 - **ccxt_ex** — Exchange trading (DEX signing planned)
+- **defisaver** (planned) — Automated position management via DeFiSaver open-source contracts (Phase 5+)
 
 ## Module Layout
 
@@ -76,3 +77,28 @@ mix dialyzer.json --quiet                      # AI-friendly dialyzer output
 mix credo --strict --format json               # Static analysis (JSON output)
 mix test.json --quiet --exclude integration    # Test all exchanges
 ```
+
+## Contract Address Verification
+
+When adding or updating addresses in `lib/onchain/aave/contracts.ex`, verify against the **Aave Address Book CSV** — the canonical source maintained by BGD Labs (~5,000 entries covering every Aave contract, asset, and network).
+
+All 4 current project addresses were verified on 2026-03-03.
+
+```bash
+# Verify a single address
+curl -s "https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/safe.csv" | grep -i "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
+# → 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2,AaveV3Ethereum POOL,1
+
+# Verify all project addresses at once
+curl -s "https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/safe.csv" | grep -i -E "0x2f39d218|0x87870Bca|0x54586bE6|0x56b7A101"
+
+# Search by contract name
+curl -s "https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/safe.csv" | grep "AaveV3Ethereum POOL,"
+```
+
+CSV format: `address,name,chainId` (chainId 1 = Ethereum mainnet)
+
+**Other useful resources:**
+- **Web UI**: https://aave-dao.github.io/aave-address-book/ (JS-rendered — needs Chrome browser tools, not `web` command)
+- **GitHub repo**: https://github.com/bgd-labs/aave-address-book (Solidity interfaces, JSON exports)
+- **Etherscan**: https://etherscan.io (verified source code, ABIs, proxy implementations)

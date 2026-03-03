@@ -3,6 +3,10 @@ defmodule Onchain.Aave.Types.UserAccountDataTest do
 
   alias Onchain.Aave.Types.UserAccountData
 
+  # Dynamic dispatch defeats the type checker for negative tests
+  @doc false
+  defp dynamic_from_raw(module, arg), do: module.from_raw(arg)
+
   describe "struct" do
     test "enforces all 6 keys" do
       assert_raise ArgumentError, ~r/the following keys must also be given/, fn ->
@@ -84,7 +88,7 @@ defmodule Onchain.Aave.Types.UserAccountDataTest do
 
     test "raises FunctionClauseError for non-list input" do
       assert_raise FunctionClauseError, fn ->
-        apply(UserAccountData, :from_raw, [{0, 0, 0, 0, 0, 0}])
+        dynamic_from_raw(UserAccountData, {0, 0, 0, 0, 0, 0})
       end
     end
   end
