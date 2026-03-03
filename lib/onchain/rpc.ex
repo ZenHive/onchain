@@ -27,6 +27,8 @@ defmodule Onchain.RPC do
   | `get_balance!/2` | Same, raises on error |
   | `block_number/1` | Current block height |
   | `block_number!/1` | Same, raises on error |
+  | `get_block_by_number/2` | Fetch block by number or tag |
+  | `get_block_by_number!/2` | Same, raises on error |
   | `chain_id/1` | Network chain ID |
   | `chain_id!/1` | Same, raises on error |
   """
@@ -195,6 +197,70 @@ defmodule Onchain.RPC do
     end
   end
 
+  # --- get_block_by_number ---
+
+  api(:get_block_by_number, "Fetch a block by number or tag (eth_getBlockByNumber).",
+    params: [
+      block_id: [
+        kind: :value,
+        description:
+          ~s{Block number (integer) or tag string ("latest", "finalized", "pending", "earliest", "safe", or "0x..." hex)}
+      ],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{
+      type: "{:ok, map} | {:error, term}",
+      description: "Raw block map with hex-encoded fields from the node",
+      example: ~s(%{"number" => "0x1312d00", "timestamp" => "0x665ba27f", ...})
+    }
+  )
+
+  @block_tags ~w(latest finalized pending earliest safe)
+
+  @spec get_block_by_number(integer() | String.t(), keyword()) ::
+          {:ok, map()} | {:error, term()}
+  def get_block_by_number(block_id, opts \\ [])
+
+  def get_block_by_number(block_id, opts) when is_integer(block_id) and block_id >= 0 do
+    hex = Onchain.Hex.from_integer(block_id)
+    do_rpc("eth_getBlockByNumber", [hex, false], to_signet_opts(opts))
+  end
+
+  def get_block_by_number(tag, opts) when tag in @block_tags do
+    do_rpc("eth_getBlockByNumber", [tag, false], to_signet_opts(opts))
+  end
+
+  def get_block_by_number("0x" <> _ = hex_num, opts) do
+    if Onchain.Hex.valid?(hex_num) do
+      do_rpc("eth_getBlockByNumber", [hex_num, false], to_signet_opts(opts))
+    else
+      {:error, {:invalid_block_id, hex_num}}
+    end
+  end
+
+  def get_block_by_number(block_id, _opts), do: {:error, {:invalid_block_id, block_id}}
+
+  # --- get_block_by_number! ---
+
+  api(:get_block_by_number!, "Fetch a block by number or tag. Raises on error.",
+    params: [
+      block_id: [
+        kind: :value,
+        description: "Block number (integer) or tag string"
+      ],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{type: :map, description: "Raw block map with hex-encoded fields"}
+  )
+
+  @spec get_block_by_number!(integer() | String.t(), keyword()) :: map()
+  def get_block_by_number!(block_id, opts \\ []) do
+    case get_block_by_number(block_id, opts) do
+      {:ok, result} -> result
+      {:error, reason} -> raise "get_block_by_number failed: #{inspect(reason)}"
+    end
+  end
+
   # --- chain_id ---
 
   api(:chain_id, "Get the network chain ID.",
@@ -236,6 +302,7 @@ defmodule Onchain.RPC do
   # Signet.RPC.send_rpc/3 spec says errors are always %{code: int, message: str},
   # but runtime errors include non-map values (Finch timeouts, connection refused).
   @dialyzer {:no_match, do_rpc: 3}
+  @spec do_rpc(String.t(), list(), keyword()) :: {:ok, term()} | {:error, term()}
   defp do_rpc(method, params, opts) do
     case Signet.RPC.send_rpc(method, params, opts) do
       {:ok, result} -> {:ok, result}
@@ -247,6 +314,7 @@ defmodule Onchain.RPC do
   @doc false
   # Validates and normalizes an address to a 0x-prefixed lowercase hex string.
   # Delegates to Address.validate/1, then encodes the validated binary.
+  @spec ensure_hex_address(term()) :: {:ok, String.t()} | {:error, term()}
   defp ensure_hex_address(input) do
     case Onchain.Address.validate(input) do
       {:ok, binary} -> {:ok, Onchain.Hex.encode(binary)}
@@ -256,6 +324,7 @@ defmodule Onchain.RPC do
 
   @doc false
   # Validates that data is a 0x-prefixed hex string.
+  @spec ensure_hex_data(term()) :: {:ok, String.t()} | {:error, term()}
   defp ensure_hex_data("0x" <> _ = data) do
     if Onchain.Hex.valid?(data) do
       {:ok, data}
@@ -268,6 +337,7 @@ defmodule Onchain.RPC do
 
   @doc false
   # Maps our option names to signet's expected keys.
+  @spec to_signet_opts(keyword()) :: keyword()
   defp to_signet_opts(opts) do
     opts
     |> Keyword.take([:rpc_url, :timeout])
@@ -277,6 +347,7 @@ defmodule Onchain.RPC do
 
   @doc false
   # Renames a keyword list key if present.
+  @spec rename_key(keyword(), atom(), atom()) :: keyword()
   defp rename_key(opts, old_key, new_key) do
     case Keyword.pop(opts, old_key) do
       {nil, opts} -> opts

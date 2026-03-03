@@ -8,7 +8,7 @@
 
 ## Current Focus
 
-**Phase 2: Aave Core (Read)** — Read on-chain Aave protocol data.
+**Phase 2: Aave Core (Read)** — Read on-chain Aave protocol data. Just completed Task 6b (Block module).
 
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
 
@@ -26,6 +26,7 @@
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
 | 6 | Contract address registry (mainnet + network param) | ⬜ | 2 | 8 | 7 | 3.75 🎯 | `Onchain.Aave.Contracts` |
+| 6b | Block fetching + timestamp binary search | ✅ | 3 | 7 | 8 | 2.50 🎯 | `Onchain.Block` |
 | 7 | Aave math conversions (to_usd, to_ltv, to_ray) | ⬜ | 3 | 9 | 8 | 2.83 🎯 | `Onchain.Aave.Math` |
 | 8 | Pool read calls (getUserAccountData) + integration tests | ⬜ | 5 | 9 | 8 | 1.70 🚀 | `Onchain.Aave.Pool` |
 | 9 | Response type structs | ⬜ | 5 | 8 | 7 | 1.50 📋 | `Onchain.Aave.Types.*` |
@@ -76,7 +77,8 @@ lib/
     address.ex                    # validate, checksum (EIP-55), normalize
     abi.ex                        # encode_call/2, decode_response/2
     decimal.ex                    # to_decimal/2, to_basis_points/1, div_pow10/2
-    rpc.ex                        # eth_call, eth_send_raw_transaction
+    block.ex                      # get_by_number, find_by_timestamp (binary search)
+    rpc.ex                        # eth_call, eth_send_raw_transaction, get_block_by_number
     signer.ex                     # key management, transaction signing
     erc20.ex                      # approve, transfer, balanceOf
     aave/

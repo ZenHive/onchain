@@ -4,6 +4,31 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+## Phase 2: Aave Core (Read)
+
+### Task 6b: Block Fetching + Timestamp Binary Search (`Onchain.Block`)
+**Completed** | [D:3/B:7/U:8 → Eff:2.50]
+
+**What was done:**
+- Added `get_block_by_number/2` + bang variant to `Onchain.RPC` — accepts integer, hex string, or tag ("latest", "finalized", etc.), returns raw block map
+- Created `Onchain.Block` with 4-function API: `get_by_number/2`, `get_by_number!/2`, `find_by_timestamp/2`, `find_by_timestamp!/2`
+- `get_by_number/2` delegates to RPC, parses hex fields (number, timestamp, hash) into native types, returns plain map
+- `find_by_timestamp/2` implements binary search ported from blockwatch's `BlockFromTimestamp` — finds highest block with `timestamp <= target`
+- Binary search accepts `:floor`/`:ceil` opts so consumers with cached data skip boundary fetches; defaults to block 1 and "finalized"
+- Pure algorithm, no caching — consumers add their own caching layer
+- Added descripex `api()` declarations for all 6 new public functions (4 Block + 2 RPC)
+- Added `Onchain.Block` to Discoverable modules list
+- 22 new tests: 10 unit (input validation + bang variants) + 12 integration (known block fetching, tag support, binary search with exact match, between-blocks, bounds, future timestamp, before-floor error)
+
+**Files:**
+- `lib/onchain/block.ex` (created)
+- `lib/onchain/rpc.ex` (added get_block_by_number/2 + bang variant)
+- `lib/onchain.ex` (added Block to Discoverable)
+- `test/onchain/block_test.exs` (created)
+- `test/onchain/rpc_test.exs` (added get_block_by_number tests)
+
+---
+
 ## Code Review Fixes (Phase 1)
 
 **What was done:**

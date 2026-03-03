@@ -118,6 +118,32 @@ defmodule Onchain.RPCTest do
       end
     end
   end
+
+  describe "get_block_by_number/2 input validation" do
+    test "rejects negative integer" do
+      assert {:error, {:invalid_block_id, -1}} = RPC.get_block_by_number(-1)
+    end
+
+    test "rejects non-integer, non-string input" do
+      assert {:error, {:invalid_block_id, :foo}} = RPC.get_block_by_number(:foo)
+    end
+
+    test "rejects invalid hex string" do
+      assert {:error, {:invalid_block_id, "0xZZZZ"}} = RPC.get_block_by_number("0xZZZZ")
+    end
+
+    test "rejects unknown string tag" do
+      assert {:error, {:invalid_block_id, "unknown_tag"}} = RPC.get_block_by_number("unknown_tag")
+    end
+  end
+
+  describe "get_block_by_number!/2" do
+    test "raises on invalid input" do
+      assert_raise RuntimeError, ~r/get_block_by_number failed/, fn ->
+        RPC.get_block_by_number!(-1)
+      end
+    end
+  end
 end
 
 defmodule Onchain.RPC.IntegrationTest do
@@ -171,6 +197,33 @@ defmodule Onchain.RPC.IntegrationTest do
     test "call to EOA returns 0x (not an error)" do
       {:ok, calldata} = ABI.encode_call("totalSupply()", [])
       assert {:ok, "0x"} = RPC.eth_call(@eoa_address, calldata, rpc_opts())
+    end
+  end
+
+  describe "get_block_by_number/2" do
+    test "fetches a known block and returns raw map" do
+      assert {:ok, block} = RPC.get_block_by_number(20_000_000, rpc_opts())
+      assert is_map(block)
+      assert block["number"] == "0x1312d00"
+      assert is_binary(block["timestamp"])
+      assert is_binary(block["hash"])
+    end
+
+    test "accepts 'latest' tag" do
+      assert {:ok, block} = RPC.get_block_by_number("latest", rpc_opts())
+      assert is_map(block)
+      assert is_binary(block["number"])
+    end
+
+    test "accepts 'finalized' tag" do
+      assert {:ok, block} = RPC.get_block_by_number("finalized", rpc_opts())
+      assert is_map(block)
+      assert is_binary(block["number"])
+    end
+
+    test "accepts hex block number" do
+      assert {:ok, block} = RPC.get_block_by_number("0x1312d00", rpc_opts())
+      assert block["number"] == "0x1312d00"
     end
   end
 
