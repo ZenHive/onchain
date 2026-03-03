@@ -23,6 +23,7 @@ Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) a
 ## Architecture
 
 - **signet** is the sole Ethereum dep — RPC, ABI encoding, signing, crypto all in one
+- Signet wraps **curvy** (pure Elixir secp256k1) internally for signing/key ops — never add curvy as a direct dep
 - Consumers configure RPC URL via `config :signet` or pass URL per-call
 - Standard error tuples: `{:ok, result} | {:error, {:tag, reason}}`
 - Plain structs with `defstruct` + `@enforce_keys`, no private macro deps
@@ -56,5 +57,6 @@ lib/onchain/
 ## Testing
 
 - Unit tests for all pure functions (hex, address, decimal, math)
-- Integration tests for RPC calls require `ETHEREUM_RPC_URL` env var
+- Integration tests for RPC calls require `ETHEREUM_API_URL` or `ETH_RPC_URL` env var
+- Use `Onchain.RPCCase.rpc_url!/0` from `test/support/rpc_case.ex` to resolve RPC URL
 - Use `flunk/1` with setup instructions for missing credentials, never silent skip

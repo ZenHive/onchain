@@ -120,7 +120,8 @@ defmodule Onchain.HexTest do
 
     test "raises on float input" do
       assert_raise FunctionClauseError, fn ->
-        Hex.from_integer(1.5)
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
+        apply(Hex, :from_integer, [1.5])
       end
     end
 

@@ -4,7 +4,68 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+## Code Review Fixes (Phase 1)
+
+**What was done:**
+- `address.ex`: Replaced `Signet.Hex.decode_hex/1` with `Onchain.Hex.decode/1` in private `to_binary/1` for consistency with all other modules
+- `rpc.ex`: Replaced 3-clause `ensure_hex_address/1` (18 lines) with 2-line version delegating to `Address.validate/1`. Removed `@dialyzer {:no_match, ensure_hex_address: 1}` annotation (no longer needed). Now also accepts bare hex addresses without 0x prefix.
+- `hex_test.exs`: Staged the `apply(Hex, :from_integer, [1.5])` version (standard Elixir idiom for testing guard clauses) instead of variable indirection
+- Added test for bare hex address acceptance in `rpc_test.exs` (148 total tests)
+
+---
+
 ## Phase 1: Ethereum Primitives
+
+### Task 5: Address Validation + EIP-55 Checksum (`Onchain.Address`)
+**Completed** | [D:4/B:9/U:7 → Eff:2.00]
+
+**What was done:**
+- Created `Onchain.Address` with 7-function API: `validate/1`, `valid?/1`, `checksum/1`, `checksum!/1`, `normalize/1`, `equal?/2`, `zero?/1`
+- Wraps `Signet.Hex.decode_address!/1`, `Signet.Util.checksum_address/1`, and `Onchain.Hex.encode/1`
+- Flexible input: all functions accept hex strings (with/without 0x prefix) or 20-byte binaries
+- Private `to_binary/1` helper normalizes any valid input before each operation
+- Error tuples: `{:error, {:invalid_address, input}}` — bang variant raises `Signet.Hex.HexError`
+- EIP-55 test vectors verified against the spec (4 canonical addresses)
+- Added descripex `api()` declarations for all 7 public functions
+- Added `Onchain.Address` to Discoverable modules list in `Onchain`
+- 43 tests covering all functions: validation (13), valid? (6), checksum (6), checksum! (4), normalize (4), equal? (5), zero? (5)
+
+**Files:**
+- `lib/onchain/address.ex` (created)
+- `test/onchain/address_test.exs` (created)
+- `lib/onchain.ex` (added Address to Discoverable)
+
+---
+
+### Task 4: Ethereum JSON-RPC Wrapper (`Onchain.RPC`)
+**Completed** | [D:4/B:9/U:9 → Eff:2.25]
+
+**What was done:**
+- Created `Onchain.RPC` with 10-function API: 5 RPC methods + bang variants
+- `eth_call/3` — read-only contract call, returns raw hex (preserves ABI pipeline)
+- `eth_send_raw_transaction/2` — broadcast signed tx, returns tx hash
+- `get_balance/2` — account ETH balance in wei as integer
+- `block_number/1` — current block height as integer
+- `chain_id/1` — network chain ID as integer
+- All accept `:rpc_url`, `:timeout`, `:block` options; maps to signet's `send_rpc/3`
+- Input validation: addresses (hex string or 20-byte binary), data (0x-prefixed hex)
+- Error normalization: JSON-RPC maps pass through as `{:rpc_error, map}`, network errors wrapped
+- `@dialyzer` annotations for signet spec mismatches (same pattern as hex.ex, abi.ex)
+- Added descripex `api()` declarations for all 10 public functions
+- Added `Onchain.RPC` to Discoverable modules list in `Onchain`
+- Created `test/support/rpc_case.ex` helper for RPC URL resolution across tests
+- Added `elixirc_paths/1` to mix.exs for test/support compilation
+- 22 tests: 16 unit (input validation + bang variants) + 6 integration (mainnet RPC)
+- Integration tests include full pipeline: `ABI.encode_call → RPC.eth_call → ABI.decode_response`
+
+**Files:**
+- `lib/onchain/rpc.ex` (created)
+- `test/onchain/rpc_test.exs` (created)
+- `test/support/rpc_case.ex` (created)
+- `lib/onchain.ex` (added RPC to Discoverable)
+- `mix.exs` (added elixirc_paths for test/support)
+
+---
 
 ### Task 3: Decimal Precision Helpers (`Onchain.Decimal`)
 **Completed** | [D:3/B:8/U:7 → Eff:2.50]

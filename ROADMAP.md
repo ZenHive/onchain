@@ -8,27 +8,16 @@
 
 ## Current Focus
 
-**Phase 1: Ethereum Primitives** — Foundation modules that everything else builds on.
+**Phase 2: Aave Core (Read)** — Read on-chain Aave protocol data.
 
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
 
-### Current Tasks
+---
 
-| # | Task | Status | D | B | U | Eff | Module |
-|---|------|--------|---|---|---|-----|--------|
-| 1 | Hex utilities (hex↔binary, hex↔integer, 0x prefix) | ✅ | 3 | 9 | 8 | 2.83 🎯 | `Onchain.Hex` |
-| 2 | ABI helpers (wrapping signet's `abi` pkg) | ✅ | 3 | 9 | 8 | 2.83 🎯 | `Onchain.ABI` |
-| 3 | Decimal precision helpers (to_decimal, div_pow10) | ✅ | 3 | 8 | 7 | 2.50 🎯 | `Onchain.Decimal` |
-| 4 | RPC wrapper (signet's RPC client) | ⬜ | 4 | 9 | 9 | 2.25 🚀 | `Onchain.RPC` |
-| 5 | Address validation + EIP-55 checksum | ⬜ | 4 | 9 | 7 | 2.00 🚀 | `Onchain.Address` |
+## Phase 1: Ethereum Primitives ✅
 
-### Priority Order
-
-1. ~~`Onchain.Hex` [Eff:2.83] — everything depends on hex conversion~~
-2. ~~`Onchain.ABI` [Eff:2.83] — needed for all contract calls~~
-3. ~~`Onchain.Decimal` [Eff:2.50] — needed for all value conversions~~
-4. `Onchain.RPC` [Eff:2.25] — needed for any on-chain read/write
-5. `Onchain.Address` [Eff:2.00] — needed for contract interaction
+> 5 tasks complete. See [CHANGELOG.md](CHANGELOG.md#phase-1-ethereum-primitives) for details.
+> Built: Hex utilities, ABI encoding, decimal conversion, JSON-RPC wrapper, address validation.
 
 ---
 
@@ -38,10 +27,10 @@
 |---|------|--------|---|---|---|-----|--------|
 | 6 | Contract address registry (mainnet + network param) | ⬜ | 2 | 8 | 7 | 3.75 🎯 | `Onchain.Aave.Contracts` |
 | 7 | Aave math conversions (to_usd, to_ltv, to_ray) | ⬜ | 3 | 9 | 8 | 2.83 🎯 | `Onchain.Aave.Math` |
-| 8 | Pool read calls (getUserAccountData) | ⬜ | 5 | 9 | 8 | 1.70 🚀 | `Onchain.Aave.Pool` |
+| 8 | Pool read calls (getUserAccountData) + integration tests | ⬜ | 5 | 9 | 8 | 1.70 🚀 | `Onchain.Aave.Pool` |
 | 9 | Response type structs | ⬜ | 5 | 8 | 7 | 1.50 📋 | `Onchain.Aave.Types.*` |
-| 10 | UiPoolDataProvider calls | ⬜ | 5 | 8 | 7 | 1.50 📋 | `Onchain.Aave.UiPoolDataProvider` |
-| 11 | Oracle + Chainlink price feeds | ⬜ | 5 | 7 | 6 | 1.30 📋 | `Onchain.Aave.Oracle` |
+| 10 | UiPoolDataProvider calls + integration tests | ⬜ | 5 | 8 | 7 | 1.50 📋 | `Onchain.Aave.UiPoolDataProvider` |
+| 11 | Oracle + Chainlink price feeds + integration tests | ⬜ | 5 | 7 | 6 | 1.30 📋 | `Onchain.Aave.Oracle` |
 
 ---
 
@@ -49,9 +38,9 @@
 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
-| 12 | Transaction signing setup | ⬜ | 4 | 9 | 9 | 2.25 🚀 | `Onchain.Signer` |
-| 13 | Token approvals (ERC-20 approve) | ⬜ | 4 | 8 | 8 | 2.00 🚀 | `Onchain.ERC20` |
-| 14 | Pool write calls (supply, borrow, repay, withdraw) | ⬜ | 6 | 9 | 8 | 1.42 📋 | `Onchain.Aave.Pool` |
+| 12 | Transaction signing setup + integration tests | ⬜ | 4 | 9 | 9 | 2.25 🚀 | `Onchain.Signer` |
+| 13 | Token approvals (ERC-20 approve) + integration tests | ⬜ | 4 | 8 | 8 | 2.00 🚀 | `Onchain.ERC20` |
+| 14 | Pool write calls (supply, borrow, repay, withdraw) + integration tests | ⬜ | 6 | 9 | 8 | 1.42 📋 | `Onchain.Aave.Pool` |
 
 ---
 
@@ -75,6 +64,7 @@
 6. **Read-first, write-ready** — Phase 1-2 are read-only, Phase 3 adds write
 7. **Descripex from day one** — All public modules use `api()` macro for self-describing functions. Not a separate task — built into each module as it's created. Enables `Onchain.describe/0-2` progressive discovery for agent consumers.
 8. **Always update docs after completing a task** — Update ROADMAP.md (⬜→✅, strikethrough in priority list), CHANGELOG.md (add entry with what was done), and README.md (if the new module adds user-facing functionality). This is part of every task, not a separate step.
+9. **Integration tests use mainnet RPCs** — `ETHEREUM_API_URL` (Alchemy) or `ETH_RPC_URL` (Infura) env vars. Use `Onchain.RPCCase.rpc_url!/0` from `test/support/rpc_case.ex` to resolve. Tests `flunk/1` with setup instructions if neither is set.
 
 ## Module Structure
 
