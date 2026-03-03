@@ -12,11 +12,11 @@ defmodule Onchain.Aave.Pool do
 
   | Source | Error Shape |
   |--------|-------------|
-  | `Address.validate/1` | `{:error, {:invalid_address, input}}` |
-  | `Contracts.address/2` | `{:error, {:unsupported_network, network}}` |
-  | `ABI.encode_call/2` | `{:error, {:encode_error, reason}}` |
-  | `RPC.eth_call/3` | `{:error, {:rpc_error, map}}` |
-  | `ABI.decode_response/2` | `{:error, {:decode_error, reason}}` |
+  | `Onchain.Address.validate/1` | `{:error, {:invalid_address, input}}` |
+  | `Onchain.Aave.Contracts.address/2` | `{:error, {:unsupported_network, network}}` |
+  | `Onchain.ABI.encode_call/2` | `{:error, {:encode_error, reason}}` |
+  | `Onchain.RPC.eth_call/3` | `{:error, {:rpc_error, map}}` |
+  | `Onchain.ABI.decode_response/2` | `{:error, {:decode_error, reason}}` |
 
   ## Functions
 

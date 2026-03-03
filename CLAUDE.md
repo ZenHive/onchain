@@ -58,6 +58,8 @@ lib/onchain/
 
 Update ROADMAP.md (⬜→✅) and CHANGELOG.md (add entry) after completing any roadmap task. This is part of every task, not a separate step.
 
+**Code reviewers**: Verify ROADMAP.md and CHANGELOG.md were updated. Reject reviews where task completion didn't include these updates.
+
 ## Testing
 
 - Unit tests for all pure functions (hex, address, decimal, math)
