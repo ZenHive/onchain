@@ -7,7 +7,7 @@ defmodule Onchain.Aave.Contracts do
 
   ## Supported Networks
 
-  Currently `:ethereum` mainnet only. Adding networks = adding map entries.
+  Ethereum, Arbitrum, Optimism, Base, Polygon, and Avalanche (all Aave V3).
 
   ## Error Format
 
@@ -32,6 +32,36 @@ defmodule Onchain.Aave.Contracts do
       pool: "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
       oracle: "0x54586bE62E3c3580375aE3723C145253060Ca0C2",
       ui_pool_data_provider: "0x56b7A1012765C285afAC8b8F25C69Bf10ccfE978"
+    },
+    arbitrum: %{
+      pool_addresses_provider: "0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb",
+      pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
+      oracle: "0xb56c2F0B653B2e0b10C9b928C8580Ac5Df02C7C7",
+      ui_pool_data_provider: "0x13c833256BD767da2320d727a3691BAff3770E39"
+    },
+    optimism: %{
+      pool_addresses_provider: "0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb",
+      pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
+      oracle: "0xD81eb3728a631871a7eBBaD631b5f424909f0c77",
+      ui_pool_data_provider: "0xa6741111f4CcB5162Ec6A825465354Ed8c6F7095"
+    },
+    base: %{
+      pool_addresses_provider: "0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D",
+      pool: "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5",
+      oracle: "0x2Cc0Fc26eD4563A5ce5e8bdcfe1A2878676Ae156",
+      ui_pool_data_provider: "0xb84A20e848baE3e13897934bB4e74E2225f4546B"
+    },
+    polygon: %{
+      pool_addresses_provider: "0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb",
+      pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
+      oracle: "0xb023e699F5a33916Ea823A16485e259257cA8Bd1",
+      ui_pool_data_provider: "0xFa1A7c4a8A63C9CAb150529c26f182cBB5500944"
+    },
+    avalanche: %{
+      pool_addresses_provider: "0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb",
+      pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
+      oracle: "0xEBd36016B3eD09D4693Ed4251c67Bd858c3c7C9C",
+      ui_pool_data_provider: "0x3518E8927A7827CDdAf841872453003CA95906A3"
     }
   }
 

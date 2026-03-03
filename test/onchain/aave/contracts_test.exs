@@ -4,6 +4,7 @@ defmodule Onchain.Aave.ContractsTest do
   alias Onchain.Aave.Contracts
 
   @known_contracts [:pool_addresses_provider, :pool, :oracle, :ui_pool_data_provider]
+  @all_networks [:ethereum, :arbitrum, :optimism, :base, :polygon, :avalanche]
 
   describe "address/1" do
     test "returns checksummed address for each known contract" do
@@ -52,8 +53,44 @@ defmodule Onchain.Aave.ContractsTest do
     end
 
     test "unsupported network returns error" do
-      assert {:error, {:unsupported_network, :polygon}} =
-               Contracts.address(:pool, network: :polygon)
+      assert {:error, {:unsupported_network, :solana}} =
+               Contracts.address(:pool, network: :solana)
+    end
+  end
+
+  describe "address/2 multi-network" do
+    test "all networks return valid checksummed addresses for all contracts" do
+      for network <- @all_networks, contract <- @known_contracts do
+        assert {:ok, addr} = Contracts.address(contract, network: network),
+               "Failed for #{network}/#{contract}"
+
+        assert String.starts_with?(addr, "0x")
+        assert String.length(addr) == 42
+        assert {:ok, ^addr} = Onchain.Address.checksum(addr)
+      end
+    end
+
+    test "arbitrum pool matches expected CREATE2 address" do
+      assert {:ok, "0x794a61358D6845594F94dc1DB02A252b5b4814aD"} =
+               Contracts.address(:pool, network: :arbitrum)
+    end
+
+    test "base pool has different address from CREATE2 chains" do
+      assert {:ok, base_pool} = Contracts.address(:pool, network: :base)
+      assert {:ok, arb_pool} = Contracts.address(:pool, network: :arbitrum)
+      refute base_pool == arb_pool
+    end
+
+    test "CREATE2 chains share pool address" do
+      create2_networks = [:arbitrum, :optimism, :polygon, :avalanche]
+
+      pool_addrs =
+        Enum.map(create2_networks, fn net ->
+          {:ok, addr} = Contracts.address(:pool, network: net)
+          addr
+        end)
+
+      assert pool_addrs |> Enum.uniq() |> length() == 1
     end
   end
 
@@ -70,14 +107,19 @@ defmodule Onchain.Aave.ContractsTest do
 
     test "raises on unsupported network" do
       assert_raise RuntimeError, ~r/address lookup failed/, fn ->
-        Contracts.address!(:pool, network: :polygon)
+        Contracts.address!(:pool, network: :solana)
       end
     end
   end
 
   describe "networks/0" do
-    test "returns list containing :ethereum" do
-      assert [:ethereum] = Contracts.networks()
+    test "returns all 6 supported networks" do
+      networks = Contracts.networks()
+      assert length(networks) == 6
+
+      for network <- @all_networks do
+        assert network in networks
+      end
     end
   end
 
@@ -98,8 +140,19 @@ defmodule Onchain.Aave.ContractsTest do
       assert length(keys) == 4
     end
 
+    test "all networks have the same 4 contract keys" do
+      for network <- @all_networks do
+        assert {:ok, keys} = Contracts.contracts(network: network)
+        assert length(keys) == 4
+
+        for key <- @known_contracts do
+          assert key in keys, "Missing #{key} for #{network}"
+        end
+      end
+    end
+
     test "unsupported network returns error" do
-      assert {:error, {:unsupported_network, :polygon}} = Contracts.contracts(network: :polygon)
+      assert {:error, {:unsupported_network, :solana}} = Contracts.contracts(network: :solana)
     end
   end
 end

@@ -13,8 +13,8 @@ defmodule Onchain.Aave.PoolTest do
       # Valid address, but unsupported network
       valid_addr = "0xF380B8F1e63e2BEd7CA329CA1FdDbC39B52cC0d3"
 
-      assert {:error, {:unsupported_network, :polygon}} =
-               Pool.get_user_account_data(valid_addr, network: :polygon)
+      assert {:error, {:unsupported_network, :solana}} =
+               Pool.get_user_account_data(valid_addr, network: :solana)
     end
   end
 
@@ -29,7 +29,7 @@ defmodule Onchain.Aave.PoolTest do
       valid_addr = "0xF380B8F1e63e2BEd7CA329CA1FdDbC39B52cC0d3"
 
       assert_raise RuntimeError, ~r/get_user_account_data failed.*unsupported_network/, fn ->
-        Pool.get_user_account_data!(valid_addr, network: :polygon)
+        Pool.get_user_account_data!(valid_addr, network: :solana)
       end
     end
   end

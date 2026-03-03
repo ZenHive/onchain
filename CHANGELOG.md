@@ -6,6 +6,29 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 2b: Read Essentials
 
+### Task 20: ERC-20 Read Operations (`Onchain.ERC20`)
+**Completed** | [D:3/B:8/U:8 → Eff:2.67]
+
+**What was done:**
+- Created `Onchain.ERC20` with 8-function API: `balance_of/3`, `allowance/4`, `decimals/2`, `symbol/2` + bang variants
+- Each function is a thin wrapper around `Contract.call/5` with hardcoded ABI signatures
+- Single-value unwrap: `Contract.call/5` returns `{:ok, [value]}`, ERC-20 functions return `{:ok, value}`
+- `balance_of` and `allowance` validate holder/owner/spender addresses before passing as ABI params
+- `decimals` and `symbol` take no address params beyond the token contract — just call and unwrap
+- Raw integer returns for balances — consumers use `Onchain.Decimal.to_decimal/2` to normalize
+- Added descripex `api()` declarations with namespace `/erc20`
+- Added `Onchain.ERC20` to Discoverable modules list
+- Unit tests for address validation errors and bang variant error cases
+- Integration tests using USDC on mainnet (decimals=6, symbol="USDC", balance_of > 0, allowance >= 0)
+
+**Files:**
+- `lib/onchain/erc20.ex` (created)
+- `test/onchain/erc20_test.exs` (created)
+- `test/onchain/erc20_integration_test.exs` (created)
+- `lib/onchain.ex` (added ERC20 to Discoverable)
+
+---
+
 ### Task 18: Generic Contract Call (`Onchain.Contract`)
 **Completed** | [D:3/B:9/U:9 → Eff:3.00]
 
@@ -28,6 +51,23 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 ---
 
 ## Phase 2: Aave Core (Read)
+
+### Task 21: Multi-chain Aave Addresses
+**Completed** | [D:2/B:7/U:7 → Eff:3.50]
+
+**What was done:**
+- Added 5 networks to `@addresses` map: Arbitrum, Optimism, Base, Polygon, Avalanche
+- Each network has all 4 contract keys: pool_addresses_provider, pool, oracle, ui_pool_data_provider
+- Addresses verified against BGD Labs Aave Address Book CSV
+- Notable: pool and pool_addresses_provider are identical across Arbitrum, Optimism, Polygon, Avalanche (CREATE2 deployments); Base has different addresses
+- Updated @moduledoc to list all 6 supported networks
+- Updated tests: fixed `:polygon` → `:solana` in unsupported network error tests, added multi-network validation (all 6 networks × 4 contracts), CREATE2 address sharing assertions
+
+**Files:**
+- `lib/onchain/aave/contracts.ex` (modified — added 5 network entries)
+- `test/onchain/aave/contracts_test.exs` (modified — multi-network tests, fixed error tests)
+
+---
 
 ### Task 10: UiPoolDataProvider + Type Structs
 **Completed** | [D:5/B:8/U:7 → Eff:1.50]
