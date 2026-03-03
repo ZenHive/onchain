@@ -8,7 +8,7 @@
 
 ## Current Focus
 
-**Phase 2: Aave Core (Read)** — Read on-chain Aave protocol data. Just completed Task 7 (Aave Math).
+**Phase 2: Aave Core (Read)** — Read on-chain Aave protocol data. Just completed Task 8 (Pool read calls).
 
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
 
@@ -28,10 +28,11 @@
 | 6 | Contract address registry (mainnet + network param) | ✅ | 2 | 8 | 7 | 3.75 🎯 | `Onchain.Aave.Contracts` |
 | 6b | Block fetching + timestamp binary search | ✅ | 3 | 7 | 8 | 2.50 🎯 | `Onchain.Block` |
 | 7 | Aave math conversions (to_usd, to_ltv, to_ray) | ✅ | 3 | 9 | 8 | 2.83 🎯 | `Onchain.Aave.Math` |
-| 8 | Pool read calls (getUserAccountData) + integration tests | ⬜ | 5 | 9 | 8 | 1.70 🚀 | `Onchain.Aave.Pool` |
+| 8 | Pool read calls (getUserAccountData) + integration tests | ✅ | 5 | 9 | 8 | 1.70 🚀 | `Onchain.Aave.Pool` |
 | 9 | Response type structs | ⬜ | 5 | 8 | 7 | 1.50 📋 | `Onchain.Aave.Types.*` |
 | 10 | UiPoolDataProvider calls + integration tests | ⬜ | 5 | 8 | 7 | 1.50 📋 | `Onchain.Aave.UiPoolDataProvider` |
 | 11 | Oracle + Chainlink price feeds + integration tests | ⬜ | 5 | 7 | 6 | 1.30 📋 | `Onchain.Aave.Oracle` |
+| 8b | Split unit and integration tests into separate files across all test modules | ⬜ | 2 | 4 | 5 | 2.25 🚀 | `test/` |
 
 ---
 

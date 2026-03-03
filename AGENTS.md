@@ -50,6 +50,16 @@ lib/onchain/
 - Never silently skip credential-dependent tests.
 - Use `flunk/1` with actionable setup instructions when credentials are missing.
 
+### Quick Commands
+
+```bash
+mix test.json --quiet                          # AI-friendly test output (failures only)
+mix test.json --quiet --failed --first-failure # Iterate on failures
+mix dialyzer.json --quiet                      # AI-friendly dialyzer output
+mix credo --strict --format json               # Static analysis (JSON output)
+mix test.json --quiet --exclude integration    # Test all exchanges
+```
+
 ## Included Global Guidance
 
 `CLAUDE.md` includes shared guidance via `@include` entries (across instances, critical rules, skills awareness, prioritization, task writing, web command, code style, development philosophy, documentation guidelines, agent economy, API integration, development commands, Elixir patterns/setup, test/dialyzer JSON, and library design).

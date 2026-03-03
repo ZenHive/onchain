@@ -60,3 +60,13 @@ lib/onchain/
 - Integration tests for RPC calls require `ETHEREUM_API_URL` or `ETH_RPC_URL` env var
 - Use `Onchain.RPCCase.rpc_url!/0` from `test/support/rpc_case.ex` to resolve RPC URL
 - Use `flunk/1` with setup instructions for missing credentials, never silent skip
+
+### Quick Commands
+
+```bash
+mix test.json --quiet                          # AI-friendly test output (failures only)
+mix test.json --quiet --failed --first-failure # Iterate on failures
+mix dialyzer.json --quiet                      # AI-friendly dialyzer output
+mix credo --strict --format json               # Static analysis (JSON output)
+mix test.json --quiet --exclude integration    # Test all exchanges
+```

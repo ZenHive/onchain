@@ -6,6 +6,27 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 2: Aave Core (Read)
 
+### Task 8: Pool Read Calls (`Onchain.Aave.Pool`)
+**Completed** | [D:5/B:9/U:8 → Eff:1.70]
+
+**What was done:**
+- Created `Onchain.Aave.Pool` with 2-function API: `get_user_account_data/2`, `get_user_account_data!/2`
+- Composes 5 modules in a `with` pipeline: `Address.validate → Contracts.address → ABI.encode_call → RPC.eth_call → ABI.decode_response`
+- Returns plain map with 6 keys (all `Decimal.t()`): `:total_collateral_base`, `:total_debt_base`, `:available_borrows_base`, `:current_liquidation_threshold`, `:ltv`, `:health_factor`
+- Math conversions via `Math.to_usd/1` (10^8), `Math.to_ltv/1` (10^4), `Math.to_health_factor/1` (10^18)
+- Options split: `:network` routed to Contracts, remaining opts (`:rpc_url`, `:timeout`, `:block`) to RPC
+- Errors pass through unmodified from whichever module fails
+- Added descripex `api()` declarations with namespace `/aave/pool`
+- Added `Onchain.Aave.Pool` to Discoverable modules list
+- Unit tests for input validation and error cases; integration tests for known borrower assertions (map structure, Decimal types, value ranges, Aave invariants), binary address input, zero-position behavior, and bang variant
+
+**Files:**
+- `lib/onchain/aave/pool.ex` (created)
+- `test/onchain/aave/pool_test.exs` (created)
+- `lib/onchain.ex` (added Aave.Pool to Discoverable)
+
+---
+
 ### Task 7: Aave Math Conversions (`Onchain.Aave.Math`)
 **Completed** | [D:3/B:9/U:8 → Eff:2.83]
 
