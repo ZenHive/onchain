@@ -43,7 +43,7 @@ Non-Aave read primitives that consumers need before write operations. Born from 
 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
-| 18 | Generic contract call (encode → eth_call → decode in one function) | ⬜ | 3 | 9 | 9 | 3.00 🎯 | `Onchain.Contract` |
+| 18 | Generic contract call (encode → eth_call → decode in one function) | ✅ | 3 | 9 | 9 | 3.00 🎯 | `Onchain.Contract` |
 | 19 | eth_getLogs + event log parsing | ⬜ | 4 | 9 | 8 | 2.13 🎯 | `Onchain.RPC` + `Onchain.Log` |
 | 20 | ERC-20 read operations (balanceOf, allowance, decimals, symbol) | ⬜ | 3 | 8 | 8 | 2.67 🎯 | `Onchain.ERC20` |
 | 22 | Multicall3 batched contract reads | ⬜ | 5 | 8 | 7 | 1.50 📋 | `Onchain.Multicall` |

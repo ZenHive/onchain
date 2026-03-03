@@ -4,6 +4,29 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+## Phase 2b: Read Essentials
+
+### Task 18: Generic Contract Call (`Onchain.Contract`)
+**Completed** | [D:3/B:9/U:9 → Eff:3.00]
+
+**What was done:**
+- Created `Onchain.Contract` with 2-function API: `call/5`, `call!/5`
+- Composes the ABI encode → eth_call → ABI decode pipeline into a single function
+- Accepts contract address (hex string or 20-byte binary), function signature, params, return type, and opts
+- Errors pass through from underlying modules (Address, ABI, RPC) — no wrapping
+- Added descripex `api()` declarations with namespace `/contract`
+- Added `Onchain.Contract` to Discoverable modules list
+- Unit tests for input validation and bang variant error cases
+- Integration tests for ERC-20 reads (balanceOf, decimals), binary address input, bang variant, and error cases
+
+**Files:**
+- `lib/onchain/contract.ex` (created)
+- `test/onchain/contract_test.exs` (created)
+- `test/onchain/contract_integration_test.exs` (created)
+- `lib/onchain.ex` (added Contract to Discoverable)
+
+---
+
 ## Phase 2: Aave Core (Read)
 
 ### Task 10: UiPoolDataProvider + Type Structs
