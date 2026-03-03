@@ -18,5 +18,13 @@ defmodule Onchain do
   """
 
   use Descripex.Discoverable,
-    modules: [Onchain.Hex, Onchain.ABI, Onchain.Decimal, Onchain.RPC, Onchain.Address, Onchain.Block]
+    modules: [
+      Onchain.Hex,
+      Onchain.ABI,
+      Onchain.Decimal,
+      Onchain.RPC,
+      Onchain.Address,
+      Onchain.Block,
+      Onchain.Aave.Contracts
+    ]
 end

@@ -6,6 +6,27 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 2: Aave Core (Read)
 
+### Task 6: Contract Address Registry (`Onchain.Aave.Contracts`)
+**Completed** | [D:2/B:8/U:7 → Eff:3.75]
+
+**What was done:**
+- Created `Onchain.Aave.Contracts` with 4-function API: `address/2`, `address!/2`, `networks/0`, `contracts/1`
+- Pure-function lookup for Aave V3 mainnet contract addresses (pool, pool_addresses_provider, oracle, ui_pool_data_provider)
+- Addresses stored as hex strings, returned checksummed via `Onchain.Address.checksum/1`
+- Network parameter (`network: :ethereum`) for future multi-chain support — adding networks = adding map entries
+- Error tuples: `{:error, {:unknown_contract, key}}` and `{:error, {:unsupported_network, network}}`
+- Added descripex `api()` declarations for all 4 public functions with namespace `/aave/contracts`
+- Added `Onchain.Aave.Contracts` to Discoverable modules list
+- 19 tests: 16 unit (address lookup for all 4 contracts, checksummed validation, error cases, bang variants, networks, contracts listing) + 3 integration (on-chain verification of pool/oracle via PoolAddressesProvider, plus UiPoolDataProvider response check)
+- Integration tests call `getPool()` and `getPriceOracle()` on PoolAddressesProvider contract and verify results match stored addresses
+
+**Files:**
+- `lib/onchain/aave/contracts.ex` (created)
+- `test/onchain/aave/contracts_test.exs` (created)
+- `lib/onchain.ex` (added Aave.Contracts to Discoverable)
+
+---
+
 ### Task 6b: Block Fetching + Timestamp Binary Search (`Onchain.Block`)
 **Completed** | [D:3/B:7/U:8 → Eff:2.50]
 
