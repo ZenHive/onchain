@@ -6,6 +6,24 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 2: Aave Core (Read)
 
+### Task 7: Aave Math Conversions (`Onchain.Aave.Math`)
+**Completed** | [D:3/B:9/U:8 → Eff:2.83]
+
+**What was done:**
+- Created `Onchain.Aave.Math` with 5-function API: `to_usd/1`, `to_ltv/1`, `to_health_factor/1`, `to_ray/1`, `to_wad/1`
+- Pure functions with integer guards, each delegating to `Onchain.Decimal.div_pow10/2` with named exponent constants
+- Covers all Aave scaling conventions: 10^8 (oracle/USD), 10^4 (LTV/basis points), 10^18 (health factor/wad), 10^27 (ray/interest rates)
+- Added descripex `api()` declarations for all 5 public functions with namespace `/aave/math`
+- Added `Onchain.Aave.Math` to Discoverable modules list
+- 28 tests: 26 unit (real-world Aave values, zero, large uint256, guard clause violations, consistency between to_health_factor/to_wad) + 2 integration (getUserAccountData with to_usd/to_health_factor on live position, getAssetPrice for WETH with to_usd sanity range check)
+
+**Files:**
+- `lib/onchain/aave/math.ex` (created)
+- `test/onchain/aave/math_test.exs` (created)
+- `lib/onchain.ex` (added Aave.Math to Discoverable)
+
+---
+
 ### Task 6: Contract Address Registry (`Onchain.Aave.Contracts`)
 **Completed** | [D:2/B:8/U:7 → Eff:3.75]
 

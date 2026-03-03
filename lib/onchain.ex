@@ -25,6 +25,7 @@ defmodule Onchain do
       Onchain.RPC,
       Onchain.Address,
       Onchain.Block,
-      Onchain.Aave.Contracts
+      Onchain.Aave.Contracts,
+      Onchain.Aave.Math
     ]
 end
