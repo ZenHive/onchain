@@ -6,6 +6,24 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 2: Aave Core (Read)
 
+### Task 8b: Split Unit and Integration Tests
+**Completed** | [D:2/B:4/U:5 → Eff:2.25]
+
+**What was done:**
+- Split all test modules into separate unit and integration test files
+- Unit tests (`*_test.exs`) run without RPC credentials
+- Integration tests (`*_integration_test.exs`) require `ETHEREUM_API_URL` or `ETH_RPC_URL`
+- Covers: RPC, Block, Aave.Contracts, Aave.Math, Aave.Pool
+
+**Files:**
+- `test/onchain/rpc_integration_test.exs` (extracted from rpc_test.exs)
+- `test/onchain/block_integration_test.exs` (extracted from block_test.exs)
+- `test/onchain/aave/contracts_integration_test.exs` (extracted from contracts_test.exs)
+- `test/onchain/aave/math_integration_test.exs` (extracted from math_test.exs)
+- `test/onchain/aave/pool_integration_test.exs` (extracted from pool_test.exs)
+
+---
+
 ### Task 8: Pool Read Calls (`Onchain.Aave.Pool`)
 **Completed** | [D:5/B:9/U:8 → Eff:1.70]
 

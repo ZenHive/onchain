@@ -8,7 +8,7 @@
 
 ## Current Focus
 
-**Phase 2: Aave Core (Read)** — Read on-chain Aave protocol data. Just completed Task 8 (Pool read calls).
+**Phase 2: Aave Core (Read)** — Read on-chain Aave protocol data. Next up: Task 9 (Response type structs).
 
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
 
@@ -32,7 +32,7 @@
 | 9 | Response type structs | ⬜ | 5 | 8 | 7 | 1.50 📋 | `Onchain.Aave.Types.*` |
 | 10 | UiPoolDataProvider calls + integration tests | ⬜ | 5 | 8 | 7 | 1.50 📋 | `Onchain.Aave.UiPoolDataProvider` |
 | 11 | Oracle + Chainlink price feeds + integration tests | ⬜ | 5 | 7 | 6 | 1.30 📋 | `Onchain.Aave.Oracle` |
-| 8b | Split unit and integration tests into separate files across all test modules | ⬜ | 2 | 4 | 5 | 2.25 🚀 | `test/` |
+| 8b | Split unit and integration tests into separate files across all test modules | ✅ | 2 | 4 | 5 | 2.25 🚀 | `test/` |
 
 ---
 
