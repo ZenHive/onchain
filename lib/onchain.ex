@@ -27,6 +27,7 @@ defmodule Onchain do
       Onchain.Block,
       Onchain.Aave.Contracts,
       Onchain.Aave.Math,
-      Onchain.Aave.Pool
+      Onchain.Aave.Pool,
+      Onchain.Aave.Types.UserAccountData
     ]
 end

@@ -22,14 +22,14 @@ defmodule Onchain.Aave.Pool do
 
   | Function | Purpose |
   |----------|---------|
-  | `get_user_account_data/2` | Full position summary as Decimal map |
+  | `get_user_account_data/2` | Full position summary as `UserAccountData` struct |
   | `get_user_account_data!/2` | Same, raises on error |
   """
 
   use Descripex, namespace: "/aave/pool"
 
   alias Onchain.Aave.Contracts
-  alias Onchain.Aave.Math
+  alias Onchain.Aave.Types.UserAccountData
   alias Onchain.ABI
   alias Onchain.Address
   alias Onchain.RPC
@@ -38,12 +38,10 @@ defmodule Onchain.Aave.Pool do
   # due to Signet.Hex spec issues). This cascades through the entire call chain:
   # 1. {:ok, values} pattern in get_user_account_data/2 appears unreachable → no_match
   # 2. Bang variant calls it, inherits "no return" → no_return, no_match, no_contracts
-  # 3. to_account_data_map/1 only called from "unreachable" branch → no_unused
   # Same root cause as @dialyzer annotations in abi.ex.
   @dialyzer {:no_match, [get_user_account_data: 2, get_user_account_data!: 2]}
   @dialyzer {:no_return, [get_user_account_data!: 1, get_user_account_data!: 2]}
   @dialyzer {:no_contracts, [get_user_account_data!: 1, get_user_account_data!: 2]}
-  @dialyzer {:no_unused, [to_account_data_map: 1]}
 
   @user_account_data_response "(uint256,uint256,uint256,uint256,uint256,uint256)"
 
@@ -62,14 +60,15 @@ defmodule Onchain.Aave.Pool do
       ]
     ],
     returns: %{
-      type: "{:ok, map} | {:error, term}",
-      description: "Map with Decimal values for collateral, debt, borrows, thresholds, and health factor",
-      example: ~s[%{total_collateral_base: Decimal.new("1234.56"), health_factor: Decimal.new("1.5"), ...}]
+      type: "{:ok, UserAccountData.t()} | {:error, term()}",
+      description:
+        "UserAccountData struct with Decimal values for collateral, debt, borrows, thresholds, and health factor",
+      example: ~s[%UserAccountData{total_collateral_base: Decimal.new("1234.56"), health_factor: Decimal.new("1.5"), ...}]
     }
   )
 
   @spec get_user_account_data(String.t() | binary(), keyword()) ::
-          {:ok, map()} | {:error, term()}
+          {:ok, UserAccountData.t()} | {:error, term()}
   def get_user_account_data(user_address, opts \\ []) do
     {network_opts, rpc_opts} = split_opts(opts)
 
@@ -78,7 +77,7 @@ defmodule Onchain.Aave.Pool do
          {:ok, calldata} <- ABI.encode_call("getUserAccountData(address)", [user_bin]),
          {:ok, hex_result} <- RPC.eth_call(pool_addr, calldata, rpc_opts),
          {:ok, values} <- ABI.decode_response(@user_account_data_response, hex_result) do
-      {:ok, to_account_data_map(values)}
+      {:ok, UserAccountData.from_raw(values)}
     end
   end
 
@@ -97,12 +96,13 @@ defmodule Onchain.Aave.Pool do
       ]
     ],
     returns: %{
-      type: :map,
-      description: "Map with Decimal values for collateral, debt, borrows, thresholds, and health factor"
+      type: "UserAccountData.t()",
+      description:
+        "UserAccountData struct with Decimal values for collateral, debt, borrows, thresholds, and health factor"
     }
   )
 
-  @spec get_user_account_data!(String.t() | binary(), keyword()) :: map()
+  @spec get_user_account_data!(String.t() | binary(), keyword()) :: UserAccountData.t()
   def get_user_account_data!(user_address, opts \\ []) do
     case get_user_account_data(user_address, opts) do
       {:ok, data} -> data
@@ -126,19 +126,5 @@ defmodule Onchain.Aave.Pool do
       end
 
     {network_opts, rpc_opts}
-  end
-
-  @doc false
-  # Converts 6 raw uint256 values from getUserAccountData into a map of Decimals.
-  @spec to_account_data_map([integer()]) :: map()
-  defp to_account_data_map([collateral, debt, available, liq_threshold, ltv, health_factor]) do
-    %{
-      total_collateral_base: Math.to_usd(collateral),
-      total_debt_base: Math.to_usd(debt),
-      available_borrows_base: Math.to_usd(available),
-      current_liquidation_threshold: Math.to_ltv(liq_threshold),
-      ltv: Math.to_ltv(ltv),
-      health_factor: Math.to_health_factor(health_factor)
-    }
   end
 end

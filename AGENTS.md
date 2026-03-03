@@ -6,6 +6,15 @@
 
 If anything in this file differs from `CLAUDE.md`, follow `CLAUDE.md`.
 
+## Roadmap Review Stance
+
+- Treat `ROADMAP.md` tasks as implementation prompts, not full specifications.
+- Apply the same stance to Claude Code plans: treat them as execution prompts and assume Claude can handle routine implementation details autonomously.
+- Do not escalate obvious implementation details (for example nonce mode, provider paging, token ABI edge cases) unless they change task intent, violate explicit project rules, or indicate a real architectural conflict.
+- When reviewing Ethereum roadmap content, evaluate within the repository's declared target scope before flagging general-case caveats.
+- Prefer concise validation of roadmap clarity and prioritization over spec-level completeness audits.
+- During implementation/code review, still double-check behavior, edge cases, and correctness against actual code and tests.
+
 ## Project Summary
 
 Shared Ethereum/blockchain library for the portfolio. Provides read (`eth_call`) and write (transaction signing) capabilities using `signet` as the sole Ethereum dependency.

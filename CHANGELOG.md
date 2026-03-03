@@ -6,6 +6,26 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 2: Aave Core (Read)
 
+### Task 9: UserAccountData Response Struct
+**Completed** | [D:5/B:8/U:7 → Eff:1.50]
+
+**What was done:**
+- Created `Onchain.Aave.Types.UserAccountData` struct with `@enforce_keys` for all 6 Decimal fields
+- `from_raw/1` converts a 6-element raw uint256 list using `Math.to_usd/1`, `Math.to_ltv/1`, `Math.to_health_factor/1` with integer guards on all params
+- Updated `Onchain.Aave.Pool.get_user_account_data/2` to return `%UserAccountData{}` instead of a plain map
+- Removed private `to_account_data_map/1` helper and its `@dialyzer` annotation from Pool
+- Updated `@spec` return types and `api()` returns to reference `UserAccountData.t()`
+- Updated integration tests to use struct pattern matching instead of map key/size assertions
+- Remaining type structs (`AggregatedReserveData`, `BaseCurrencyInfo`, `UserReserveData`) deferred to Task 10 alongside their consumer module
+
+**Files:**
+- `lib/onchain/aave/types/user_account_data.ex` (created)
+- `test/onchain/aave/types/user_account_data_test.exs` (created)
+- `lib/onchain/aave/pool.ex` (modified — struct return, removed private helper)
+- `test/onchain/aave/pool_integration_test.exs` (modified — struct assertions)
+
+---
+
 ### Task 8b: Split Unit and Integration Tests
 **Completed** | [D:2/B:4/U:5 → Eff:2.25]
 

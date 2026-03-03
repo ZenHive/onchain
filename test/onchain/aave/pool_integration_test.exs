@@ -2,42 +2,33 @@ defmodule Onchain.Aave.Pool.IntegrationTest do
   use ExUnit.Case, async: false
 
   alias Onchain.Aave.Pool
+  alias Onchain.Aave.Types.UserAccountData
 
   @moduletag :integration
 
   # Active Aave V3 borrower — same address used in math/contracts integration tests
   @known_borrower "0xF380B8F1e63e2BEd7CA329CA1FdDbC39B52cC0d3"
 
-  @expected_keys [
-    :total_collateral_base,
-    :total_debt_base,
-    :available_borrows_base,
-    :current_liquidation_threshold,
-    :ltv,
-    :health_factor
-  ]
-
   defp rpc_opts do
     [rpc_url: Onchain.RPCCase.rpc_url!()]
   end
 
   describe "get_user_account_data/2 with known borrower" do
-    test "returns {:ok, map} with all 6 expected keys" do
+    test "returns {:ok, %UserAccountData{}} struct" do
       {:ok, data} = Pool.get_user_account_data(@known_borrower, rpc_opts())
 
-      for key <- @expected_keys do
-        assert Map.has_key?(data, key), "Missing key: #{key}"
-      end
-
-      assert map_size(data) == 6
+      assert %UserAccountData{} = data
     end
 
     test "all values are Decimal structs" do
       {:ok, data} = Pool.get_user_account_data(@known_borrower, rpc_opts())
 
-      for {key, value} <- data do
-        assert %Decimal{} = value, "Expected Decimal for #{key}, got #{inspect(value)}"
-      end
+      assert %Decimal{} = data.total_collateral_base
+      assert %Decimal{} = data.total_debt_base
+      assert %Decimal{} = data.available_borrows_base
+      assert %Decimal{} = data.current_liquidation_threshold
+      assert %Decimal{} = data.ltv
+      assert %Decimal{} = data.health_factor
     end
 
     test "active borrower has collateral > 0 and debt > 0" do
@@ -89,7 +80,7 @@ defmodule Onchain.Aave.Pool.IntegrationTest do
       {:ok, user_bin} = Onchain.Address.validate(@known_borrower)
       {:ok, data} = Pool.get_user_account_data(user_bin, rpc_opts())
 
-      assert map_size(data) == 6
+      assert %UserAccountData{} = data
       assert Decimal.gt?(data.total_collateral_base, Decimal.new(0))
     end
   end
@@ -112,11 +103,10 @@ defmodule Onchain.Aave.Pool.IntegrationTest do
   end
 
   describe "get_user_account_data!/2" do
-    test "returns map directly for known borrower" do
+    test "returns UserAccountData struct directly for known borrower" do
       data = Pool.get_user_account_data!(@known_borrower, rpc_opts())
 
-      assert is_map(data)
-      assert map_size(data) == 6
+      assert %UserAccountData{} = data
       assert %Decimal{} = data.health_factor
     end
   end
