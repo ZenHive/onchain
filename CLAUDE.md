@@ -54,6 +54,10 @@ lib/onchain/
     types/        # response structs
 ```
 
+## After Every Task
+
+Update ROADMAP.md (⬜→✅) and CHANGELOG.md (add entry) after completing any roadmap task. This is part of every task, not a separate step.
+
 ## Testing
 
 - Unit tests for all pure functions (hex, address, decimal, math)
