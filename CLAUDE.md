@@ -12,12 +12,7 @@ Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) a
 @include ~/.claude/includes/development-philosophy.md
 @include ~/.claude/includes/documentation-guidelines.md
 @include ~/.claude/includes/agent-economy.md
-@include ~/.claude/includes/api-integration.md
-@include ~/.claude/includes/development-commands.md
 @include ~/.claude/includes/elixir-patterns.md
-@include ~/.claude/includes/elixir-setup.md
-@include ~/.claude/includes/ex-unit-json.md
-@include ~/.claude/includes/dialyzer-json.md
 @include ~/.claude/includes/library-design.md
 
 ## Architecture

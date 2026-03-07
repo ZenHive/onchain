@@ -31,7 +31,7 @@
 | 8 | Pool read calls (getUserAccountData) + integration tests | ✅ | 5 | 9 | 8 | 1.70 🚀 | `Onchain.Aave.Pool` |
 | 9 | UserAccountData response struct | ✅ | 5 | 8 | 7 | 1.50 📋 | `Onchain.Aave.Types.UserAccountData` |
 | 10 | UiPoolDataProvider calls + remaining type structs + integration tests | ✅ | 5 | 8 | 7 | 1.50 📋 | `Onchain.Aave.UiPoolDataProvider` |
-| 11 | Oracle + Chainlink price feeds + integration tests | ⬜ | 5 | 7 | 6 | 1.30 📋 | `Onchain.Aave.Oracle` |
+| 11 | Oracle + Chainlink price feeds + integration tests | ✅ | 5 | 7 | 6 | 1.30 📋 | `Onchain.Aave.Oracle` |
 | 8b | Split unit and integration tests into separate files across all test modules | ✅ | 2 | 4 | 5 | 2.25 🚀 | `test/` |
 | 21 | Multi-chain Aave addresses (Arbitrum, Optimism, Base, Polygon, Avalanche) | ✅ | 2 | 7 | 7 | 3.50 🎯 | `Onchain.Aave.Contracts` |
 
@@ -44,9 +44,9 @@ Non-Aave read primitives that consumers need before write operations. Born from 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
 | 18 | Generic contract call (encode → eth_call → decode in one function) | ✅ | 3 | 9 | 9 | 3.00 🎯 | `Onchain.Contract` |
-| 19 | eth_getLogs + event log parsing | ⬜ | 4 | 9 | 8 | 2.13 🎯 | `Onchain.RPC` + `Onchain.Log` |
+| 19 | eth_getLogs + event log parsing | ✅ | 4 | 9 | 8 | 2.13 🎯 | `Onchain.RPC` + `Onchain.Log` |
 | 20 | ERC-20 read operations (balanceOf, allowance, decimals, symbol) | ✅ | 3 | 8 | 8 | 2.67 🎯 | `Onchain.ERC20` |
-| 22 | Multicall3 batched contract reads | ⬜ | 5 | 8 | 7 | 1.50 📋 | `Onchain.Multicall` |
+| 22 | Multicall3 batched contract reads | ✅ | 5 | 8 | 7 | 1.50 📋 | `Onchain.Multicall` |
 
 **Task descriptions:**
 

@@ -1,0 +1,132 @@
+defmodule Onchain.LogTest do
+  use ExUnit.Case, async: true
+
+  alias Onchain.Log
+
+  # Known keccak256 hashes for common events
+  @transfer_topic "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+  @approval_topic "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"
+
+  describe "event_topic/1" do
+    test "returns correct keccak256 hash for Transfer event" do
+      assert {:ok, @transfer_topic} = Log.event_topic("Transfer(address,address,uint256)")
+    end
+
+    test "returns correct keccak256 hash for Approval event" do
+      assert {:ok, @approval_topic} = Log.event_topic("Approval(address,address,uint256)")
+    end
+
+    test "returns error for invalid signature without parens" do
+      assert {:error, {:invalid_signature, "Transfer"}} = Log.event_topic("Transfer")
+    end
+
+    test "returns error for non-string input" do
+      assert {:error, {:invalid_signature, 123}} = Log.event_topic(123)
+    end
+  end
+
+  describe "event_topic!/1" do
+    test "returns hash directly" do
+      assert @transfer_topic = Log.event_topic!("Transfer(address,address,uint256)")
+    end
+
+    test "raises on invalid signature" do
+      assert_raise RuntimeError, ~r/event_topic failed/, fn ->
+        Log.event_topic!("bad")
+      end
+    end
+  end
+
+  describe "decode_event/2" do
+    test "decodes a Transfer event with indexed from/to and non-indexed value" do
+      # Construct a log matching Transfer(address indexed from, address indexed to, uint256 value)
+      from_addr = "0x000000000000000000000000A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+      to_addr = "0x000000000000000000000000dAC17F958D2ee523a2206206994597C13D831ec7"
+
+      # Encode value = 1000000 as ABI uint256
+      {:ok, value_data} = Onchain.ABI.encode_call("transfer(uint256)", [1_000_000])
+      # Strip the 4-byte selector to get just the encoded uint256
+      "0x" <> hex = value_data
+      data = "0x" <> String.slice(hex, 8, String.length(hex) - 8)
+
+      log = %{
+        topics: [@transfer_topic, from_addr, to_addr],
+        data: data
+      }
+
+      signature = "Transfer(address indexed from, address indexed to, uint256 value)"
+
+      assert {:ok, decoded} = Log.decode_event(log, signature)
+      assert is_map(decoded)
+      assert decoded.value == 1_000_000
+      # Addresses should be checksummed
+      assert decoded.from == Onchain.Address.checksum!("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
+      assert decoded.to == Onchain.Address.checksum!("0xdAC17F958D2ee523a2206206994597C13D831ec7")
+    end
+
+    test "decodes event with only indexed params (no data)" do
+      addr_topic = "0x000000000000000000000000A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+      signature = "OwnerChanged(address indexed newOwner)"
+      {:ok, owner_changed_topic} = Log.event_topic("OwnerChanged(address)")
+
+      log = %{
+        topics: [owner_changed_topic, addr_topic],
+        data: "0x"
+      }
+
+      assert {:ok, decoded} = Log.decode_event(log, signature)
+      assert decoded.newOwner == Onchain.Address.checksum!("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
+    end
+
+    test "returns error for invalid log format" do
+      assert {:error, {:decode_error, :invalid_log_format}} =
+               Log.decode_event("not a map", "Transfer(address,uint256)")
+    end
+
+    test "returns error when topics list is empty" do
+      log = %{topics: [], data: "0x"}
+
+      assert {:error, {:decode_error, :missing_event_topic}} =
+               Log.decode_event(log, "Transfer(address indexed from, uint256 value)")
+    end
+
+    test "returns error when topic0 does not match signature" do
+      wrong_topic = "0x0000000000000000000000000000000000000000000000000000000000000001"
+
+      log = %{
+        topics: [wrong_topic],
+        data: "0x"
+      }
+
+      assert {:error, {:decode_error, {:topic_mismatch, _}}} =
+               Log.decode_event(log, "Transfer(address indexed from, uint256 value)")
+    end
+
+    test "returns raw hash for indexed dynamic types (string, bytes, arrays)" do
+      signature = "TextChanged(string indexed key, string value)"
+      {:ok, topic0} = Log.event_topic("TextChanged(string,string)")
+      # Indexed string is stored as keccak256(value) — raw 32-byte hash
+      key_hash = "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+
+      # Encode non-indexed string value "hello"
+      {:ok, encoded} = Onchain.ABI.encode_call("f(string)", ["hello"])
+      "0x" <> hex = encoded
+      data = "0x" <> String.slice(hex, 8, String.length(hex) - 8)
+
+      log = %{topics: [topic0, key_hash], data: data}
+
+      assert {:ok, decoded} = Log.decode_event(log, signature)
+      # Indexed string returns the raw topic hash (keccak of original value)
+      assert decoded.key == key_hash
+      assert decoded.value == "hello"
+    end
+  end
+
+  describe "decode_event!/2" do
+    test "raises on invalid log" do
+      assert_raise RuntimeError, ~r/decode_event failed/, fn ->
+        Log.decode_event!("bad", "Transfer(address,uint256)")
+      end
+    end
+  end
+end

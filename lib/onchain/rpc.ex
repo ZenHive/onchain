@@ -295,7 +295,131 @@ defmodule Onchain.RPC do
     end
   end
 
+  # --- eth_get_logs ---
+
+  api(:eth_get_logs, "Fetch event logs matching a filter (eth_getLogs).",
+    params: [
+      filter: [
+        kind: :value,
+        description:
+          "Filter map with keys: :address (hex string or binary), :topics (list), :from_block (integer or tag), :to_block (integer or tag)"
+      ],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{
+      type: "{:ok, [log_map]} | {:error, term}",
+      description:
+        "List of log maps with keys: address, topics, data, block_number, transaction_hash, log_index, transaction_index, removed"
+    }
+  )
+
+  @spec eth_get_logs(map(), keyword()) :: {:ok, [map()]} | {:error, term()}
+  def eth_get_logs(filter, opts \\ []) when is_map(filter) do
+    with {:ok, rpc_filter} <- build_log_filter(filter) do
+      case do_rpc("eth_getLogs", [rpc_filter], to_signet_opts(opts)) do
+        {:ok, logs} when is_list(logs) -> {:ok, Enum.map(logs, &parse_log/1)}
+        {:ok, other} -> {:error, {:rpc_error, %{message: "unexpected response: #{inspect(other)}"}}}
+        error -> error
+      end
+    end
+  end
+
+  # --- eth_get_logs! ---
+
+  api(:eth_get_logs!, "Fetch event logs matching a filter. Raises on error.",
+    params: [
+      filter: [kind: :value, description: "Filter map (see eth_get_logs/2)"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{type: "[log_map]", description: "List of parsed log maps"}
+  )
+
+  @spec eth_get_logs!(map(), keyword()) :: [map()]
+  def eth_get_logs!(filter, opts \\ []) do
+    case eth_get_logs(filter, opts) do
+      {:ok, logs} -> logs
+      {:error, reason} -> raise "eth_get_logs failed: #{inspect(reason)}"
+    end
+  end
+
   # --- Private helpers ---
+
+  @doc false
+  # Builds a JSON-RPC filter object from an Elixir map.
+  @spec build_log_filter(map()) :: {:ok, map()} | {:error, term()}
+  defp build_log_filter(filter) do
+    with {:ok, result} <- put_filter_address(%{}, filter),
+         {:ok, result} <- put_filter_topics(result, filter),
+         {:ok, result} <- put_block_param(result, "fromBlock", :fromBlock, Map.get(filter, :from_block)) do
+      put_block_param(result, "toBlock", :toBlock, Map.get(filter, :to_block))
+    end
+  end
+
+  @doc false
+  @spec put_filter_address(map(), map()) :: {:ok, map()} | {:error, term()}
+  defp put_filter_address(result, filter) do
+    case Map.get(filter, :address) do
+      nil -> {:ok, result}
+      addr -> with {:ok, hex} <- ensure_hex_address(addr), do: {:ok, Map.put(result, "address", hex)}
+    end
+  end
+
+  @doc false
+  @spec put_filter_topics(map(), map()) :: {:ok, map()} | {:error, term()}
+  defp put_filter_topics(result, filter) do
+    case Map.get(filter, :topics) do
+      nil -> {:ok, result}
+      topics when is_list(topics) -> {:ok, Map.put(result, "topics", topics)}
+      other -> {:error, {:invalid_filter, {:topics, other}}}
+    end
+  end
+
+  @doc false
+  # Converts a block identifier to hex for the filter.
+  # `error_label` is an atom used in error tuples (e.g. :fromBlock, :toBlock).
+  @spec put_block_param(map(), String.t(), atom(), term()) :: {:ok, map()} | {:error, term()}
+  defp put_block_param(result, _key, _error_label, nil), do: {:ok, result}
+
+  defp put_block_param(result, key, _error_label, n) when is_integer(n) and n >= 0,
+    do: {:ok, Map.put(result, key, Onchain.Hex.from_integer(n))}
+
+  defp put_block_param(result, key, _error_label, tag) when tag in @block_tags, do: {:ok, Map.put(result, key, tag)}
+
+  defp put_block_param(result, key, error_label, "0x" <> _ = hex) do
+    if Onchain.Hex.valid?(hex),
+      do: {:ok, Map.put(result, key, hex)},
+      else: {:error, {:invalid_filter, {error_label, hex}}}
+  end
+
+  defp put_block_param(_result, _key, error_label, other), do: {:error, {:invalid_filter, {error_label, other}}}
+
+  @doc false
+  # Parses hex fields in a raw log map from the RPC response.
+  @spec parse_log(map()) :: map()
+  defp parse_log(log) when is_map(log) do
+    %{
+      address: parse_address(log["address"]),
+      topics: log["topics"] || [],
+      data: log["data"],
+      block_number: parse_hex_integer(log["blockNumber"]),
+      transaction_hash: log["transactionHash"],
+      log_index: parse_hex_integer(log["logIndex"]),
+      transaction_index: parse_hex_integer(log["transactionIndex"]),
+      removed: log["removed"] || false
+    }
+  end
+
+  @doc false
+  # Parses a hex address string to checksummed format.
+  @spec parse_address(String.t() | nil) :: String.t() | nil
+  defp parse_address(nil), do: nil
+  defp parse_address(hex), do: Onchain.Address.checksum!(hex)
+
+  @doc false
+  # Parses a hex integer string, returning nil for nil input.
+  @spec parse_hex_integer(String.t() | nil) :: non_neg_integer() | nil
+  defp parse_hex_integer(nil), do: nil
+  defp parse_hex_integer(hex), do: Onchain.Hex.to_integer!(hex)
 
   @doc false
   # Sends an RPC request and normalizes the error format.

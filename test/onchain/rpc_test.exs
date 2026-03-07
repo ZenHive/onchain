@@ -144,4 +144,45 @@ defmodule Onchain.RPCTest do
       end
     end
   end
+
+  describe "eth_get_logs/2 filter validation" do
+    test "returns error for invalid from_block value" do
+      filter = %{from_block: "bogus"}
+      assert {:error, {:invalid_filter, {:fromBlock, "bogus"}}} = RPC.eth_get_logs(filter)
+    end
+
+    test "returns error for invalid to_block value" do
+      filter = %{from_block: 100, to_block: :not_valid}
+      assert {:error, {:invalid_filter, {:toBlock, :not_valid}}} = RPC.eth_get_logs(filter)
+    end
+
+    test "returns error for negative block number" do
+      filter = %{from_block: -1}
+      assert {:error, {:invalid_filter, {:fromBlock, -1}}} = RPC.eth_get_logs(filter)
+    end
+
+    test "returns error for invalid hex block string" do
+      filter = %{from_block: "0xZZZZ"}
+      assert {:error, {:invalid_filter, {:fromBlock, "0xZZZZ"}}} = RPC.eth_get_logs(filter)
+    end
+
+    test "accepts valid block tags" do
+      # Will fail at RPC level but should pass filter validation
+      filter = %{from_block: "latest", to_block: "finalized"}
+      result = RPC.eth_get_logs(filter)
+      refute match?({:error, {:invalid_filter, _}}, result)
+    end
+
+    test "accepts valid integer blocks" do
+      filter = %{from_block: 100, to_block: 200}
+      result = RPC.eth_get_logs(filter)
+      refute match?({:error, {:invalid_filter, _}}, result)
+    end
+
+    test "accepts valid hex block strings" do
+      filter = %{from_block: "0x64", to_block: "0xc8"}
+      result = RPC.eth_get_logs(filter)
+      refute match?({:error, {:invalid_filter, _}}, result)
+    end
+  end
 end

@@ -6,6 +6,53 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 2b: Read Essentials
 
+### Task 19: eth_getLogs + Event Log Parsing (`Onchain.RPC` + `Onchain.Log`)
+**Completed** | [D:4/B:9/U:8 → Eff:2.13]
+
+**What was done:**
+- Added `eth_get_logs/2` + bang variant to `Onchain.RPC` — accepts filter map with `:address`, `:topics`, `:from_block`, `:to_block`; converts block numbers to hex; returns parsed log maps
+- Log parsing: raw RPC response logs are converted to atom-keyed maps with checksummed addresses, integer block numbers/indices, and boolean `removed` flag
+- Created `Onchain.Log` with 4-function API: `event_topic/1`, `decode_event/2` + bang variants
+- `event_topic/1` computes keccak256 hash of event signatures via `Signet.Hash.keccak/1`
+- `decode_event/2` parses event signatures with indexed markers (e.g. `"Transfer(address indexed from, address indexed to, uint256 value)"`), extracts indexed params from topics and non-indexed from ABI-decoded data field
+- Address values are checksummed in both indexed and non-indexed results
+- Added descripex `api()` declarations with namespaces `/rpc` and `/log`
+- Added `Onchain.Log` to Discoverable modules list
+- Unit tests: event_topic hashes for Transfer/Approval, decode_event with constructed logs, error cases
+- Integration tests: fetch recent USDC Transfer events via eth_get_logs, decode fetched Transfer log with decode_event, empty results for non-matching filter
+
+**Files:**
+- `lib/onchain/rpc.ex` (modified — added eth_get_logs, build_log_filter, parse_log helpers)
+- `lib/onchain/log.ex` (created)
+- `test/onchain/log_test.exs` (created)
+- `test/onchain/rpc/eth_get_logs_integration_test.exs` (created)
+- `test/onchain/log_integration_test.exs` (created)
+- `lib/onchain.ex` (added Log to Discoverable)
+
+---
+
+### Task 22: Multicall3 Batched Reads (`Onchain.Multicall`)
+**Completed** | [D:5/B:8/U:7 → Eff:1.50]
+
+**What was done:**
+- Created `Onchain.Multicall` with 4-function API: `aggregate3/2`, `call_many/2` + bang variants
+- `aggregate3/2` — low-level: takes `[{address, allow_failure, calldata}]` tuples, encodes as `aggregate3((address,bool,bytes)[])` ABI call to the Multicall3 contract, returns `[{success, return_data_hex}]`
+- `call_many/2` — high-level: takes `[{address, signature, params, return_type}]`, auto-encodes each call, batches into single `aggregate3`, auto-decodes results. Returns `[{:ok, decoded_values} | {:error, hex}]`
+- All calls use `allow_failure: true` for partial failure handling — individual failed calls return `{:error, data_hex}` without failing the batch
+- Uses the canonical Multicall3 address `0xcA11bde05977b3631167028862bE2a173976CA11` (identical on all EVM chains)
+- Added descripex `api()` declarations with namespace `/multicall`
+- Added `Onchain.Multicall` to Discoverable modules list
+- Unit tests for address validation errors, ABI signature errors, bang variants
+- Integration tests: batch 3 ERC-20 reads (USDC symbol, USDC decimals, WETH symbol), partial failure with non-contract address, result consistency vs individual `Contract.call`
+
+**Files:**
+- `lib/onchain/multicall.ex` (created)
+- `test/onchain/multicall_test.exs` (created)
+- `test/onchain/multicall_integration_test.exs` (created)
+- `lib/onchain.ex` (added Multicall to Discoverable)
+
+---
+
 ### Task 20: ERC-20 Read Operations (`Onchain.ERC20`)
 **Completed** | [D:3/B:8/U:8 → Eff:2.67]
 
@@ -51,6 +98,29 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 ---
 
 ## Phase 2: Aave Core (Read)
+
+### Task 11: Oracle + Chainlink Price Feeds (`Onchain.Aave.Oracle`)
+**Completed** | [D:5/B:7/U:6 → Eff:1.30]
+
+**What was done:**
+- Created `Onchain.Aave.Oracle` with 14-function API (7 functions + bang variants)
+- Aave Oracle reads: `get_asset_price/2`, `get_asset_prices/2`, `get_source_of_asset/2`, `get_base_currency/1`, `get_base_currency_unit/1`, `get_fallback_oracle/1`
+- Each follows the Pool pattern: split_opts → Contracts.address(:oracle) → Contract.call → unwrap
+- `get_asset_prices/2` validates all addresses before making the batch call
+- Chainlink direct read: `get_latest_round_data/2` calls `latestRoundData()` on any Chainlink aggregator (obtained via `get_source_of_asset`), returns plain map with `:round_id`, `:answer`, `:started_at`, `:updated_at`, `:answered_in_round`
+- Address results checksummed via `Address.checksum/1`
+- Added descripex `api()` declarations with namespace `/aave/oracle`
+- Added `Onchain.Aave.Oracle` to Discoverable modules list
+- Unit tests for address validation errors and bang variant error cases
+- Integration tests: WETH/USDC prices (non-zero), batch prices, Chainlink source address, base currency/unit (verifies 10^8), fallback oracle, latest round data shape and values
+
+**Files:**
+- `lib/onchain/aave/oracle.ex` (created)
+- `test/onchain/aave/oracle_test.exs` (created)
+- `test/onchain/aave/oracle_integration_test.exs` (created)
+- `lib/onchain.ex` (added Aave.Oracle to Discoverable)
+
+---
 
 ### Task 21: Multi-chain Aave Addresses
 **Completed** | [D:2/B:7/U:7 → Eff:3.50]
