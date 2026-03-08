@@ -4,6 +4,48 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+## Code Review Fixes (Phase 3)
+
+### Fix: Block param validation, tx hash validation, flaky receipt tests
+**Completed** | Code review findings from Codex
+
+**What was done:**
+- Added `normalize_block/1` to validate and convert `:block` option in `eth_call/3`, `get_balance/2`, `get_transaction_count/2` — integers auto-converted to hex, tags and hex strings validated, invalid values return `{:error, {:invalid_block, value}}`
+- Added `ensure_tx_hash/1` to validate 32-byte transaction hashes in `get_transaction_receipt/2` — rejects too-short/too-long hex with `{:error, {:invalid_tx_hash, value}}`
+- Fixed flaky receipt integration tests: replaced `"latest"` block (may have empty transactions) with `@test_block 20_000_000` (known mainnet block with transactions), removed broken `|| ["0x0"]` fallbacks
+- Updated transaction count integration test to pass integer block directly (validates `normalize_block` works end-to-end)
+- Added unit tests: block validation for eth_call, get_balance, get_transaction_count (invalid/integer/tag); tx hash validation (too-short, valid 32-byte, no prefix, invalid hex)
+
+**Files:**
+- `lib/onchain/rpc.ex` (modified — added normalize_block/1, ensure_tx_hash/1, updated 4 functions)
+- `test/onchain/rpc_test.exs` (modified — added block and tx hash validation tests)
+- `test/onchain/rpc/receipt_integration_test.exs` (modified — deterministic block, removed fallbacks)
+- `test/onchain/rpc/transaction_count_integration_test.exs` (modified — integer block param)
+
+---
+
+## Phase 3: Aave Actions (Write)
+
+### Task 23: Transaction Receipt + Nonce RPC Methods (`Onchain.RPC`)
+**Completed** | [D:3/B:8/U:8 → Eff:2.67]
+
+**What was done:**
+- Added `get_transaction_receipt/2` + bang variant — calls `eth_getTransactionReceipt`, returns parsed atom-keyed map or nil for pending/unknown transactions
+- Receipt parsing via `parse_receipt/1`: hex fields decoded to integers (block_number, gas_used, status, etc.), addresses checksummed, logs reuse existing `parse_log/1`
+- Added `get_transaction_count/2` + bang variant — calls `eth_getTransactionCount`, returns nonce as integer. Follows `get_balance` pattern (address + opts with `:block` default "latest", `:decode, :hex_unsigned`)
+- Updated `@moduledoc` function table with 6 missing rows (eth_get_logs pair was also undocumented)
+- Added descripex `api()` declarations for all 4 new public functions
+- Unit tests: input validation for tx_hash (no prefix, invalid hex, non-binary) and address (wrong byte size, invalid hex, non-binary, binary acceptance), bang variant raises
+- Integration tests: receipt from known block tx (all fields verified), log structure consistency, nil for fake hash, bang variants; transaction count for Vitalik (positive), zero address (0), historical block comparison, binary address acceptance
+
+**Files:**
+- `lib/onchain/rpc.ex` (modified — added 4 functions, parse_receipt helper, updated moduledoc)
+- `test/onchain/rpc_test.exs` (modified — added 8 unit tests)
+- `test/onchain/rpc/receipt_integration_test.exs` (created)
+- `test/onchain/rpc/transaction_count_integration_test.exs` (created)
+
+---
+
 ## Phase 2b: Read Essentials
 
 ### Task 19: eth_getLogs + Event Log Parsing (`Onchain.RPC` + `Onchain.Log`)

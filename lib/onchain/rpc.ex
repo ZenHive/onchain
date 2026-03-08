@@ -8,7 +8,10 @@ defmodule Onchain.RPC do
 
   ## Error Format
 
-  - Input validation: `{:error, {:invalid_address, input}}` or `{:error, {:invalid_data, input}}`
+  - Address validation: `{:error, {:invalid_address, input}}`
+  - Data validation: `{:error, {:invalid_data, input}}`
+  - Block validation: `{:error, {:invalid_block, input}}`
+  - Tx hash validation: `{:error, {:invalid_tx_hash, input}}` (must be 32 bytes)
   - RPC/network errors: `{:error, {:rpc_error, %{code: integer, message: string}}}`
 
   For RPC errors, the map always has at least a `:message` key. JSON-RPC error
@@ -31,6 +34,12 @@ defmodule Onchain.RPC do
   | `get_block_by_number!/2` | Same, raises on error |
   | `chain_id/1` | Network chain ID |
   | `chain_id!/1` | Same, raises on error |
+  | `eth_get_logs/2` | Fetch event logs by filter |
+  | `eth_get_logs!/2` | Same, raises on error |
+  | `get_transaction_receipt/2` | Transaction receipt by hash |
+  | `get_transaction_receipt!/2` | Same, raises on error |
+  | `get_transaction_count/2` | Account nonce (tx count) |
+  | `get_transaction_count!/2` | Same, raises on error |
   """
 
   use Descripex, namespace: "/rpc"
@@ -56,9 +65,8 @@ defmodule Onchain.RPC do
           {:ok, String.t()} | {:error, term()}
   def eth_call(address, data, opts \\ []) do
     with {:ok, hex_addr} <- ensure_hex_address(address),
-         {:ok, hex_data} <- ensure_hex_data(data) do
-      block = Keyword.get(opts, :block, "latest")
-
+         {:ok, hex_data} <- ensure_hex_data(data),
+         {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")) do
       call_params = %{"to" => hex_addr, "data" => hex_data}
 
       do_rpc("eth_call", [call_params, block], to_signet_opts(opts))
@@ -138,9 +146,8 @@ defmodule Onchain.RPC do
 
   @spec get_balance(String.t() | binary(), keyword()) :: {:ok, non_neg_integer()} | {:error, term()}
   def get_balance(address, opts \\ []) do
-    with {:ok, hex_addr} <- ensure_hex_address(address) do
-      block = Keyword.get(opts, :block, "latest")
-
+    with {:ok, hex_addr} <- ensure_hex_address(address),
+         {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")) do
       do_rpc("eth_getBalance", [hex_addr, block], Keyword.put(to_signet_opts(opts), :decode, :hex_unsigned))
     end
   end
@@ -295,6 +302,92 @@ defmodule Onchain.RPC do
     end
   end
 
+  # --- get_transaction_receipt ---
+
+  api(:get_transaction_receipt, "Get a transaction receipt by hash (eth_getTransactionReceipt).",
+    params: [
+      tx_hash: [kind: :value, description: "0x-prefixed hex transaction hash"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{
+      type: "{:ok, map | nil} | {:error, term}",
+      description: "Parsed receipt map, or nil if the transaction is pending/unknown"
+    }
+  )
+
+  @spec get_transaction_receipt(String.t(), keyword()) :: {:ok, map() | nil} | {:error, term()}
+  def get_transaction_receipt(tx_hash, opts \\ []) do
+    with {:ok, _hex} <- ensure_tx_hash(tx_hash) do
+      case do_rpc("eth_getTransactionReceipt", [tx_hash], to_signet_opts(opts)) do
+        {:ok, nil} -> {:ok, nil}
+        {:ok, receipt} when is_map(receipt) -> {:ok, parse_receipt(receipt)}
+        error -> error
+      end
+    end
+  end
+
+  # --- get_transaction_receipt! ---
+
+  api(:get_transaction_receipt!, "Get a transaction receipt by hash. Raises on error.",
+    params: [
+      tx_hash: [kind: :value, description: "0x-prefixed hex transaction hash"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{type: "map | nil", description: "Parsed receipt map or nil"}
+  )
+
+  @spec get_transaction_receipt!(String.t(), keyword()) :: map() | nil
+  def get_transaction_receipt!(tx_hash, opts \\ []) do
+    case get_transaction_receipt(tx_hash, opts) do
+      {:ok, result} -> result
+      {:error, reason} -> raise "get_transaction_receipt failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- get_transaction_count ---
+
+  api(:get_transaction_count, "Get the transaction count (nonce) of an address.",
+    params: [
+      address: [kind: :value, description: "Account address as 0x hex string or 20-byte binary"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout, :block"]
+    ],
+    returns: %{
+      type: "{:ok, non_neg_integer} | {:error, term}",
+      description: "Transaction count (nonce)"
+    }
+  )
+
+  @spec get_transaction_count(String.t() | binary(), keyword()) ::
+          {:ok, non_neg_integer()} | {:error, term()}
+  def get_transaction_count(address, opts \\ []) do
+    with {:ok, hex_addr} <- ensure_hex_address(address),
+         {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")) do
+      do_rpc(
+        "eth_getTransactionCount",
+        [hex_addr, block],
+        Keyword.put(to_signet_opts(opts), :decode, :hex_unsigned)
+      )
+    end
+  end
+
+  # --- get_transaction_count! ---
+
+  api(:get_transaction_count!, "Get the transaction count (nonce) of an address. Raises on error.",
+    params: [
+      address: [kind: :value, description: "Account address as 0x hex string or 20-byte binary"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout, :block"]
+    ],
+    returns: %{type: :non_neg_integer, description: "Transaction count (nonce)"}
+  )
+
+  @spec get_transaction_count!(String.t() | binary(), keyword()) :: non_neg_integer()
+  def get_transaction_count!(address, opts \\ []) do
+    case get_transaction_count(address, opts) do
+      {:ok, result} -> result
+      {:error, reason} -> raise "get_transaction_count failed: #{inspect(reason)}"
+    end
+  end
+
   # --- eth_get_logs ---
 
   api(:eth_get_logs, "Fetch event logs matching a filter (eth_getLogs).",
@@ -410,6 +503,27 @@ defmodule Onchain.RPC do
   end
 
   @doc false
+  # Parses a raw transaction receipt map from the RPC response into atom-keyed map.
+  @spec parse_receipt(map()) :: map()
+  defp parse_receipt(receipt) when is_map(receipt) do
+    %{
+      transaction_hash: receipt["transactionHash"],
+      transaction_index: parse_hex_integer(receipt["transactionIndex"]),
+      block_hash: receipt["blockHash"],
+      block_number: parse_hex_integer(receipt["blockNumber"]),
+      from: parse_address(receipt["from"]),
+      to: parse_address(receipt["to"]),
+      cumulative_gas_used: parse_hex_integer(receipt["cumulativeGasUsed"]),
+      gas_used: parse_hex_integer(receipt["gasUsed"]),
+      effective_gas_price: parse_hex_integer(receipt["effectiveGasPrice"]),
+      status: parse_hex_integer(receipt["status"]),
+      contract_address: parse_address(receipt["contractAddress"]),
+      logs: Enum.map(receipt["logs"] || [], &parse_log/1),
+      type: parse_hex_integer(receipt["type"])
+    }
+  end
+
+  @doc false
   # Parses a hex address string to checksummed format.
   @spec parse_address(String.t() | nil) :: String.t() | nil
   defp parse_address(nil), do: nil
@@ -445,6 +559,34 @@ defmodule Onchain.RPC do
       {:error, _} -> {:error, {:invalid_address, input}}
     end
   end
+
+  @doc false
+  # Normalizes a block identifier for RPC params.
+  # Accepts tag strings, non-negative integers (converted to hex), and "0x..." hex strings.
+  @spec normalize_block(term()) :: {:ok, String.t()} | {:error, term()}
+  defp normalize_block(tag) when tag in @block_tags, do: {:ok, tag}
+  defp normalize_block(n) when is_integer(n) and n >= 0, do: {:ok, Onchain.Hex.from_integer(n)}
+
+  defp normalize_block("0x" <> _ = hex) do
+    if Onchain.Hex.valid?(hex), do: {:ok, hex}, else: {:error, {:invalid_block, hex}}
+  end
+
+  defp normalize_block(other), do: {:error, {:invalid_block, other}}
+
+  @tx_hash_hex_length 66
+
+  @doc false
+  # Validates that a value is a 0x-prefixed hex string of exactly 32 bytes (66 chars).
+  @spec ensure_tx_hash(term()) :: {:ok, String.t()} | {:error, term()}
+  defp ensure_tx_hash("0x" <> _ = hash) do
+    cond do
+      not Onchain.Hex.valid?(hash) -> {:error, {:invalid_tx_hash, hash}}
+      String.length(hash) != @tx_hash_hex_length -> {:error, {:invalid_tx_hash, hash}}
+      true -> {:ok, hash}
+    end
+  end
+
+  defp ensure_tx_hash(other), do: {:error, {:invalid_tx_hash, other}}
 
   @doc false
   # Validates that data is a 0x-prefixed hex string.

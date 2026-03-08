@@ -47,6 +47,41 @@ defmodule Onchain.RPCTest do
     end
   end
 
+  describe "eth_call/3 block validation" do
+    test "rejects invalid block value" do
+      addr = "0x" <> String.duplicate("aa", 20)
+      assert {:error, {:invalid_block, :foo}} = RPC.eth_call(addr, "0x18160ddd", block: :foo)
+    end
+
+    test "rejects negative integer block" do
+      addr = "0x" <> String.duplicate("aa", 20)
+      assert {:error, {:invalid_block, -1}} = RPC.eth_call(addr, "0x18160ddd", block: -1)
+    end
+
+    test "accepts integer block (passes input validation)" do
+      addr = "0x" <> String.duplicate("aa", 20)
+      result = RPC.eth_call(addr, "0x18160ddd", block: 15_000_000)
+      refute match?({:error, {:invalid_block, _}}, result)
+    end
+
+    test "accepts tag block (passes input validation)" do
+      addr = "0x" <> String.duplicate("aa", 20)
+      result = RPC.eth_call(addr, "0x18160ddd", block: "finalized")
+      refute match?({:error, {:invalid_block, _}}, result)
+    end
+
+    test "accepts hex block string (passes input validation)" do
+      addr = "0x" <> String.duplicate("aa", 20)
+      result = RPC.eth_call(addr, "0x18160ddd", block: "0xe4e1c0")
+      refute match?({:error, {:invalid_block, _}}, result)
+    end
+
+    test "rejects invalid hex block string" do
+      addr = "0x" <> String.duplicate("aa", 20)
+      assert {:error, {:invalid_block, "0xZZZZ"}} = RPC.eth_call(addr, "0x18160ddd", block: "0xZZZZ")
+    end
+  end
+
   describe "get_balance/2 input validation" do
     test "rejects address with wrong byte size" do
       short_addr = "0x" <> String.duplicate("aa", 10)
@@ -56,6 +91,19 @@ defmodule Onchain.RPCTest do
     test "rejects invalid hex address" do
       bad_addr = "0xnotreallyhex000000000000000000000000000000"
       assert {:error, {:invalid_address, ^bad_addr}} = RPC.get_balance(bad_addr)
+    end
+  end
+
+  describe "get_balance/2 block validation" do
+    test "rejects invalid block value" do
+      addr = "0x" <> String.duplicate("aa", 20)
+      assert {:error, {:invalid_block, "bogus"}} = RPC.get_balance(addr, block: "bogus")
+    end
+
+    test "accepts integer block (passes input validation)" do
+      addr = "0x" <> String.duplicate("aa", 20)
+      result = RPC.get_balance(addr, block: 15_000_000)
+      refute match?({:error, {:invalid_block, _}}, result)
     end
   end
 
@@ -183,6 +231,93 @@ defmodule Onchain.RPCTest do
       filter = %{from_block: "0x64", to_block: "0xc8"}
       result = RPC.eth_get_logs(filter)
       refute match?({:error, {:invalid_filter, _}}, result)
+    end
+  end
+
+  describe "get_transaction_receipt/2 input validation" do
+    test "rejects tx_hash without 0x prefix" do
+      assert {:error, {:invalid_tx_hash, "abcd1234"}} = RPC.get_transaction_receipt("abcd1234")
+    end
+
+    test "rejects tx_hash with invalid hex characters" do
+      assert {:error, {:invalid_tx_hash, "0xZZZZ"}} = RPC.get_transaction_receipt("0xZZZZ")
+    end
+
+    test "rejects non-binary input" do
+      assert {:error, {:invalid_tx_hash, 12_345}} = RPC.get_transaction_receipt(12_345)
+    end
+
+    test "rejects too-short hex string" do
+      short_hash = "0x1234"
+      assert {:error, {:invalid_tx_hash, ^short_hash}} = RPC.get_transaction_receipt(short_hash)
+    end
+
+    test "rejects too-long hex string" do
+      long_hash = "0x" <> String.duplicate("ab", 33)
+      assert {:error, {:invalid_tx_hash, ^long_hash}} = RPC.get_transaction_receipt(long_hash)
+    end
+
+    test "accepts valid 32-byte hash (passes input validation)" do
+      valid_hash = "0x" <> String.duplicate("ab", 32)
+      result = RPC.get_transaction_receipt(valid_hash)
+      refute match?({:error, {:invalid_tx_hash, _}}, result)
+    end
+  end
+
+  describe "get_transaction_receipt!/2" do
+    test "raises on invalid input" do
+      assert_raise RuntimeError, ~r/get_transaction_receipt failed/, fn ->
+        RPC.get_transaction_receipt!("no_prefix")
+      end
+    end
+  end
+
+  describe "get_transaction_count/2 input validation" do
+    test "rejects address with wrong byte size" do
+      short_addr = "0x" <> String.duplicate("aa", 10)
+      assert {:error, {:invalid_address, ^short_addr}} = RPC.get_transaction_count(short_addr)
+    end
+
+    test "rejects invalid hex address" do
+      bad_addr = "0xnotreallyhex000000000000000000000000000000"
+      assert {:error, {:invalid_address, ^bad_addr}} = RPC.get_transaction_count(bad_addr)
+    end
+
+    test "rejects non-binary input" do
+      assert {:error, {:invalid_address, 12_345}} = RPC.get_transaction_count(12_345)
+    end
+
+    test "accepts 20-byte binary address" do
+      addr = <<1::160>>
+      result = RPC.get_transaction_count(addr)
+      refute match?({:error, {:invalid_address, _}}, result)
+    end
+  end
+
+  describe "get_transaction_count/2 block validation" do
+    test "rejects invalid block value" do
+      addr = "0x" <> String.duplicate("aa", 20)
+      assert {:error, {:invalid_block, :foo}} = RPC.get_transaction_count(addr, block: :foo)
+    end
+
+    test "accepts integer block (passes input validation)" do
+      addr = "0x" <> String.duplicate("aa", 20)
+      result = RPC.get_transaction_count(addr, block: 15_000_000)
+      refute match?({:error, {:invalid_block, _}}, result)
+    end
+
+    test "accepts tag block (passes input validation)" do
+      addr = "0x" <> String.duplicate("aa", 20)
+      result = RPC.get_transaction_count(addr, block: "pending")
+      refute match?({:error, {:invalid_block, _}}, result)
+    end
+  end
+
+  describe "get_transaction_count!/2" do
+    test "raises on invalid address" do
+      assert_raise RuntimeError, ~r/get_transaction_count failed/, fn ->
+        RPC.get_transaction_count!("0xshort")
+      end
     end
   end
 end

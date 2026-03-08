@@ -67,7 +67,7 @@ Non-Aave read primitives that consumers need before write operations. Born from 
 | 12 | Transaction signing setup + integration tests | ⬜ | 4 | 9 | 9 | 2.25 🚀 | `Onchain.Signer` |
 | 13 | ERC-20 write operations (approve, transfer) + integration tests | ⬜ | 4 | 8 | 8 | 2.00 🚀 | `Onchain.ERC20` |
 | 14 | Pool write calls (supply, borrow, repay, withdraw) + integration tests | ⬜ | 6 | 9 | 8 | 1.42 📋 | `Onchain.Aave.Pool` |
-| 23 | Transaction receipt + nonce RPC methods (eth_getTransactionReceipt, eth_getTransactionCount) | ⬜ | 3 | 8 | 8 | 2.67 🎯 | `Onchain.RPC` |
+| 23 | Transaction receipt + nonce RPC methods (eth_getTransactionReceipt, eth_getTransactionCount) | ✅ | 3 | 8 | 8 | 2.67 🎯 | `Onchain.RPC` |
 
 ---
 
