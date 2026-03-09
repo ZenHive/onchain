@@ -1,8 +1,8 @@
 defmodule Onchain.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
-  @source_url "https://github.com/titofranco/onchain"
+  @version "0.2.0"
+  @source_url "https://github.com/ZenHive/onchain"
 
   def project do
     [
