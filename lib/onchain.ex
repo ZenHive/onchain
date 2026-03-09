@@ -29,6 +29,7 @@ defmodule Onchain do
       Onchain.ERC20,
       Onchain.Log,
       Onchain.Multicall,
+      Onchain.Signer,
       Onchain.Aave.Contracts,
       Onchain.Aave.Math,
       Onchain.Aave.Oracle,

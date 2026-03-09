@@ -26,6 +26,31 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 3: Aave Actions (Write)
 
+### Task 12: Transaction Signing Setup (`Onchain.Signer`)
+**Completed** | [D:4/B:9/U:9 → Eff:2.25]
+
+**What was done:**
+- Created `Onchain.Signer` with 10-function API (5 functions + bang variants): `address_from_key`, `build_transaction`, `sign_transaction`, `encode_transaction`, `send_transaction`
+- Stateless EIP-1559 pipeline — no GenServer, no application config, private key always explicit
+- Uses `Signet.Signer.sign_direct/4` for signing without a running GenServer, `Signet.Transaction.V2` for transaction construction
+- `build_transaction/3` accepts `{n, :gwei}` tuples or integer wei for gas params, with sensible defaults (100k gas, 30 gwei max fee, 2 gwei priority)
+- `send_transaction/3` composes the full pipeline: build → sign → encode → broadcast via `RPC.eth_send_raw_transaction`
+- Private `decode_private_key/1` helper accepts 32-byte binary or hex string (with/without 0x)
+- Created `Onchain.SignerCase` test helpers (reusable by tasks 13, 14): `signer_key!`, `signer_address!`, `sepolia_rpc_url!`, `wait_for_receipt`
+- Added descripex `api()` declarations with namespace `/signer`
+- Added `Onchain.Signer` to Discoverable modules list
+- Unit tests: address derivation (binary/hex/bare, checksummed, errors), build_transaction (fields, gas params, defaults, missing opts, invalid address), sign_transaction (signature fields, signer recovery), encode_transaction (hex output, unsigned error, decode roundtrip), full roundtrip, bang variants
+- Integration tests: real Sepolia key address derivation, nonce fetch, self-transfer with receipt verification (opt-in `:sepolia_send` tag)
+
+**Files:**
+- `lib/onchain/signer.ex` (created)
+- `test/onchain/signer_test.exs` (created)
+- `test/onchain/signer_integration_test.exs` (created)
+- `test/support/signer_case.ex` (created)
+- `lib/onchain.ex` (added Signer to Discoverable)
+
+---
+
 ### Task 23: Transaction Receipt + Nonce RPC Methods (`Onchain.RPC`)
 **Completed** | [D:3/B:8/U:8 → Eff:2.67]
 
