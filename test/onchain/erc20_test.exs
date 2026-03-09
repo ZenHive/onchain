@@ -172,14 +172,18 @@ defmodule Onchain.ERC20Test do
     end
 
     Code.prepend_path(runtime_tools_ebin!())
+    # credo:disable-for-next-line Credo.Check.Refactor.Apply
     apply(:dbg, :tracer, [:process, {handler, nil}])
+    # credo:disable-for-next-line Credo.Check.Refactor.Apply
     apply(:dbg, :p, [self(), [:call]])
+    # credo:disable-for-next-line Credo.Check.Refactor.Apply
     apply(:dbg, :tpl, [Onchain.Signer, :send_transaction, :x])
 
     try do
       fun.()
       receive_signer_calldata()
     after
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
       apply(:dbg, :stop_clear, [])
       drain_dbg_messages()
     end
