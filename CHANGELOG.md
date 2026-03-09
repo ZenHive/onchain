@@ -26,6 +26,28 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 3: Aave Actions (Write)
 
+### Task 14: Aave V3 Pool Write Operations (`Onchain.Aave.Pool`)
+**Completed** | [D:6/B:9/U:8 → Eff:1.42]
+
+**What was done:**
+- Added `supply/4`, `withdraw/4`, `borrow/4`, `repay/4` + bang variants to `Onchain.Aave.Pool`
+- Each validates addresses, resolves Pool address from `:network` option, ABI-encodes calldata, and delegates to `Signer.send_transaction/3`
+- `referralCode` hardcoded to 0 (vestigial in V3, no active program)
+- `interest_rate_mode` option for borrow/repay: `:variable` (default, maps to 2), `:stable` (maps to 1); invalid values return `{:error, {:invalid_interest_rate_mode, value}}`
+- Private `split_write_opts/1` separates `:network` and `:interest_rate_mode` from Signer opts
+- Private `resolve_interest_rate_mode/1` maps atoms to Solidity uint256 values
+- Added `@dialyzer` annotations for the same Signet spec cascade as other write functions
+- Added descripex `api()` declarations for all 8 new functions
+- Updated `@moduledoc` to document write operations alongside reads
+- Unit tests: address validation errors (asset, on_behalf_of/to), unsupported network, invalid interest_rate_mode (borrow/repay), bang variant raises
+- Full calldata verification via `:dbg` trace: ABI selector correctness, argument position verification (all 32-byte slots), referralCode == 0, variable/stable rate encoding, distinct selectors across all 4 operations
+
+**Files:**
+- `lib/onchain/aave/pool.ex` (modified — added 8 functions, 2 helpers, aliases, constants, dialyzer, api() macros, moduledoc)
+- `test/onchain/aave/pool_test.exs` (modified — switched to async: false, added write unit tests + calldata verification)
+
+---
+
 ### Task 13: ERC-20 Write Operations (`Onchain.ERC20`)
 **Completed** | [D:4/B:8/U:8 → Eff:2.00]
 

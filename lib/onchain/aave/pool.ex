@@ -1,10 +1,14 @@
 defmodule Onchain.Aave.Pool do
   @moduledoc """
-  High-level Aave V3 Pool read operations.
+  High-level Aave V3 Pool read and write operations.
 
-  Composes `Address`, `Contracts`, `ABI`, `RPC`, and `Math` into single-call
-  functions that return converted `Decimal` values. Consumers don't need to
-  manually encode ABI calls, make RPC requests, and decode responses.
+  **Read operations** compose `Address`, `Contracts`, `ABI`, `RPC`, and `Math`
+  into single-call functions that return converted `Decimal` values.
+
+  **Write operations** validate inputs, ABI-encode calldata, and delegate to
+  `Signer.send_transaction/3`. Gas limits are NOT defaulted per operation —
+  Aave ops typically need more than Signer's default 100k (supply ~200k,
+  borrow ~300k). Specify via `:gas_limit` in opts.
 
   ## Error Format
 
@@ -17,6 +21,8 @@ defmodule Onchain.Aave.Pool do
   | `Onchain.ABI.encode_call/2` | `{:error, {:encode_error, reason}}` |
   | `Onchain.RPC.eth_call/3` | `{:error, {:rpc_error, map}}` |
   | `Onchain.ABI.decode_response/2` | `{:error, {:decode_error, reason}}` |
+  | `Onchain.Signer.send_transaction/3` | `{:error, {:missing_option, ...}}`, `{:error, {:sign_error, ...}}`, etc. |
+  | Interest rate mode validation | `{:error, {:invalid_interest_rate_mode, value}}` |
 
   ## Functions
 
@@ -24,6 +30,14 @@ defmodule Onchain.Aave.Pool do
   |----------|---------|
   | `get_user_account_data/2` | Full position summary as `UserAccountData` struct |
   | `get_user_account_data!/2` | Same, raises on error |
+  | `supply/4` | Supply asset to pool (returns tx hash) |
+  | `supply!/4` | Same, raises on error |
+  | `withdraw/4` | Withdraw asset from pool (returns tx hash) |
+  | `withdraw!/4` | Same, raises on error |
+  | `borrow/4` | Borrow asset from pool (returns tx hash) |
+  | `borrow!/4` | Same, raises on error |
+  | `repay/4` | Repay borrowed asset (returns tx hash) |
+  | `repay!/4` | Same, raises on error |
   """
 
   use Descripex, namespace: "/aave/pool"
@@ -32,7 +46,13 @@ defmodule Onchain.Aave.Pool do
   alias Onchain.Aave.Types.UserAccountData
   alias Onchain.ABI
   alias Onchain.Address
+  alias Onchain.Hex
   alias Onchain.RPC
+  alias Onchain.Signer
+
+  @referral_code 0
+  @variable_rate 2
+  @stable_rate 1
 
   # ABI.decode_response/2 has upstream spec mismatch (success typing is no_return()
   # due to Signet.Hex spec issues). This cascades through the entire call chain:
@@ -42,6 +62,12 @@ defmodule Onchain.Aave.Pool do
   @dialyzer {:no_match, [get_user_account_data: 2, get_user_account_data!: 2]}
   @dialyzer {:no_return, [get_user_account_data!: 1, get_user_account_data!: 2]}
   @dialyzer {:no_contracts, [get_user_account_data!: 1, get_user_account_data!: 2]}
+
+  # Write functions inherit the same Signet.Hex spec cascade through ABI.encode_call/2.
+  @dialyzer {:no_match, [supply: 4, supply!: 4, withdraw: 4, withdraw!: 4]}
+  @dialyzer {:no_match, [borrow: 4, borrow!: 4, repay: 4, repay!: 4]}
+  @dialyzer {:no_return, [supply!: 4, withdraw!: 4, borrow!: 4, repay!: 4]}
+  @dialyzer {:no_contracts, [supply!: 4, withdraw!: 4, borrow!: 4, repay!: 4]}
 
   @user_account_data_response "(uint256,uint256,uint256,uint256,uint256,uint256)"
 
@@ -110,6 +136,252 @@ defmodule Onchain.Aave.Pool do
     end
   end
 
+  # --- supply ---
+
+  api(:supply, "Supply an asset to the Aave V3 Pool.",
+    params: [
+      asset: [kind: :value, description: "ERC-20 token contract address to supply"],
+      amount: [kind: :value, description: "Amount to supply (raw integer, not decimal-adjusted)"],
+      on_behalf_of: [kind: :value, description: "Address that receives the aTokens"],
+      opts: [
+        kind: :value,
+        description:
+          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :network (default :ethereum), :gas_limit (recommend ~200k for supply)"
+      ]
+    ],
+    returns: %{
+      type: "{:ok, String.t()} | {:error, term()}",
+      description: "Transaction hash hex string"
+    }
+  )
+
+  @spec supply(String.t() | binary(), non_neg_integer(), String.t() | binary(), keyword()) ::
+          {:ok, String.t()} | {:error, term()}
+  def supply(asset, amount, on_behalf_of, opts) do
+    {network_opts, _rate_mode, signer_opts} = split_write_opts(opts)
+
+    with {:ok, asset_bin} <- Address.validate(asset),
+         {:ok, obo_bin} <- Address.validate(on_behalf_of),
+         {:ok, pool_addr} <- Contracts.address(:pool, network_opts),
+         {:ok, calldata_hex} <-
+           ABI.encode_call(
+             "supply(address,uint256,address,uint16)",
+             [asset_bin, amount, obo_bin, @referral_code]
+           ) do
+      Signer.send_transaction(pool_addr, Hex.decode!(calldata_hex), signer_opts)
+    end
+  end
+
+  # --- supply! ---
+
+  api(:supply!, "Supply an asset to the Aave V3 Pool. Raises on error.",
+    params: [
+      asset: [kind: :value, description: "ERC-20 token contract address to supply"],
+      amount: [kind: :value, description: "Amount to supply (raw integer, not decimal-adjusted)"],
+      on_behalf_of: [kind: :value, description: "Address that receives the aTokens"],
+      opts: [
+        kind: :value,
+        description:
+          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :network (default :ethereum), :gas_limit (recommend ~200k for supply)"
+      ]
+    ],
+    returns: %{type: :string, description: "Transaction hash hex string"}
+  )
+
+  @spec supply!(String.t() | binary(), non_neg_integer(), String.t() | binary(), keyword()) ::
+          String.t()
+  def supply!(asset, amount, on_behalf_of, opts) do
+    case supply(asset, amount, on_behalf_of, opts) do
+      {:ok, tx_hash} -> tx_hash
+      {:error, reason} -> raise "supply failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- withdraw ---
+
+  api(:withdraw, "Withdraw an asset from the Aave V3 Pool.",
+    params: [
+      asset: [kind: :value, description: "ERC-20 token contract address to withdraw"],
+      amount: [kind: :value, description: "Amount to withdraw (raw integer, or max uint256 for full balance)"],
+      to: [kind: :value, description: "Address that receives the withdrawn tokens"],
+      opts: [
+        kind: :value,
+        description:
+          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :network (default :ethereum), :gas_limit (recommend ~200k for withdraw)"
+      ]
+    ],
+    returns: %{
+      type: "{:ok, String.t()} | {:error, term()}",
+      description: "Transaction hash hex string"
+    }
+  )
+
+  @spec withdraw(String.t() | binary(), non_neg_integer(), String.t() | binary(), keyword()) ::
+          {:ok, String.t()} | {:error, term()}
+  def withdraw(asset, amount, to, opts) do
+    {network_opts, _rate_mode, signer_opts} = split_write_opts(opts)
+
+    with {:ok, asset_bin} <- Address.validate(asset),
+         {:ok, to_bin} <- Address.validate(to),
+         {:ok, pool_addr} <- Contracts.address(:pool, network_opts),
+         {:ok, calldata_hex} <-
+           ABI.encode_call(
+             "withdraw(address,uint256,address)",
+             [asset_bin, amount, to_bin]
+           ) do
+      Signer.send_transaction(pool_addr, Hex.decode!(calldata_hex), signer_opts)
+    end
+  end
+
+  # --- withdraw! ---
+
+  api(:withdraw!, "Withdraw an asset from the Aave V3 Pool. Raises on error.",
+    params: [
+      asset: [kind: :value, description: "ERC-20 token contract address to withdraw"],
+      amount: [kind: :value, description: "Amount to withdraw (raw integer, or max uint256 for full balance)"],
+      to: [kind: :value, description: "Address that receives the withdrawn tokens"],
+      opts: [
+        kind: :value,
+        description:
+          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :network (default :ethereum), :gas_limit (recommend ~200k for withdraw)"
+      ]
+    ],
+    returns: %{type: :string, description: "Transaction hash hex string"}
+  )
+
+  @spec withdraw!(String.t() | binary(), non_neg_integer(), String.t() | binary(), keyword()) ::
+          String.t()
+  def withdraw!(asset, amount, to, opts) do
+    case withdraw(asset, amount, to, opts) do
+      {:ok, tx_hash} -> tx_hash
+      {:error, reason} -> raise "withdraw failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- borrow ---
+
+  api(:borrow, "Borrow an asset from the Aave V3 Pool.",
+    params: [
+      asset: [kind: :value, description: "ERC-20 token contract address to borrow"],
+      amount: [kind: :value, description: "Amount to borrow (raw integer, not decimal-adjusted)"],
+      on_behalf_of: [kind: :value, description: "Address that incurs the debt"],
+      opts: [
+        kind: :value,
+        description:
+          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :network (default :ethereum), :interest_rate_mode (:variable default, :stable), :gas_limit (recommend ~300k for borrow)"
+      ]
+    ],
+    returns: %{
+      type: "{:ok, String.t()} | {:error, term()}",
+      description: "Transaction hash hex string"
+    }
+  )
+
+  @spec borrow(String.t() | binary(), non_neg_integer(), String.t() | binary(), keyword()) ::
+          {:ok, String.t()} | {:error, term()}
+  def borrow(asset, amount, on_behalf_of, opts) do
+    {network_opts, rate_mode, signer_opts} = split_write_opts(opts)
+
+    with {:ok, rate} <- resolve_interest_rate_mode(rate_mode),
+         {:ok, asset_bin} <- Address.validate(asset),
+         {:ok, obo_bin} <- Address.validate(on_behalf_of),
+         {:ok, pool_addr} <- Contracts.address(:pool, network_opts),
+         {:ok, calldata_hex} <-
+           ABI.encode_call(
+             "borrow(address,uint256,uint256,uint16,address)",
+             [asset_bin, amount, rate, @referral_code, obo_bin]
+           ) do
+      Signer.send_transaction(pool_addr, Hex.decode!(calldata_hex), signer_opts)
+    end
+  end
+
+  # --- borrow! ---
+
+  api(:borrow!, "Borrow an asset from the Aave V3 Pool. Raises on error.",
+    params: [
+      asset: [kind: :value, description: "ERC-20 token contract address to borrow"],
+      amount: [kind: :value, description: "Amount to borrow (raw integer, not decimal-adjusted)"],
+      on_behalf_of: [kind: :value, description: "Address that incurs the debt"],
+      opts: [
+        kind: :value,
+        description:
+          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :network (default :ethereum), :interest_rate_mode (:variable default, :stable), :gas_limit (recommend ~300k for borrow)"
+      ]
+    ],
+    returns: %{type: :string, description: "Transaction hash hex string"}
+  )
+
+  @spec borrow!(String.t() | binary(), non_neg_integer(), String.t() | binary(), keyword()) ::
+          String.t()
+  def borrow!(asset, amount, on_behalf_of, opts) do
+    case borrow(asset, amount, on_behalf_of, opts) do
+      {:ok, tx_hash} -> tx_hash
+      {:error, reason} -> raise "borrow failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- repay ---
+
+  api(:repay, "Repay a borrowed asset to the Aave V3 Pool.",
+    params: [
+      asset: [kind: :value, description: "ERC-20 token contract address to repay"],
+      amount: [kind: :value, description: "Amount to repay (raw integer, or max uint256 for full debt)"],
+      on_behalf_of: [kind: :value, description: "Address whose debt is being repaid"],
+      opts: [
+        kind: :value,
+        description:
+          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :network (default :ethereum), :interest_rate_mode (:variable default, :stable), :gas_limit (recommend ~200k for repay)"
+      ]
+    ],
+    returns: %{
+      type: "{:ok, String.t()} | {:error, term()}",
+      description: "Transaction hash hex string"
+    }
+  )
+
+  @spec repay(String.t() | binary(), non_neg_integer(), String.t() | binary(), keyword()) ::
+          {:ok, String.t()} | {:error, term()}
+  def repay(asset, amount, on_behalf_of, opts) do
+    {network_opts, rate_mode, signer_opts} = split_write_opts(opts)
+
+    with {:ok, rate} <- resolve_interest_rate_mode(rate_mode),
+         {:ok, asset_bin} <- Address.validate(asset),
+         {:ok, obo_bin} <- Address.validate(on_behalf_of),
+         {:ok, pool_addr} <- Contracts.address(:pool, network_opts),
+         {:ok, calldata_hex} <-
+           ABI.encode_call(
+             "repay(address,uint256,uint256,address)",
+             [asset_bin, amount, rate, obo_bin]
+           ) do
+      Signer.send_transaction(pool_addr, Hex.decode!(calldata_hex), signer_opts)
+    end
+  end
+
+  # --- repay! ---
+
+  api(:repay!, "Repay a borrowed asset to the Aave V3 Pool. Raises on error.",
+    params: [
+      asset: [kind: :value, description: "ERC-20 token contract address to repay"],
+      amount: [kind: :value, description: "Amount to repay (raw integer, or max uint256 for full debt)"],
+      on_behalf_of: [kind: :value, description: "Address whose debt is being repaid"],
+      opts: [
+        kind: :value,
+        description:
+          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :network (default :ethereum), :interest_rate_mode (:variable default, :stable), :gas_limit (recommend ~200k for repay)"
+      ]
+    ],
+    returns: %{type: :string, description: "Transaction hash hex string"}
+  )
+
+  @spec repay!(String.t() | binary(), non_neg_integer(), String.t() | binary(), keyword()) ::
+          String.t()
+  def repay!(asset, amount, on_behalf_of, opts) do
+    case repay(asset, amount, on_behalf_of, opts) do
+      {:ok, tx_hash} -> tx_hash
+      {:error, reason} -> raise "repay failed: #{inspect(reason)}"
+    end
+  end
+
   # --- Private helpers ---
 
   @doc false
@@ -127,4 +399,28 @@ defmodule Onchain.Aave.Pool do
 
     {network_opts, rpc_opts}
   end
+
+  @doc false
+  # Separates :network and :interest_rate_mode from opts; remainder passes to Signer.
+  @spec split_write_opts(keyword()) :: {keyword(), atom(), keyword()}
+  defp split_write_opts(opts) do
+    {network_val, rest} = Keyword.pop(opts, :network)
+    {rate_mode, signer_opts} = Keyword.pop(rest, :interest_rate_mode, :variable)
+
+    network_opts =
+      if network_val do
+        [network: network_val]
+      else
+        []
+      end
+
+    {network_opts, rate_mode, signer_opts}
+  end
+
+  @doc false
+  # Maps :variable → 2, :stable → 1. Returns error tuple for invalid values.
+  @spec resolve_interest_rate_mode(atom()) :: {:ok, pos_integer()} | {:error, {:invalid_interest_rate_mode, term()}}
+  defp resolve_interest_rate_mode(:variable), do: {:ok, @variable_rate}
+  defp resolve_interest_rate_mode(:stable), do: {:ok, @stable_rate}
+  defp resolve_interest_rate_mode(other), do: {:error, {:invalid_interest_rate_mode, other}}
 end
