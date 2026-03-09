@@ -26,6 +26,26 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 3: Aave Actions (Write)
 
+### Task 13: ERC-20 Write Operations (`Onchain.ERC20`)
+**Completed** | [D:4/B:8/U:8 → Eff:2.00]
+
+**What was done:**
+- Added `approve/4` and `transfer/4` + bang variants to `Onchain.ERC20`
+- Each validates the target address (spender/recipient), ABI-encodes the calldata, and delegates to `Signer.send_transaction/3`
+- ABI selectors: `0x095ea7b3` (approve), `0xa9059cbb` (transfer)
+- Added descripex `api()` declarations for all 4 new functions
+- Added `@dialyzer` annotations for the same Signet spec cascade as read functions
+- Updated `@moduledoc` to document write operations alongside reads
+- Unit tests: address validation errors, ABI selector verification, bang variant raises
+- Integration tests (Sepolia): self-approve with allowance verification, zero transfer to self with receipt verification
+
+**Files:**
+- `lib/onchain/erc20.ex` (modified — added 4 functions + aliases + dialyzer + api() macros + moduledoc)
+- `test/onchain/erc20_test.exs` (modified — added 8 unit tests for approve/transfer)
+- `test/onchain/erc20_write_integration_test.exs` (created — Sepolia integration tests)
+
+---
+
 ### Task 12: Transaction Signing Setup (`Onchain.Signer`)
 **Completed** | [D:4/B:9/U:9 → Eff:2.25]
 

@@ -1,19 +1,22 @@
 defmodule Onchain.ERC20 do
   @moduledoc """
-  ERC-20 token read operations.
+  ERC-20 token operations.
 
-  Thin wrappers around `Onchain.Contract.call/5` for the standard ERC-20
-  read-only interface. Returns raw integer values for balances — consumers
-  use `Onchain.Decimal.to_decimal/2` with the result of `decimals/2` to normalize.
+  Read operations are thin wrappers around `Onchain.Contract.call/5`.
+  Write operations delegate to `Onchain.Signer.send_transaction/3`.
+  Returns raw integer values for balances — consumers use
+  `Onchain.Decimal.to_decimal/2` with the result of `decimals/2` to normalize.
 
   ## Error Format
 
-  Errors pass through from `Contract.call/5`:
+  Errors pass through from underlying modules:
 
   | Source | Error Shape |
   |--------|-------------|
   | `Onchain.Address.validate/1` | `{:error, {:invalid_address, input}}` |
   | `Onchain.Contract.call/5` | `{:error, {:encode_error, ...}}`, `{:error, {:rpc_error, ...}}`, `{:error, {:decode_error, ...}}` |
+  | `Onchain.ABI.encode_call/2` | `{:error, {:encode_error, ...}}` |
+  | `Onchain.Signer.send_transaction/3` | `{:error, {:missing_option, ...}}`, `{:error, {:sign_error, ...}}`, etc. |
 
   ## Functions
 
@@ -27,26 +30,36 @@ defmodule Onchain.ERC20 do
   | `decimals!/2` | Same, raises on error |
   | `symbol/2` | Token ticker symbol |
   | `symbol!/2` | Same, raises on error |
+  | `approve/4` | Approve spender to transfer tokens (returns tx hash) |
+  | `approve!/4` | Same, raises on error |
+  | `transfer/4` | Transfer tokens to recipient (returns tx hash) |
+  | `transfer!/4` | Same, raises on error |
   """
 
   use Descripex, namespace: "/erc20"
 
+  alias Onchain.ABI
   alias Onchain.Address
   alias Onchain.Contract
+  alias Onchain.Hex
+  alias Onchain.Signer
 
   # Contract.call/5 inherits the upstream Signet.Hex spec mismatch that
   # makes ABI.decode_response/2 appear to return no_return(). Every function
   # here unwraps Contract.call results, so the same cascade applies.
   @dialyzer {:no_match, [balance_of: 3, balance_of!: 3, allowance: 4, allowance!: 4]}
   @dialyzer {:no_match, [decimals: 2, decimals!: 2, symbol: 2, symbol!: 2]}
+  @dialyzer {:no_match, [approve: 4, approve!: 4, transfer: 4, transfer!: 4]}
   @dialyzer {:no_return, [balance_of!: 2, balance_of!: 3]}
   @dialyzer {:no_return, [allowance!: 3, allowance!: 4]}
   @dialyzer {:no_return, [decimals!: 1, decimals!: 2]}
   @dialyzer {:no_return, [symbol!: 1, symbol!: 2]}
+  @dialyzer {:no_return, [approve!: 4, transfer!: 4]}
   @dialyzer {:no_contracts, [balance_of!: 2, balance_of!: 3]}
   @dialyzer {:no_contracts, [allowance!: 3, allowance!: 4]}
   @dialyzer {:no_contracts, [decimals!: 1, decimals!: 2]}
   @dialyzer {:no_contracts, [symbol!: 1, symbol!: 2]}
+  @dialyzer {:no_contracts, [approve!: 4, transfer!: 4]}
 
   # --- balance_of ---
 
@@ -222,6 +235,112 @@ defmodule Onchain.ERC20 do
     case symbol(token, opts) do
       {:ok, value} -> value
       {:error, reason} -> raise "symbol failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- approve ---
+
+  api(:approve, "Approve a spender to transfer tokens on your behalf.",
+    params: [
+      token: [kind: :value, description: "ERC-20 token contract address"],
+      spender: [kind: :value, description: "Address to approve for spending"],
+      amount: [kind: :value, description: "Amount to approve (raw integer, not decimal-adjusted)"],
+      opts: [
+        kind: :value,
+        description:
+          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :gas_limit, :max_fee_per_gas, :max_priority_fee_per_gas"
+      ]
+    ],
+    returns: %{
+      type: "{:ok, String.t()} | {:error, term()}",
+      description: "Transaction hash hex string"
+    }
+  )
+
+  @spec approve(String.t() | binary(), String.t() | binary(), non_neg_integer(), keyword()) ::
+          {:ok, String.t()} | {:error, term()}
+  def approve(token, spender, amount, opts) do
+    with {:ok, spender_bin} <- Address.validate(spender),
+         {:ok, calldata_hex} <- ABI.encode_call("approve(address,uint256)", [spender_bin, amount]) do
+      Signer.send_transaction(token, Hex.decode!(calldata_hex), opts)
+    end
+  end
+
+  # --- approve! ---
+
+  api(:approve!, "Approve a spender to transfer tokens on your behalf. Raises on error.",
+    params: [
+      token: [kind: :value, description: "ERC-20 token contract address"],
+      spender: [kind: :value, description: "Address to approve for spending"],
+      amount: [kind: :value, description: "Amount to approve (raw integer, not decimal-adjusted)"],
+      opts: [
+        kind: :value,
+        description:
+          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :gas_limit, :max_fee_per_gas, :max_priority_fee_per_gas"
+      ]
+    ],
+    returns: %{type: :string, description: "Transaction hash hex string"}
+  )
+
+  @spec approve!(String.t() | binary(), String.t() | binary(), non_neg_integer(), keyword()) ::
+          String.t()
+  def approve!(token, spender, amount, opts) do
+    case approve(token, spender, amount, opts) do
+      {:ok, tx_hash} -> tx_hash
+      {:error, reason} -> raise "approve failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- transfer ---
+
+  api(:transfer, "Transfer tokens to a recipient.",
+    params: [
+      token: [kind: :value, description: "ERC-20 token contract address"],
+      to: [kind: :value, description: "Recipient address"],
+      amount: [kind: :value, description: "Amount to transfer (raw integer, not decimal-adjusted)"],
+      opts: [
+        kind: :value,
+        description:
+          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :gas_limit, :max_fee_per_gas, :max_priority_fee_per_gas"
+      ]
+    ],
+    returns: %{
+      type: "{:ok, String.t()} | {:error, term()}",
+      description: "Transaction hash hex string"
+    }
+  )
+
+  @spec transfer(String.t() | binary(), String.t() | binary(), non_neg_integer(), keyword()) ::
+          {:ok, String.t()} | {:error, term()}
+  def transfer(token, to, amount, opts) do
+    with {:ok, to_bin} <- Address.validate(to),
+         {:ok, calldata_hex} <- ABI.encode_call("transfer(address,uint256)", [to_bin, amount]) do
+      Signer.send_transaction(token, Hex.decode!(calldata_hex), opts)
+    end
+  end
+
+  # --- transfer! ---
+
+  api(:transfer!, "Transfer tokens to a recipient. Raises on error.",
+    params: [
+      token: [kind: :value, description: "ERC-20 token contract address"],
+      to: [kind: :value, description: "Recipient address"],
+      amount: [kind: :value, description: "Amount to transfer (raw integer, not decimal-adjusted)"],
+      opts: [
+        kind: :value,
+        description:
+          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :gas_limit, :max_fee_per_gas, :max_priority_fee_per_gas"
+      ]
+    ],
+    returns: %{type: :string, description: "Transaction hash hex string"}
+  )
+
+  @spec transfer!(String.t() | binary(), String.t() | binary(), non_neg_integer(), keyword()) ::
+          String.t()
+  def transfer!(token, to, amount, opts) do
+    case transfer(token, to, amount, opts) do
+      {:ok, tx_hash} -> tx_hash
+      {:error, reason} -> raise "transfer failed: #{inspect(reason)}"
     end
   end
 end
