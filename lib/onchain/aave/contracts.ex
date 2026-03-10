@@ -7,7 +7,8 @@ defmodule Onchain.Aave.Contracts do
 
   ## Supported Networks
 
-  Ethereum, Arbitrum, Optimism, Base, Polygon, and Avalanche (all Aave V3).
+  Ethereum, Arbitrum, Optimism, Base, Polygon, Avalanche (all Aave V3 mainnet),
+  and Sepolia (V3 testnet).
 
   ## Error Format
 
@@ -62,6 +63,14 @@ defmodule Onchain.Aave.Contracts do
       pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
       oracle: "0xEBd36016B3eD09D4693Ed4251c67Bd858c3c7C9C",
       ui_pool_data_provider: "0x3518E8927A7827CDdAf841872453003CA95906A3"
+    },
+    # Testnet — verified on-chain 2026-03-09 via PoolAddressesProvider.getPool/getPriceOracle
+    # and BGD Labs aave-address-book src/AaveV3Sepolia.sol
+    sepolia: %{
+      pool_addresses_provider: "0x012bAC54348C0E635dCAc9D5FB99f06F24136C9A",
+      pool: "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951",
+      oracle: "0x2da88497588bf89281816106C7259e31AF45a663",
+      ui_pool_data_provider: "0x69529987FA4A075D0C00B0128fa848dc9ebbE9CE"
     }
   }
 

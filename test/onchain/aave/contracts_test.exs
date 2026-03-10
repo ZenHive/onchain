@@ -4,7 +4,7 @@ defmodule Onchain.Aave.ContractsTest do
   alias Onchain.Aave.Contracts
 
   @known_contracts [:pool_addresses_provider, :pool, :oracle, :ui_pool_data_provider]
-  @all_networks [:ethereum, :arbitrum, :optimism, :base, :polygon, :avalanche]
+  @all_networks [:ethereum, :arbitrum, :optimism, :base, :polygon, :avalanche, :sepolia]
 
   describe "address/1" do
     test "returns checksummed address for each known contract" do
@@ -113,9 +113,9 @@ defmodule Onchain.Aave.ContractsTest do
   end
 
   describe "networks/0" do
-    test "returns all 6 supported networks" do
+    test "returns all 7 supported networks" do
       networks = Contracts.networks()
-      assert length(networks) == 6
+      assert length(networks) == 7
 
       for network <- @all_networks do
         assert network in networks

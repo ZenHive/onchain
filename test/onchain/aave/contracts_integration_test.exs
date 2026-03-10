@@ -11,6 +11,38 @@ defmodule Onchain.Aave.Contracts.IntegrationTest do
     [rpc_url: Onchain.RPCCase.rpc_url!()]
   end
 
+  defp sepolia_rpc_opts do
+    [rpc_url: Onchain.SignerCase.sepolia_rpc_url!()]
+  end
+
+  describe "Sepolia on-chain address verification" do
+    test "PoolAddressesProvider.getPool() matches stored :pool for Sepolia" do
+      {:ok, provider_addr} = Contracts.address(:pool_addresses_provider, network: :sepolia)
+      {:ok, calldata} = ABI.encode_call("getPool()", [])
+      {:ok, hex_result} = RPC.eth_call(provider_addr, calldata, sepolia_rpc_opts())
+      {:ok, [pool_addr_raw]} = ABI.decode_response("(address)", hex_result)
+
+      {:ok, pool_on_chain} = Onchain.Address.checksum(pool_addr_raw)
+      {:ok, pool_stored} = Contracts.address(:pool, network: :sepolia)
+
+      assert Onchain.Address.equal?(pool_on_chain, pool_stored),
+             "On-chain pool #{pool_on_chain} != stored #{pool_stored}"
+    end
+
+    test "PoolAddressesProvider.getPriceOracle() matches stored :oracle for Sepolia" do
+      {:ok, provider_addr} = Contracts.address(:pool_addresses_provider, network: :sepolia)
+      {:ok, calldata} = ABI.encode_call("getPriceOracle()", [])
+      {:ok, hex_result} = RPC.eth_call(provider_addr, calldata, sepolia_rpc_opts())
+      {:ok, [oracle_addr_raw]} = ABI.decode_response("(address)", hex_result)
+
+      {:ok, oracle_on_chain} = Onchain.Address.checksum(oracle_addr_raw)
+      {:ok, oracle_stored} = Contracts.address(:oracle, network: :sepolia)
+
+      assert Onchain.Address.equal?(oracle_on_chain, oracle_stored),
+             "On-chain oracle #{oracle_on_chain} != stored #{oracle_stored}"
+    end
+  end
+
   describe "on-chain address verification" do
     test "PoolAddressesProvider.getPool() matches stored :pool address" do
       {:ok, provider_addr} = Contracts.address(:pool_addresses_provider)

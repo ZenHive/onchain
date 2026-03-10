@@ -1,4 +1,5 @@
 defmodule Onchain.Aave.PoolTest do
+  # async: false — :dbg tracing sets a process-global tracer, can't run concurrently
   use ExUnit.Case, async: false
 
   alias Onchain.Aave.Contracts
@@ -8,7 +9,6 @@ defmodule Onchain.Aave.PoolTest do
   @valid_address "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
   @valid_address_2 "0xF380B8F1e63e2BEd7CA329CA1FdDbC39B52cC0d3"
   @test_amount 1_000_000
-  @trace_timeout_ms 1_000
 
   # Expected Pool contract address (ethereum mainnet, checksummed)
   @pool_address "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
@@ -338,74 +338,11 @@ defmodule Onchain.Aave.PoolTest do
     end
   end
 
-  # --- :dbg trace helpers (same pattern as erc20_test.exs) ---
-
   @doc false
-  # Traces the wrapper's downstream Signer call so tests can assert on the
-  # destination address and calldata passed to send_transaction/3.
+  # Delegates to TraceCase and destructures to {to, calldata}.
   defp capture_signer_args(fun) do
-    parent = self()
-
-    handler = fn msg, state ->
-      send(parent, {:dbg_trace, msg})
-      state
-    end
-
-    Code.prepend_path(runtime_tools_ebin!())
-    # credo:disable-for-next-line Credo.Check.Refactor.Apply
-    apply(:dbg, :tracer, [:process, {handler, nil}])
-    # credo:disable-for-next-line Credo.Check.Refactor.Apply
-    apply(:dbg, :p, [self(), [:call]])
-    # credo:disable-for-next-line Credo.Check.Refactor.Apply
-    apply(:dbg, :tpl, [Onchain.Signer, :send_transaction, :x])
-
-    try do
-      fun.()
-      receive_signer_args()
-    after
-      # credo:disable-for-next-line Credo.Check.Refactor.Apply
-      apply(:dbg, :stop_clear, [])
-      drain_dbg_messages()
-    end
-  end
-
-  @doc false
-  # Waits for the traced Signer.send_transaction/3 call and returns {to, calldata}.
-  defp receive_signer_args do
-    receive do
-      {:dbg_trace, {:trace, _pid, :call, {Onchain.Signer, :send_transaction, [to, calldata, _opts]}}} ->
-        {to, calldata}
-
-      {:dbg_trace, _other} ->
-        receive_signer_args()
-    after
-      @trace_timeout_ms ->
-        flunk("Expected traced call to Onchain.Signer.send_transaction/3")
-    end
-  end
-
-  @doc false
-  # Clears any buffered dbg trace messages so later tests start cleanly.
-  defp drain_dbg_messages do
-    receive do
-      {:dbg_trace, _message} -> drain_dbg_messages()
-    after
-      0 -> :ok
-    end
-  end
-
-  @doc false
-  # Finds the OTP runtime_tools ebin path so mix test can load :dbg on demand.
-  defp runtime_tools_ebin! do
-    root_dir = List.to_string(:code.root_dir())
-
-    case Path.wildcard(Path.join([root_dir, "lib", "runtime_tools-*", "ebin"])) do
-      [ebin | _rest] ->
-        ebin
-
-      [] ->
-        flunk("Could not locate OTP runtime_tools ebin path for :dbg tracing")
-    end
+    {to, calldata, _opts} = Onchain.TraceCase.capture_signer_call(fun)
+    {to, calldata}
   end
 
   @doc false

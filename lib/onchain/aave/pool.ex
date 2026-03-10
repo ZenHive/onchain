@@ -385,41 +385,24 @@ defmodule Onchain.Aave.Pool do
   # --- Private helpers ---
 
   @doc false
-  # Separates :network option (for Contracts) from RPC options (:rpc_url, :timeout, :block).
+  # Separates :network option (for Contracts) from remaining options.
   @spec split_opts(keyword()) :: {keyword(), keyword()}
   defp split_opts(opts) do
-    {network_val, rpc_opts} = Keyword.pop(opts, :network)
-
-    network_opts =
-      if network_val do
-        [network: network_val]
-      else
-        []
-      end
-
-    {network_opts, rpc_opts}
+    {Keyword.take(opts, [:network]), Keyword.delete(opts, :network)}
   end
 
   @doc false
   # Separates :network and :interest_rate_mode from opts; remainder passes to Signer.
   @spec split_write_opts(keyword()) :: {keyword(), atom(), keyword()}
   defp split_write_opts(opts) do
-    {network_val, rest} = Keyword.pop(opts, :network)
+    {network_opts, rest} = split_opts(opts)
     {rate_mode, signer_opts} = Keyword.pop(rest, :interest_rate_mode, :variable)
-
-    network_opts =
-      if network_val do
-        [network: network_val]
-      else
-        []
-      end
-
     {network_opts, rate_mode, signer_opts}
   end
 
   @doc false
   # Maps :variable → 2, :stable → 1. Returns error tuple for invalid values.
-  @spec resolve_interest_rate_mode(atom()) :: {:ok, pos_integer()} | {:error, {:invalid_interest_rate_mode, term()}}
+  @spec resolve_interest_rate_mode(term()) :: {:ok, pos_integer()} | {:error, {:invalid_interest_rate_mode, term()}}
   defp resolve_interest_rate_mode(:variable), do: {:ok, @variable_rate}
   defp resolve_interest_rate_mode(:stable), do: {:ok, @stable_rate}
   defp resolve_interest_rate_mode(other), do: {:error, {:invalid_interest_rate_mode, other}}

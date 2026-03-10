@@ -26,6 +26,27 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 3: Aave Actions (Write)
 
+### Task 14b: Pool Write Sepolia Integration Tests (`Onchain.Aave.Pool`)
+**Completed** | [D:4/B:7/U:6 → Eff:1.63]
+
+**What was done:**
+- Added `:sepolia` network to `Onchain.Aave.Contracts` address registry (pool_addresses_provider, pool, oracle, ui_pool_data_provider) — verified on-chain via PoolAddressesProvider.getPool/getPriceOracle and BGD Labs aave-address-book src/AaveV3Sepolia.sol
+- Added Sepolia on-chain verification tests to contracts integration tests (getPool, getPriceOracle match stored addresses)
+- Created pool write integration tests with two round-trip scenarios on Sepolia testnet:
+  - **Supply/withdraw round trip**: Mint WETH from Aave faucet → approve Pool → supply WETH → assert collateral increased → withdraw → assert collateral decreased
+  - **Borrow/repay round trip**: Supply WETH as collateral → borrow USDC (variable rate) → assert debt increased → approve USDC → repay full debt (max uint256) → assert debt decreased
+- Faucet minting is idempotent (only mints if balance below threshold)
+- Uses directional assertions (increased/decreased) to handle testnet state persistence and interest accrual
+- Corrected faucet ABI from plan's `mint(address,uint256)` to actual `mint(address,address,uint256)` (token, to, amount)
+
+**Files:**
+- `lib/onchain/aave/contracts.ex` (modified — added `:sepolia` network entry, updated moduledoc)
+- `test/onchain/aave/contracts_test.exs` (modified — added `:sepolia` to `@all_networks`, updated network count to 7)
+- `test/onchain/aave/contracts_integration_test.exs` (modified — added Sepolia on-chain verification tests)
+- `test/onchain/aave/pool_write_integration_test.exs` (created — supply/withdraw + borrow/repay round trips)
+
+---
+
 ### Task 14: Aave V3 Pool Write Operations (`Onchain.Aave.Pool`)
 **Completed** | [D:6/B:9/U:8 → Eff:1.42]
 
