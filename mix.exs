@@ -42,6 +42,7 @@ defmodule Onchain.MixProject do
       {:signet, "~> 1.6"},
       {:decimal, "~> 2.0"},
       {:descripex, "~> 0.4"},
+      {:rustler, "~> 0.37", runtime: false},
 
       # Dev/test tooling
       {:tidewave, "~> 0.5", only: :dev},

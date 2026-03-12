@@ -4,6 +4,27 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+## Phase 5: Contract Codegen
+
+### Task 24: Rustler NIF — Solidity ABI Parser via Alloy (`Onchain.Solidity`)
+**Completed** | [D:5/B:9/U:9 → Eff:1.80]
+
+**What was done:**
+- Added Rustler NIF using Alloy (`alloy-json-abi`) to parse Solidity ABI JSON into structured Elixir maps
+- Returns functions (with signature, selector, return_type, state_mutability, inputs/outputs), events (with topic hash, indexed params), errors, and constructor
+- The `return_type` field produces tuple-type strings compatible with `Onchain.ABI.decode_response/2`, bridging parsing to existing encoding infrastructure
+- Handles nested tuple/struct types, overloaded functions, and all Solidity ABI item types
+- File convenience functions (`parse_abi_file/1`) keep file I/O in Elixir, NIF does pure JSON parsing
+
+**Files:**
+- `mix.exs` (modified — added `{:rustler, "~> 0.37"}`)
+- `native/onchain_solidity/Cargo.toml` (new — Rust crate with alloy-json-abi, serde_json, hex)
+- `native/onchain_solidity/src/lib.rs` (new — NIF implementation, single `parse_abi_json` function)
+- `lib/onchain/solidity.ex` (new — Elixir wrapper with parse_abi_json/!, parse_abi_file/!)
+- `test/onchain/solidity_test.exs` (new — unit tests using existing priv/abis/ fixtures)
+
+---
+
 ## Code Review Fixes (Phase 3)
 
 ### Fix: Block param validation, tx hash validation, flaky receipt tests

@@ -25,3 +25,9 @@ onchain-*.tar
 # Hex docs cache
 /.hex-docs/
 
+# Rust NIF build artifacts
+/native/*/target/
+
+# Compiled NIF binaries (rebuilt on mix compile)
+/priv/native/
+
