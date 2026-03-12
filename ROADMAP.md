@@ -86,7 +86,7 @@ Drop a `.sol` file, get a typed Elixir module. Rustler NIF using Alloy to parse 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
 | 24 | Rustler NIF: Solidity ABI parser via Alloy | ✅ | 5 | 9 | 9 | 1.80 🚀 | `Onchain.Solidity` (native) |
-| 25 | Contract codegen macro (`use Onchain.Contract, sol: "...")`) | ⬜ | 6 | 10 | 9 | 1.58 🚀 | `Onchain.Contract.Generator` |
+| 25 | Contract codegen macro (`use Onchain.Contract.Generator, sol: "..."`) | ✅ | 6 | 10 | 9 | 1.58 🚀 | `Onchain.Contract.Generator` |
 
 **Task descriptions:**
 

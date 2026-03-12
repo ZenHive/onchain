@@ -4,6 +4,7 @@ defmodule Onchain.SolidityTest do
   alias Onchain.Solidity
 
   @priv_abis Path.join(:code.priv_dir(:onchain), "abis")
+  @priv_contracts Path.join(:code.priv_dir(:onchain), "contracts")
 
   describe "parse_abi_json/1" do
     test "parses function with no inputs and single output" do
@@ -220,6 +221,243 @@ defmodule Onchain.SolidityTest do
     end
   end
 
+  describe "parse_sol/1" do
+    test "parses minimal interface with view function" do
+      sol = """
+      pragma solidity ^0.8.0;
+      interface ISimple {
+          function decimals() external pure returns (uint8);
+      }
+      """
+
+      assert {:ok, result} = Solidity.parse_sol(sol)
+      assert [func] = result.functions
+      assert func.name == "decimals"
+      assert func.signature == "decimals()"
+      assert func.return_type == "(uint8)"
+      assert func.state_mutability == "pure"
+      assert func.inputs == []
+      assert is_binary(func.selector)
+      assert String.starts_with?(func.selector, "0x")
+    end
+
+    test "parses interface with struct definitions" do
+      sol = File.read!(Path.join(@priv_contracts, "test_interface.sol"))
+      assert {:ok, result} = Solidity.parse_sol(sol)
+
+      assert length(result.structs) == 2
+
+      user_data = Enum.find(result.structs, &(&1.name == "UserData"))
+      assert user_data
+      assert length(user_data.fields) == 3
+
+      field_names = Enum.map(user_data.fields, & &1.name)
+      assert "balance" in field_names
+      assert "owner" in field_names
+      assert "active" in field_names
+
+      balance_field = Enum.find(user_data.fields, &(&1.name == "balance"))
+      assert balance_field.ty == "uint256"
+
+      owner_field = Enum.find(user_data.fields, &(&1.name == "owner"))
+      assert owner_field.ty == "address"
+    end
+
+    test "parses interface with enum" do
+      sol = File.read!(Path.join(@priv_contracts, "test_interface.sol"))
+      assert {:ok, result} = Solidity.parse_sol(sol)
+
+      assert [status_enum] = result.enums
+      assert status_enum.name == "Status"
+      assert status_enum.variants == ["Pending", "Active", "Closed"]
+    end
+
+    test "parses interface with NatSpec" do
+      sol = File.read!(Path.join(@priv_contracts, "test_interface.sol"))
+      assert {:ok, result} = Solidity.parse_sol(sol)
+
+      get_user = Enum.find(result.functions, &(&1.name == "getUserData"))
+      assert get_user.natspec
+      assert get_user.natspec.notice == "Get user data by address"
+      assert get_user.natspec.params["user"] == "The user address to query"
+      assert get_user.natspec.returns["data"] == "The user's data struct"
+    end
+
+    test "functions without NatSpec have nil natspec" do
+      sol = File.read!(Path.join(@priv_contracts, "test_interface.sol"))
+      assert {:ok, result} = Solidity.parse_sol(sol)
+
+      total = Enum.find(result.functions, &(&1.name == "totalSupply"))
+      assert total.natspec == nil
+    end
+
+    test "parses empty interface" do
+      sol = """
+      pragma solidity ^0.8.0;
+      interface IEmpty {}
+      """
+
+      assert {:ok, result} = Solidity.parse_sol(sol)
+      assert result.functions == []
+      assert result.events == []
+      assert result.errors == []
+      assert result.structs == []
+      assert result.enums == []
+      assert result.constants == []
+      assert result.constructor == nil
+    end
+
+    test "returns error for invalid Solidity" do
+      assert {:error, {:parse_error, _reason}} = Solidity.parse_sol("not solidity {{{")
+    end
+
+    test "struct types resolve to tuple in signatures and return_type" do
+      sol = File.read!(Path.join(@priv_contracts, "test_interface.sol"))
+      assert {:ok, result} = Solidity.parse_sol(sol)
+
+      get_user = Enum.find(result.functions, &(&1.name == "getUserData"))
+      # UserData has 3 fields: uint256, address, bool → signature uses tuple
+      assert get_user.signature == "getUserData(address)"
+      # Return type wraps struct fields in parens
+      assert get_user.return_type == "((uint256,address,bool))"
+
+      # Output param should be tuple type with components
+      assert [output] = get_user.outputs
+      assert output.ty == "tuple"
+      assert length(output.components) == 3
+    end
+
+    test "event with struct type resolves to tuple signature and components" do
+      sol = File.read!(Path.join(@priv_contracts, "test_interface.sol"))
+      assert {:ok, result} = Solidity.parse_sol(sol)
+
+      assert [event] = result.events
+      assert event.name == "Updated"
+      # Struct expands in signature: Updated((uint256,address,bool))
+      assert event.signature == "Updated((uint256,address,bool))"
+      assert is_binary(event.topic)
+      assert String.starts_with?(event.topic, "0x")
+
+      # Input param has tuple type with components
+      assert [input] = event.inputs
+      assert input.ty == "tuple"
+      assert length(input.components) == 3
+    end
+
+    test "error with struct type resolves to tuple signature and components" do
+      sol = File.read!(Path.join(@priv_contracts, "test_interface.sol"))
+      assert {:ok, result} = Solidity.parse_sol(sol)
+
+      assert [err] = result.errors
+      assert err.name == "BadData"
+      # Struct expands in signature: BadData((uint256,address,bool))
+      assert err.signature == "BadData((uint256,address,bool))"
+      assert is_binary(err.selector)
+      assert String.starts_with?(err.selector, "0x")
+
+      # Input param has tuple type with components
+      assert [input] = err.inputs
+      assert input.ty == "tuple"
+      assert length(input.components) == 3
+    end
+
+    test "nested struct resolves recursively" do
+      sol = File.read!(Path.join(@priv_contracts, "test_interface.sol"))
+      assert {:ok, result} = Solidity.parse_sol(sol)
+
+      get_nested = Enum.find(result.functions, &(&1.name == "getNested"))
+      assert get_nested
+
+      # Nested has fields: uint256 id, UserData data
+      # UserData expands to (uint256,address,bool)
+      # So Nested becomes (uint256,(uint256,address,bool))
+      assert get_nested.return_type == "((uint256,(uint256,address,bool)))"
+
+      # Output param is tuple with 2 components
+      assert [output] = get_nested.outputs
+      assert output.ty == "tuple"
+      assert length(output.components) == 2
+
+      # Second component (data) is itself a tuple with 3 sub-components
+      data_comp = Enum.at(output.components, 1)
+      assert data_comp.name == "data"
+      assert data_comp.ty == "tuple"
+      assert length(data_comp.components) == 3
+    end
+
+    test "parses block-style NatSpec comments" do
+      sol = File.read!(Path.join(@priv_contracts, "test_interface.sol"))
+      assert {:ok, result} = Solidity.parse_sol(sol)
+
+      name_fn = Enum.find(result.functions, &(&1.name == "name"))
+      assert name_fn.natspec
+      assert name_fn.natspec.notice == "Get the token name"
+      assert name_fn.natspec.returns["name"] == "The token name string"
+    end
+
+    test "has all required map keys" do
+      sol = File.read!(Path.join(@priv_contracts, "test_interface.sol"))
+      assert {:ok, result} = Solidity.parse_sol(sol)
+
+      assert Map.has_key?(result, :functions)
+      assert Map.has_key?(result, :events)
+      assert Map.has_key?(result, :errors)
+      assert Map.has_key?(result, :constructor)
+      assert Map.has_key?(result, :structs)
+      assert Map.has_key?(result, :enums)
+      assert Map.has_key?(result, :constants)
+    end
+  end
+
+  describe "parse_sol!/1" do
+    test "returns map on success" do
+      sol = """
+      pragma solidity ^0.8.0;
+      interface ISimple {
+          function decimals() external pure returns (uint8);
+      }
+      """
+
+      result = Solidity.parse_sol!(sol)
+      assert is_map(result)
+      assert [func] = result.functions
+      assert func.name == "decimals"
+    end
+
+    test "raises on invalid input" do
+      assert_raise RuntimeError, ~r/Solidity parse failed/, fn ->
+        Solidity.parse_sol!("not solidity {{{")
+      end
+    end
+  end
+
+  describe "parse_sol_file/1" do
+    test "reads and parses file" do
+      path = Path.join(@priv_contracts, "test_interface.sol")
+      assert {:ok, result} = Solidity.parse_sol_file(path)
+      assert length(result.functions) == 6
+    end
+
+    test "returns file_error for missing file" do
+      assert {:error, {:file_error, reason}} = Solidity.parse_sol_file("/nonexistent/file.sol")
+      assert reason =~ "/nonexistent/file.sol"
+    end
+  end
+
+  describe "parse_sol_file!/1" do
+    test "returns map on success" do
+      path = Path.join(@priv_contracts, "test_interface.sol")
+      assert %{functions: funcs} = Solidity.parse_sol_file!(path)
+      assert length(funcs) == 6
+    end
+
+    test "raises on missing file" do
+      assert_raise RuntimeError, ~r/Solidity file error/, fn ->
+        Solidity.parse_sol_file!("/nonexistent/file.sol")
+      end
+    end
+  end
+
   describe "roundtrip with Onchain.ABI" do
     test "parsed signatures produce matching selectors when encoded" do
       json = File.read!(Path.join(@priv_abis, "aave_pool.json"))
@@ -231,6 +469,43 @@ defmodule Onchain.SolidityTest do
 
         assert encoded_selector == func.selector,
                "Selector mismatch for #{func.name}: encoded=#{encoded_selector}, parsed=#{func.selector}"
+      end
+    end
+  end
+
+  describe "roundtrip: parse_sol vs parse_abi_json consistency" do
+    test "selectors match between sol and abi_json for same contract" do
+      # Build a minimal ERC-20 interface in both formats
+      sol = """
+      pragma solidity ^0.8.0;
+      interface IERC20 {
+          function balanceOf(address account) external view returns (uint256);
+          function transfer(address to, uint256 amount) external returns (bool);
+          function decimals() external pure returns (uint8);
+      }
+      """
+
+      abi_json = ~s([
+        {"inputs":[{"name":"account","type":"address"}],"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+        {"inputs":[{"name":"to","type":"address"},{"name":"amount","type":"uint256"}],"name":"transfer","outputs":[{"name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},
+        {"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"stateMutability":"pure","type":"function"}
+      ])
+
+      {:ok, from_sol} = Solidity.parse_sol(sol)
+      {:ok, from_json} = Solidity.parse_abi_json(abi_json)
+
+      for json_func <- from_json.functions do
+        sol_func = Enum.find(from_sol.functions, &(&1.name == json_func.name))
+        assert sol_func, "Function #{json_func.name} not found in sol parse"
+
+        assert sol_func.signature == json_func.signature,
+               "Signature mismatch for #{json_func.name}: sol=#{sol_func.signature}, json=#{json_func.signature}"
+
+        assert sol_func.selector == json_func.selector,
+               "Selector mismatch for #{json_func.name}: sol=#{sol_func.selector}, json=#{json_func.selector}"
+
+        assert sol_func.return_type == json_func.return_type,
+               "Return type mismatch for #{json_func.name}: sol=#{sol_func.return_type}, json=#{json_func.return_type}"
       end
     end
   end

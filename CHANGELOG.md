@@ -6,6 +6,29 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 5: Contract Codegen
 
+### Task 25: Contract Codegen Macro (`Onchain.Contract.Generator`)
+**Completed** | [D:6/B:10/U:9 → Eff:1.58]
+
+**What was done:**
+- Created `Onchain.Contract.Generator` — a `@before_compile` macro that reads a Solidity ABI at compile time and generates typed Elixir functions for every contract function
+- Three input modes: `:sol` (Solidity source via `parse_sol!`), `:abi_json` (JSON string via `parse_abi_json!`), `:abi_file` (file path via `parse_abi_file!`)
+- **Read functions** (`view`/`pure`): delegates to `Onchain.Contract.call/5` with `opts \\ []`
+- **Write functions** (`nonpayable`/`payable`): ABI-encodes calldata via `Onchain.ABI.encode_call/2`, delegates to `Onchain.Signer.send_transaction/3` with required `opts`
+- **Bang variants** for all functions — raises on error
+- **Address validation**: `address` params validated via `Onchain.Address.validate/1` in `with` chain before ABI encoding
+- **camelCase → snake_case** naming with overload disambiguation (same-arity overloads get type suffixes)
+- **`.sol` extras**: nested `defmodule` structs with `@enforce_keys`, `defstruct`, `from_raw/1`; enum constants as module attributes; `@doc` from NatSpec `/// @notice`
+- **`__contract_abi__/0`**: returns full parsed ABI map
+- **`@dialyzer` annotations**: same cascade pattern as `erc20.ex` for Signet spec mismatch
+- **`@moduledoc`**: auto-generated function listing by read/write type
+
+**Files:**
+- `lib/onchain/contract/generator.ex` (created)
+- `test/onchain/contract/generator_test.exs` (created)
+- `test/onchain/contract/generator_integration_test.exs` (created)
+
+---
+
 ### Task 24: Rustler NIF — Solidity ABI Parser via Alloy (`Onchain.Solidity`)
 **Completed** | [D:5/B:9/U:9 → Eff:1.80]
 

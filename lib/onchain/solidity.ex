@@ -1,23 +1,20 @@
 defmodule Onchain.Solidity do
   @moduledoc """
-  Solidity ABI parser powered by Alloy via Rustler NIF.
+  Solidity ABI parser powered by Alloy and solang-parser via Rustler NIF.
 
-  Parses ABI JSON (standard `solc` output) into structured Elixir maps with
-  function signatures, selectors, parameter types, events, and errors —
-  everything needed to generate typed contract wrappers.
+  Supports two input formats:
+
+  - **ABI JSON** — standard `solc` output. Parses function signatures, selectors,
+    parameter types, events, and errors. Use `parse_abi_json/1`.
+  - **Solidity source** — raw `.sol` files. Recovers struct definitions, enum
+    definitions, NatSpec documentation, and constants that ABI JSON discards.
+    Use `parse_sol/1`.
 
   ## Output Structure
 
-  Returns a `parsed_abi()` map with four keys:
-
-  - `:functions` — list of `function_info()` maps with `:name`, `:signature`,
-    `:selector`, `:return_type`, `:state_mutability`, `:inputs`, `:outputs`
-  - `:events` — list of `event_info()` maps with `:name`, `:signature`, `:topic`,
-    `:anonymous`, `:inputs`
-  - `:errors` — list of `error_info()` maps with `:name`, `:signature`, `:selector`,
-    `:inputs`
-  - `:constructor` — `constructor_info()` map with `:inputs`, `:state_mutability`
-    (or `nil`)
+  Both parsers return maps with `:functions`, `:events`, `:errors`, `:constructor`.
+  The `.sol` parser additionally returns `:structs`, `:enums`, `:constants`, and
+  attaches `:natspec` to each function entry.
 
   ### Parameter Maps
 
@@ -38,6 +35,7 @@ defmodule Onchain.Solidity do
   | Source | Error Shape |
   |--------|-------------|
   | Invalid JSON / malformed ABI | `{:error, {:parse_error, reason}}` |
+  | Invalid Solidity source | `{:error, {:parse_error, reason}}` |
   | File not found / unreadable | `{:error, {:file_error, reason}}` |
 
   ## Functions
@@ -48,6 +46,10 @@ defmodule Onchain.Solidity do
   | `parse_abi_json!/1` | Same, raises on error |
   | `parse_abi_file/1` | Read file + parse ABI JSON |
   | `parse_abi_file!/1` | Same, raises on error |
+  | `parse_sol/1` | Parse Solidity source string → enriched map |
+  | `parse_sol!/1` | Same, raises on error |
+  | `parse_sol_file/1` | Read file + parse Solidity source |
+  | `parse_sol_file!/1` | Same, raises on error |
   """
 
   use Descripex, namespace: "/solidity"
@@ -77,6 +79,18 @@ defmodule Onchain.Solidity do
           outputs: [param()]
         }
 
+  @typedoc "Parsed function entry with NatSpec (from .sol source)."
+  @type function_info_with_natspec :: %{
+          name: String.t(),
+          signature: String.t(),
+          selector: String.t(),
+          return_type: String.t(),
+          state_mutability: String.t(),
+          inputs: [param()],
+          outputs: [param()],
+          natspec: natspec() | nil
+        }
+
   @typedoc "Parsed ABI event entry."
   @type event_info :: %{
           name: String.t(),
@@ -103,6 +117,33 @@ defmodule Onchain.Solidity do
           events: [event_info()],
           errors: [error_info()],
           constructor: constructor_info()
+        }
+
+  @typedoc "Struct definition from Solidity source."
+  @type struct_info :: %{name: String.t(), fields: [%{name: String.t(), ty: String.t()}]}
+
+  @typedoc "Enum definition from Solidity source."
+  @type enum_info :: %{name: String.t(), variants: [String.t()]}
+
+  @typedoc "Constant definition from Solidity source."
+  @type constant_info :: %{name: String.t(), ty: String.t(), value: String.t()}
+
+  @typedoc "NatSpec documentation for a function."
+  @type natspec :: %{
+          notice: String.t(),
+          params: %{String.t() => String.t()},
+          returns: %{String.t() => String.t()}
+        }
+
+  @typedoc "Complete parsed Solidity source with structs, enums, constants, and NatSpec."
+  @type parsed_sol :: %{
+          functions: [function_info_with_natspec()],
+          events: [event_info()],
+          errors: [error_info()],
+          constructor: constructor_info(),
+          structs: [struct_info()],
+          enums: [enum_info()],
+          constants: [constant_info()]
         }
 
   # --- parse_abi_json ---
@@ -193,6 +234,103 @@ defmodule Onchain.Solidity do
       {:error, {:parse_error, reason}} -> raise "ABI parse failed: #{reason}"
       {:error, {:file_error, reason}} -> raise "ABI file error: #{reason}"
       {:error, reason} -> raise "ABI error: #{inspect(reason)}"
+    end
+  end
+
+  # --- parse_sol ---
+
+  api(
+    :parse_sol,
+    "Parse a Solidity source string into structured Elixir data with structs, enums, and NatSpec.",
+    params: [
+      source: [
+        kind: :value,
+        description: "Solidity source code string (e.g. an interface definition)"
+      ]
+    ],
+    returns: %{
+      type: "{:ok, parsed_sol()} | {:error, {:parse_error, String.t()}}",
+      description:
+        "Enriched parsed data with :functions, :events, :errors, :constructor, :structs, :enums, :constants keys"
+    }
+  )
+
+  @spec parse_sol(String.t()) :: {:ok, parsed_sol()} | {:error, {:parse_error, String.t()}}
+  def parse_sol(_source), do: :erlang.nif_error(:nif_not_loaded)
+
+  # --- parse_sol! ---
+
+  api(:parse_sol!, "Parse a Solidity source string. Raises on error.",
+    params: [
+      source: [
+        kind: :value,
+        description: "Solidity source code string (e.g. an interface definition)"
+      ]
+    ],
+    returns: %{
+      type: "parsed_sol()",
+      description:
+        "Enriched parsed data with :functions, :events, :errors, :constructor, :structs, :enums, :constants keys"
+    }
+  )
+
+  @spec parse_sol!(String.t()) :: parsed_sol()
+  def parse_sol!(source) do
+    case parse_sol(source) do
+      {:ok, result} -> result
+      {:error, {:parse_error, reason}} -> raise "Solidity parse failed: #{reason}"
+      {:error, reason} -> raise "Solidity parse failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- parse_sol_file ---
+
+  api(:parse_sol_file, "Read a file and parse its contents as Solidity source.",
+    params: [
+      path: [
+        kind: :value,
+        description: "Path to a .sol file (e.g. \"priv/contracts/IPool.sol\")"
+      ]
+    ],
+    returns: %{
+      type: "{:ok, parsed_sol()} | {:error, {:parse_error, String.t()} | {:file_error, String.t()}}",
+      description:
+        "Enriched parsed data with :functions, :events, :errors, :constructor, :structs, :enums, :constants keys"
+    }
+  )
+
+  @spec parse_sol_file(String.t()) ::
+          {:ok, parsed_sol()} | {:error, {:parse_error, String.t()} | {:file_error, String.t()}}
+  def parse_sol_file(path) do
+    case File.read(path) do
+      {:ok, contents} -> parse_sol(contents)
+      {:error, reason} -> {:error, {:file_error, "#{path}: #{reason}"}}
+    end
+  end
+
+  # --- parse_sol_file! ---
+
+  api(:parse_sol_file!, "Read a file and parse its contents as Solidity source. Raises on error.",
+    params: [
+      path: [
+        kind: :value,
+        description: "Path to a .sol file (e.g. \"priv/contracts/IPool.sol\")"
+      ]
+    ],
+    returns: %{
+      type: "parsed_sol()",
+      description:
+        "Enriched parsed data with :functions, :events, :errors, :constructor, :structs, :enums, :constants keys"
+    }
+  )
+
+  @spec parse_sol_file!(String.t()) :: parsed_sol()
+  def parse_sol_file!(path) do
+    case parse_sol_file(path) do
+      {:ok, result} -> result
+      {:error, {:parse_error, reason}} -> raise "Solidity parse failed: #{reason}"
+      {:error, {:file_error, reason}} -> raise "Solidity file error: #{reason}"
+      {:error, reason} -> raise "Solidity error: #{inspect(reason)}"
     end
   end
 end
