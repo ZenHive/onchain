@@ -70,7 +70,8 @@ defmodule Onchain.Aave.Contracts do
       pool_addresses_provider: "0x012bAC54348C0E635dCAc9D5FB99f06F24136C9A",
       pool: "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951",
       oracle: "0x2da88497588bf89281816106C7259e31AF45a663",
-      ui_pool_data_provider: "0x69529987FA4A075D0C00B0128fa848dc9ebbE9CE"
+      ui_pool_data_provider: "0x69529987FA4A075D0C00B0128fa848dc9ebbE9CE",
+      faucet: "0xC959483DBa39aa9E78757139af0e9a2EDEb3f42D"
     }
   }
 

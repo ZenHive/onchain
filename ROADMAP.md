@@ -69,17 +69,13 @@ Non-Aave read primitives that consumers need before write operations. Born from 
 | 14 | Pool write calls (supply, borrow, repay, withdraw) + unit tests | ✅ | 6 | 9 | 8 | 1.42 📋 | `Onchain.Aave.Pool` |
 | 14b | Pool write Sepolia integration tests | ✅ | 4 | 7 | 6 | 1.63 🚀 | `Onchain.Aave.Pool` |
 | 23 | Transaction receipt + nonce RPC methods (eth_getTransactionReceipt, eth_getTransactionCount) | ✅ | 3 | 8 | 8 | 2.67 🎯 | `Onchain.RPC` |
-| 35 | Aave testnet faucet module (mint test ERC-20 tokens programmatically) | ⬜ | 2 | 4 | 3 | 1.75 🚀 | `Onchain.Aave.Faucet` |
+| 35 | Aave testnet faucet module (mint test ERC-20 tokens programmatically) | ✅ | 2 | 4 | 3 | 1.75 🚀 | `Onchain.Aave.Faucet` |
 
 ---
 
-## Phase 4: Consumer Migration
+## Phase 4: Consumer Migration — Out of Scope
 
-| # | Task | Status | D | B | U | Eff |
-|---|------|--------|---|---|---|-----|
-| 15 | ccxt_ex integration (path dep, shared types) | ⬜ | 2 | 5 | 4 | 2.25 🚀 |
-| 16 | aave_sim migration | ⬜ | 6 | 8 | 7 | 1.25 📋 |
-| 17 | blockwatch migration | ⬜ | 7 | 9 | 8 | 1.21 📋 |
+Consumer integration work lives in the consumer repos (ccxt_ex, blockwatch, etc.), not here.
 
 ---
 

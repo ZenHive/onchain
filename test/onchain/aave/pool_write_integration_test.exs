@@ -3,20 +3,24 @@ defmodule Onchain.Aave.Pool.WriteIntegrationTest do
   use ExUnit.Case, async: false
 
   alias Onchain.Aave.Contracts
+  alias Onchain.Aave.Faucet
   alias Onchain.Aave.Pool
   alias Onchain.ERC20
   alias Onchain.RPC
 
   @moduletag :integration
+  # Borrow/repay test can hit up to 8 wait_for_receipt calls (each up to 60s).
+  # Budget: 8 × 60s = 480s worst case + RPC overhead → 600s (10 min).
+  @moduletag timeout: 600_000
 
   @sepolia_chain_id 11_155_111
 
   # Aave Sepolia testnet tokens (from BGD Labs aave-address-book src/AaveV3Sepolia.sol)
   @aave_sepolia_weth "0xC558DBdd856501FCd9aaF1E62eae57A9F0629a3c"
   @aave_sepolia_usdc "0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8"
-  @aave_sepolia_faucet "0xC959483DBa39aa9E78757139af0e9a2EDEb3f42D"
 
   # Gas limits per operation type
+  @gas_limit_weth_deposit 60_000
   @gas_limit_faucet_mint 200_000
   @gas_limit_erc20_approve 120_000
   @gas_limit_pool_supply 400_000
@@ -27,8 +31,9 @@ defmodule Onchain.Aave.Pool.WriteIntegrationTest do
   # Amounts (raw integers — WETH has 18 decimals, USDC has 6)
   @weth_supply_amount 10_000_000_000_000_000
   @usdc_borrow_amount 1_000_000
-  @faucet_mint_threshold_weth 100_000_000_000_000_000
-  @faucet_mint_amount_weth 10_000_000_000_000_000_000
+  # WETH deposit: wrap 0.1 ETH when balance drops below 0.05 ETH
+  @weth_deposit_threshold 50_000_000_000_000_000
+  @weth_deposit_amount 100_000_000_000_000_000
   @faucet_mint_threshold_usdc 10_000_000
   @faucet_mint_amount_usdc 1_000_000_000
 
@@ -37,7 +42,6 @@ defmodule Onchain.Aave.Pool.WriteIntegrationTest do
 
   # --- Test-local helpers ---
 
-  @doc false
   defp send_opts(rpc_url, key, address) do
     {:ok, nonce} = RPC.get_transaction_count(address, rpc_url: rpc_url, block: "pending")
 
@@ -51,7 +55,6 @@ defmodule Onchain.Aave.Pool.WriteIntegrationTest do
     ]
   end
 
-  @doc false
   defp pool_opts(rpc_url, key, address, gas_limit) do
     rpc_url
     |> send_opts(key, address)
@@ -59,7 +62,6 @@ defmodule Onchain.Aave.Pool.WriteIntegrationTest do
     |> Keyword.put(:gas_limit, gas_limit)
   end
 
-  @doc false
   # Sends a transaction and waits for its receipt. Asserts status == 1 (success).
   defp send_and_wait!(tx_hash, rpc_url) do
     assert String.starts_with?(tx_hash, "0x"), "Expected tx hash, got: #{tx_hash}"
@@ -72,28 +74,23 @@ defmodule Onchain.Aave.Pool.WriteIntegrationTest do
     receipt
   end
 
-  @doc false
-  # Mints tokens from the Aave Sepolia faucet if balance is below threshold.
-  # Faucet ABI: mint(address token, address to, uint256 amount)
-  defp mint_if_needed(token, amount, threshold, rpc_url, key, address) do
-    {:ok, balance} = ERC20.balance_of(token, address, rpc_url: rpc_url)
+  # Wraps Sepolia ETH into WETH via deposit() if WETH balance is below threshold.
+  # WETH9Mock's mint() is owner-only — the faucet can't mint it.
+  defp deposit_weth_if_needed(threshold, amount, rpc_url, key, address) do
+    {:ok, balance} = ERC20.balance_of(@aave_sepolia_weth, address, rpc_url: rpc_url)
 
     if balance < threshold do
-      {:ok, token_bin} = Onchain.Address.validate(token)
-      {:ok, to_bin} = Onchain.Address.validate(address)
-
-      {:ok, calldata_hex} =
-        Onchain.ABI.encode_call("mint(address,address,uint256)", [token_bin, to_bin, amount])
-
+      # deposit() selector: 0xd0e30db0 (no arguments, ETH sent as value)
       opts =
         rpc_url
         |> send_opts(key, address)
-        |> Keyword.put(:gas_limit, @gas_limit_faucet_mint)
+        |> Keyword.put(:gas_limit, @gas_limit_weth_deposit)
+        |> Keyword.put(:value, amount)
 
       {:ok, tx_hash} =
         Onchain.Signer.send_transaction(
-          @aave_sepolia_faucet,
-          Onchain.Hex.decode!(calldata_hex),
+          @aave_sepolia_weth,
+          {:raw, Onchain.Hex.decode!("0xd0e30db0")},
           opts
         )
 
@@ -101,12 +98,27 @@ defmodule Onchain.Aave.Pool.WriteIntegrationTest do
     end
   end
 
-  @doc false
+  # Mints tokens from the Aave Sepolia faucet if balance is below threshold.
+  # Works for TestnetERC20 tokens (USDC, DAI, etc.) but NOT WETH.
+  defp faucet_mint_if_needed(token, amount, threshold, rpc_url, key, address) do
+    {:ok, balance} = ERC20.balance_of(token, address, rpc_url: rpc_url)
+
+    if balance < threshold do
+      opts =
+        rpc_url
+        |> send_opts(key, address)
+        |> Keyword.put(:gas_limit, @gas_limit_faucet_mint)
+        |> Keyword.put(:network, :sepolia)
+
+      {:ok, tx_hash} = Faucet.mint(token, address, amount, opts)
+      send_and_wait!(tx_hash, rpc_url)
+    end
+  end
+
   defp account_data(address, rpc_url) do
     Pool.get_user_account_data!(address, network: :sepolia, rpc_url: rpc_url)
   end
 
-  @doc false
   # Asserts two Decimal values are within a relative tolerance (e.g. "0.05" = 5%).
   # Uses min base of 1 to avoid division by zero. Accounts for oracle price jitter
   # between reads on testnet.
@@ -135,11 +147,10 @@ defmodule Onchain.Aave.Pool.WriteIntegrationTest do
     test "supply WETH then withdraw restores collateral", ctx do
       %{key: key, rpc_url: rpc_url, address: address} = ctx
 
-      # 1. Mint WETH from faucet if balance is low
-      mint_if_needed(
-        @aave_sepolia_weth,
-        @faucet_mint_amount_weth,
-        @faucet_mint_threshold_weth,
+      # 1. Wrap Sepolia ETH into WETH if balance is low
+      deposit_weth_if_needed(
+        @weth_deposit_threshold,
+        @weth_deposit_amount,
         rpc_url,
         key,
         address
@@ -209,17 +220,16 @@ defmodule Onchain.Aave.Pool.WriteIntegrationTest do
     test "borrow USDC then repay reduces debt", ctx do
       %{key: key, rpc_url: rpc_url, address: address} = ctx
 
-      # 1. Mint WETH and USDC from faucet if balance is low
-      mint_if_needed(
-        @aave_sepolia_weth,
-        @faucet_mint_amount_weth,
-        @faucet_mint_threshold_weth,
+      # 1. Wrap Sepolia ETH into WETH and mint USDC from faucet if balance is low
+      deposit_weth_if_needed(
+        @weth_deposit_threshold,
+        @weth_deposit_amount,
         rpc_url,
         key,
         address
       )
 
-      mint_if_needed(
+      faucet_mint_if_needed(
         @aave_sepolia_usdc,
         @faucet_mint_amount_usdc,
         @faucet_mint_threshold_usdc,

@@ -5,6 +5,7 @@ defmodule Onchain.Aave.ContractsTest do
 
   @known_contracts [:pool_addresses_provider, :pool, :oracle, :ui_pool_data_provider]
   @all_networks [:ethereum, :arbitrum, :optimism, :base, :polygon, :avalanche, :sepolia]
+  @mainnet_networks [:ethereum, :arbitrum, :optimism, :base, :polygon, :avalanche]
 
   describe "address/1" do
     test "returns checksummed address for each known contract" do
@@ -140,15 +141,33 @@ defmodule Onchain.Aave.ContractsTest do
       assert length(keys) == 4
     end
 
-    test "all networks have the same 4 contract keys" do
-      for network <- @all_networks do
+    test "mainnet networks have exactly the 4 core contract keys" do
+      for network <- @mainnet_networks do
         assert {:ok, keys} = Contracts.contracts(network: network)
-        assert length(keys) == 4
+        assert length(keys) == 4, "#{network} has #{length(keys)} keys, expected 4: #{inspect(keys)}"
 
         for key <- @known_contracts do
           assert key in keys, "Missing #{key} for #{network}"
         end
       end
+    end
+
+    test "sepolia has exactly 5 contract keys (4 core + faucet)" do
+      assert {:ok, keys} = Contracts.contracts(network: :sepolia)
+      assert length(keys) == 5, "Sepolia has #{length(keys)} keys, expected 5: #{inspect(keys)}"
+
+      for key <- @known_contracts do
+        assert key in keys, "Missing #{key} for sepolia"
+      end
+
+      assert :faucet in keys
+    end
+
+    test "sepolia has faucet contract" do
+      assert {:ok, addr} = Contracts.address(:faucet, network: :sepolia)
+      assert String.starts_with?(addr, "0x")
+      assert String.length(addr) == 42
+      assert {:ok, ^addr} = Onchain.Address.checksum(addr)
     end
 
     test "unsupported network returns error" do

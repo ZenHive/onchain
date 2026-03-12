@@ -2,18 +2,22 @@
 
 Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) and write (transaction signing) capabilities using `signet` as the sole Ethereum dependency.
 
-@include ~/.claude/includes/across-instances.md
-@include ~/.claude/includes/critical-rules.md
-@include ~/.claude/includes/skills-awareness.md
-@include ~/.claude/includes/task-prioritization.md
-@include ~/.claude/includes/task-writing.md
-@include ~/.claude/includes/web-command.md
-@include ~/.claude/includes/code-style.md
-@include ~/.claude/includes/development-philosophy.md
-@include ~/.claude/includes/documentation-guidelines.md
-@include ~/.claude/includes/agent-economy.md
-@include ~/.claude/includes/elixir-patterns.md
-@include ~/.claude/includes/library-design.md
+@~/.claude/includes/across-instances.md
+@~/.claude/includes/critical-rules.md
+@~/.claude/includes/skills-awareness.md
+@~/.claude/includes/task-prioritization.md
+@~/.claude/includes/task-writing.md
+@~/.claude/includes/web-command.md
+@~/.claude/includes/code-style.md
+@~/.claude/includes/development-philosophy.md
+@~/.claude/includes/documentation-guidelines.md
+@~/.claude/includes/agent-economy.md
+@~/.claude/includes/elixir-patterns.md
+@~/.claude/includes/elixir-setup.md
+@~/.claude/includes/development-commands.md
+@~/.claude/includes/ex-unit-json.md
+@~/.claude/includes/dialyzer-json.md
+@~/.claude/includes/library-design.md
 
 ## Architecture
 
@@ -59,18 +63,23 @@ Update ROADMAP.md (⬜→✅) and CHANGELOG.md (add entry) after completing any 
 ## Testing
 
 - Unit tests for all pure functions (hex, address, decimal, math)
-- Integration tests for RPC calls require `ETHEREUM_API_URL` or `ETH_RPC_URL` env var
+- Integration tests are **excluded by default** (`ExUnit.start(exclude: [:integration])` in test_helper.exs)
+- `mix test.json --quiet` runs only unit tests — no flags needed to skip integration
+- Integration tests for RPC reads require `ETHEREUM_API_URL` or `ETH_RPC_URL` env var
+- Integration tests for Sepolia writes (`@tag :sepolia_send`) additionally require `SIGNER_PRIVATE_KEY`
 - Use `Onchain.RPCCase.rpc_url!/0` from `test/support/rpc_case.ex` to resolve RPC URL
 - Use `flunk/1` with setup instructions for missing credentials, never silent skip
 
 ### Quick Commands
 
 ```bash
-mix test.json --quiet                          # AI-friendly test output (failures only)
+mix test.json --quiet                          # Unit tests only (integration excluded by default)
 mix test.json --quiet --failed --first-failure # Iterate on failures
+mix test.json --quiet --include integration    # Unit + all integration tests
+mix test.json --quiet --only integration       # Integration tests only
+mix test.json --quiet --only sepolia_send      # Sepolia write tests only (sends transactions)
 mix dialyzer.json --quiet                      # AI-friendly dialyzer output
 mix credo --strict --format json               # Static analysis (JSON output)
-mix test.json --quiet --exclude integration    # Test all exchanges
 ```
 
 ## Contract Address Verification

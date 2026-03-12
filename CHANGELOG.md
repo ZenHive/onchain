@@ -26,6 +26,24 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 3: Aave Actions (Write)
 
+### Task 35: Aave Testnet Faucet Module (`Onchain.Aave.Faucet`)
+**Completed** | [D:2/B:4/U:3 → Eff:1.75]
+
+**What was done:**
+- Created `Onchain.Aave.Faucet` with `mint/4` and `mint!/4` — validates addresses, looks up faucet contract via `Contracts.address(:faucet, ...)`, ABI-encodes `mint(address,address,uint256)`, delegates to `Signer.send_transaction/3`
+- Added `:faucet` address to Sepolia entry in `Onchain.Aave.Contracts` — faucet is testnet-only, so mainnet networks naturally return `{:error, {:unknown_contract, :faucet}}`
+- Default gas limit of 200k applied when not specified in opts
+- Refactored `pool_write_integration_test.exs` to use `Faucet.mint/4` instead of inline ABI encoding
+
+**Files:**
+- `lib/onchain/aave/faucet.ex` (created — mint/4, mint!/4 with Descripex metadata)
+- `lib/onchain/aave/contracts.ex` (modified — added `:faucet` to sepolia map)
+- `test/onchain/aave/faucet_test.exs` (created — unit tests for validation and network guards)
+- `test/onchain/aave/faucet_integration_test.exs` (created — Sepolia mint + balance verification)
+- `test/onchain/aave/pool_write_integration_test.exs` (modified — uses Faucet.mint instead of inline logic)
+
+---
+
 ### Task 14b: Pool Write Sepolia Integration Tests (`Onchain.Aave.Pool`)
 **Completed** | [D:4/B:7/U:6 → Eff:1.63]
 
