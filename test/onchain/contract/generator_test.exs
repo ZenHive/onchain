@@ -206,6 +206,20 @@ defmodule Onchain.Contract.GeneratorTest do
       assert String.starts_with?(result.owner, "0x")
     end
 
+    test "from_raw/1 recursively converts nested structs" do
+      raw = {1, {1000, <<1::160>>, true}}
+      result = SolModule.Nested.from_raw(raw)
+
+      assert %SolModule.Nested{} = result
+      assert result.id == 1
+
+      assert %SolModule.UserData{} = result.data
+      assert result.data.balance == 1000
+      assert result.data.active == true
+      assert is_binary(result.data.owner)
+      assert String.starts_with?(result.data.owner, "0x")
+    end
+
     test "struct has correct fields" do
       fields = SolModule.UserData.__struct__() |> Map.keys() |> Enum.reject(&(&1 == :__struct__))
       assert :balance in fields

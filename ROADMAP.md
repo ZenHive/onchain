@@ -87,12 +87,15 @@ Drop a `.sol` file, get a typed Elixir module. Rustler NIF using Alloy to parse 
 |---|------|--------|---|---|---|-----|--------|
 | 24 | Rustler NIF: Solidity ABI parser via Alloy | ✅ | 5 | 9 | 9 | 1.80 🚀 | `Onchain.Solidity` (native) |
 | 25 | Contract codegen macro (`use Onchain.Contract.Generator, sol: "..."`) | ✅ | 6 | 10 | 9 | 1.58 🚀 | `Onchain.Contract.Generator` |
+| 25b | Solidity import/remapping resolution for multi-file codegen | ⬜ | 5 | 9 | 8 | 1.80 🚀 | `Onchain.Contract.Generator` |
 
 **Task descriptions:**
 
 **24 — Rustler NIF: Solidity ABI parser.** Rustler NIF using Alloy to parse `.sol` files (or ABI JSON) into structured Elixir data at compile time. Returns function signatures, input/output types, state mutability, events — everything needed to generate typed wrappers. Thin bridge: "take string, return parsed ABI as map." Alloy is battle-tested (Foundry uses it for everything).
 
 **25 — Contract codegen macro.** `use Onchain.Contract, sol: "priv/contracts/erc20.sol"` reads the `.sol` file via the Rustler NIF, generates raw call functions with proper typespecs, descripex `api()` declarations, and response struct skeletons at compile time. Delegates to `Onchain.Contract.call/4` (task 18) at runtime. Developers add semantic wrappers (like `UserAccountData.from_raw/1`) on top of generated raw functions. Depends on tasks 18 and 24. Once built, could subsume the manual wiring in tasks 10 (UiPoolDataProvider), 11 (Oracle), 14 (Pool writes), and 20 (ERC-20 reads) — those hand-written modules become validation references and semantic wrapper layers over generated raw functions.
+
+**25b — Solidity import/remapping resolution.** Add a file-based codegen path that accepts a root `.sol` file and resolves relative imports and remappings before parsing. This should make real multi-file contracts like Aave and DeFiSaver usable directly via codegen instead of requiring pasted source strings. Include tests against vendored upstream fixtures once import support lands.
 
 ---
 

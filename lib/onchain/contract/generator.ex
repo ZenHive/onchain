@@ -516,6 +516,7 @@ defmodule Onchain.Contract.Generator do
   @doc false
   defp generate_struct_modules(abi, parent_module) do
     structs = Map.get(abi, :structs, [])
+    struct_names = MapSet.new(structs, & &1.name)
 
     Enum.map(structs, fn struct_info ->
       mod_name = Module.concat(parent_module, struct_info.name)
@@ -526,7 +527,7 @@ defmodule Onchain.Contract.Generator do
           {String.to_atom(to_snake_case(f.name)), solidity_to_struct_type(f.ty)}
         end)
 
-      from_raw_body = build_from_raw(struct_info.fields)
+      from_raw_body = build_from_raw(struct_info.fields, parent_module, struct_names)
 
       quote do
         defmodule unquote(mod_name) do
@@ -548,29 +549,43 @@ defmodule Onchain.Contract.Generator do
   end
 
   @doc false
-  defp build_from_raw(fields) do
+  # Builds a struct literal from decoded ABI tuple values.
+  defp build_from_raw(fields, parent_module, struct_names) do
     assignments =
       fields
       |> Enum.with_index()
       |> Enum.map(fn {field, idx} ->
         key = String.to_atom(to_snake_case(field.name))
-
-        value =
-          if field.ty == "address" do
-            quote do
-              Onchain.Address.checksum!(Enum.at(values, unquote(idx)))
-            end
-          else
-            quote do
-              Enum.at(values, unquote(idx))
-            end
-          end
+        value = build_struct_field_value(field.ty, idx, parent_module, struct_names)
 
         {key, value}
       end)
 
     quote do
       %__MODULE__{unquote_splicing(assignments)}
+    end
+  end
+
+  @doc false
+  # Recursively converts nested struct fields while preserving address normalization.
+  defp build_struct_field_value("address", idx, _parent_module, _struct_names) do
+    quote do
+      Onchain.Address.checksum!(Enum.at(values, unquote(idx)))
+    end
+  end
+
+  @doc false
+  defp build_struct_field_value(type, idx, parent_module, struct_names) do
+    if MapSet.member?(struct_names, type) do
+      nested_module = Module.concat(parent_module, type)
+
+      quote do
+        unquote(nested_module).from_raw(Enum.at(values, unquote(idx)))
+      end
+    else
+      quote do
+        Enum.at(values, unquote(idx))
+      end
     end
   end
 

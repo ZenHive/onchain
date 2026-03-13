@@ -6,6 +6,22 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 5: Contract Codegen
 
+### Fix: Nested Struct Conversion in Generated `from_raw/1`
+**Completed** | Follow-up to Task 25
+
+**What was done:**
+- Generated `.sol` struct modules now recursively convert nested child structs in `from_raw/1` instead of leaving nested tuples raw
+- Nested address fields continue to flow through `Onchain.Address.checksum!/1` via the child struct conversion path
+- Added a focused regression test for `Nested -> UserData` conversion using the existing Solidity fixture
+- Added roadmap follow-up Task 25b for multi-file Solidity import/remapping support in codegen
+
+**Files:**
+- `lib/onchain/contract/generator.ex` (modified)
+- `test/onchain/contract/generator_test.exs` (modified)
+- `ROADMAP.md` (modified)
+
+---
+
 ### Task 25: Contract Codegen Macro (`Onchain.Contract.Generator`)
 **Completed** | [D:6/B:10/U:9 → Eff:1.58]
 
