@@ -19,6 +19,25 @@ Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) a
 @~/.claude/includes/dialyzer-json.md
 @~/.claude/includes/library-design.md
 
+## Portfolio Context
+
+This repo is part of a three-library portfolio. The boundary is **ephemeral vs durable**, not read vs write.
+
+- **onchain** (this repo) — chain interaction, returning ephemeral results (reads, writes, codegen, simulation)
+- **rexex** — chain indexing, storing durable facts (ExEx ingestion, Postgres, reorg-safe history, dashboards)
+- **hologram** — JS runtimes, npm access, headless/edge execution (Elixir interpreter in any JS runtime)
+
+**Where does this feature go?**
+
+1. Talks to Ethereum directly and returns an immediate result? → **onchain**
+2. Persists or queries chain facts over time? → **rexex**
+3. Runs Elixir in JS or reaches npm/edge runtimes? → **hologram**
+4. Composes those capabilities into a user-facing workflow? → **separate consumer repo**
+
+**Watch boundary:** onchain Phase 8 (eth_subscribe, Transfer parser) overlaps rexex territory. The distinction: onchain returns results to the caller (ephemeral); rexex writes facts to Postgres (durable). If a consumer needs historical queries over indexed data, that's rexex.
+
+**Agent consumers:** AI agents are first-class consumers of this library. See [AGENT_WISHLIST.md](AGENT_WISHLIST.md) for use cases and scenarios.
+
 ## Architecture
 
 - **signet** is the sole Ethereum dep — RPC, ABI encoding, signing, crypto all in one

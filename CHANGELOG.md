@@ -6,6 +6,31 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 5: Contract Codegen
 
+### Task 25b: Solidity Import/Remapping Resolution for Multi-File Codegen
+**Completed** | [D:5/B:9/U:8 → Eff:1.80]
+
+**What was done:**
+- Added multi-file Solidity resolution in `Onchain.Solidity` with `resolve_sol_file/2`, `resolve_sol_file!/2`, and extended `parse_sol_file/2` support for relative imports, nearest-ancestor `remappings.txt`, and explicit remapping overrides
+- Added native helpers to extract Solidity imports and parse a selected root contract from a merged source graph while keeping imported structs, enums, and constants available for codegen
+- Extended `Onchain.Contract.Generator` with `sol_file:` plus passthrough `:remappings` and `:root_contract` options, and registered resolved files as `@external_resource`
+- Vendored pinned upstream DefiSaver and Aave Solidity fixtures to exercise relative imports and remapped imports with real contracts
+- Added parser and generator coverage for multi-file `.sol` inputs, imported namespaced structs, nested imported `from_raw/1` conversion, root-contract filtering, and external resource tracking
+
+**Files:**
+- `lib/onchain/solidity.ex` (modified)
+- `native/onchain_solidity/src/lib.rs` (modified)
+- `lib/onchain/contract/generator.ex` (modified)
+- `priv/contracts/real/defisaver-v3-contracts/contracts/interfaces/protocols/aaveV3/DataTypes.sol` (new)
+- `priv/contracts/real/defisaver-v3-contracts/contracts/interfaces/protocols/aaveV3/IPoolAddressesProvider.sol` (new)
+- `priv/contracts/real/defisaver-v3-contracts/contracts/interfaces/protocols/aaveV3/IPoolV3.sol` (new)
+- `priv/contracts/real/aave-v3-periphery/contracts/misc/interfaces/IUiPoolDataProviderV3.sol` (new)
+- `priv/contracts/real/aave-v3-periphery/lib/aave-v3-core/contracts/interfaces/IPoolAddressesProvider.sol` (new)
+- `priv/contracts/real/aave-v3-periphery/remappings.txt` (new)
+- `test/onchain/solidity_test.exs` (modified)
+- `test/onchain/contract/generator_test.exs` (modified)
+
+---
+
 ### Fix: Nested Struct Conversion in Generated `from_raw/1`
 **Completed** | Follow-up to Task 25
 

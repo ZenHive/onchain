@@ -3,6 +3,7 @@ use alloy_json_abi::{
 };
 use rustler::{Encoder, Env, NifResult, Term};
 use solang_parser::pt;
+use std::collections::{HashMap, HashSet};
 use tiny_keccak::{Hasher, Keccak};
 
 mod atoms {
@@ -61,118 +62,55 @@ fn parse_abi_json<'a>(env: Env<'a>, json: &str) -> NifResult<Term<'a>> {
 
 #[rustler::nif]
 fn parse_sol<'a>(env: Env<'a>, source: &str) -> NifResult<Term<'a>> {
-    let (tree, _comments) = match solang_parser::parse(source, 0) {
-        Ok(result) => result,
-        Err(diags) => {
-            let msgs: Vec<String> = diags.iter().map(|d| format!("{:?}", d)).collect();
-            let reason = msgs.join("; ");
-            return Ok((atoms::error(), (atoms::parse_error(), reason)).encode(env));
-        }
-    };
-
-    // Extract doc comments from the source for NatSpec.
-    // Uses a mutable vec to mark consumed entries.
-    let mut doc_comments = extract_doc_comments(source);
-
-    // Walk the AST to extract structs, enums, constants, and functions
-    let mut sol_structs: Vec<Term<'a>> = Vec::new();
-    let mut sol_enums: Vec<Term<'a>> = Vec::new();
-    let mut sol_constants: Vec<Term<'a>> = Vec::new();
-    let mut sol_functions: Vec<Term<'a>> = Vec::new();
-    let mut sol_events: Vec<Term<'a>> = Vec::new();
-    let mut sol_errors: Vec<Term<'a>> = Vec::new();
-    let mut sol_constructor: Term<'a> = rustler::types::atom::nil().encode(env);
-
-    // Collect struct definitions for resolving tuple types
-    let mut struct_defs: Vec<SolStruct> = Vec::new();
-
-    for part in &tree.0 {
-        match part {
-            pt::SourceUnitPart::ContractDefinition(contract) => {
-                // First pass: collect struct definitions
-                for part in &contract.parts {
-                    if let pt::ContractPart::StructDefinition(s) = part {
-                        let fields: Vec<SolField> = s
-                            .fields
-                            .iter()
-                            .map(|f| SolField {
-                                name: f.name.as_ref().map(|id| id.name.clone()).unwrap_or_default(),
-                                ty: expr_to_type_string(&f.ty),
-                            })
-                            .collect();
-                        struct_defs.push(SolStruct {
-                            name: s.name.as_ref().map(|id| id.name.clone()).unwrap_or_default(),
-                            fields,
-                        });
-                    }
-                }
-
-                // Second pass: process all parts
-                for part in &contract.parts {
-                    match part {
-                        pt::ContractPart::StructDefinition(s) => {
-                            sol_structs.push(encode_sol_struct(env, s));
-                        }
-                        pt::ContractPart::EnumDefinition(e) => {
-                            sol_enums.push(encode_sol_enum(env, e));
-                        }
-                        pt::ContractPart::VariableDefinition(v) => {
-                            if let Some(c) = encode_sol_constant(env, v) {
-                                sol_constants.push(c);
-                            }
-                        }
-                        pt::ContractPart::FunctionDefinition(f) => {
-                            match &f.ty {
-                                pt::FunctionTy::Constructor => {
-                                    sol_constructor =
-                                        encode_sol_constructor(env, f, &struct_defs);
-                                }
-                                pt::FunctionTy::Function => {
-                                    let natspec = take_natspec_for_offset(
-                                        &mut doc_comments,
-                                        f.loc.start(),
-                                    );
-                                    sol_functions.push(encode_sol_function(
-                                        env,
-                                        f,
-                                        natspec.as_ref(),
-                                        &struct_defs,
-                                    ));
-                                }
-                                _ => {}
-                            }
-                        }
-                        pt::ContractPart::EventDefinition(e) => {
-                            sol_events.push(encode_sol_event(env, e, &struct_defs));
-                        }
-                        pt::ContractPart::ErrorDefinition(e) => {
-                            sol_errors.push(encode_sol_error(env, e, &struct_defs));
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    let mut map = Term::map_new(env);
-    map = map_put(map, atoms::functions().encode(env), sol_functions.encode(env));
-    map = map_put(map, atoms::events().encode(env), sol_events.encode(env));
-    map = map_put(map, atoms::errors().encode(env), sol_errors.encode(env));
-    map = map_put(map, atoms::constructor().encode(env), sol_constructor);
-    map = map_put(map, atoms::structs().encode(env), sol_structs.encode(env));
-    map = map_put(map, atoms::enums().encode(env), sol_enums.encode(env));
-    map = map_put(
-        map,
-        atoms::constants().encode(env),
-        sol_constants.encode(env),
-    );
-
-    Ok((atoms::ok(), map).encode(env))
+    encode_parse_result(env, parse_sol_source(env, source, None))
 }
 
-// --- Struct definitions for internal use ---
+#[rustler::nif]
+fn __parse_sol_root__<'a>(env: Env<'a>, source: &str, root_contract: &str) -> NifResult<Term<'a>> {
+    encode_parse_result(env, parse_sol_source(env, source, Some(root_contract)))
+}
+
+#[rustler::nif]
+fn __extract_sol_imports__<'a>(env: Env<'a>, source: &str) -> NifResult<Term<'a>> {
+    match parse_source_unit(source) {
+        Ok(tree) => {
+            let imports = collect_imports(&tree);
+            Ok((atoms::ok(), imports).encode(env))
+        }
+        Err(reason) => Ok((atoms::error(), (atoms::parse_error(), reason)).encode(env)),
+    }
+}
+
+fn encode_parse_result<'a>(env: Env<'a>, result: Result<Term<'a>, String>) -> NifResult<Term<'a>> {
+    match result {
+        Ok(map) => Ok((atoms::ok(), map).encode(env)),
+        Err(reason) => Ok((atoms::error(), (atoms::parse_error(), reason)).encode(env)),
+    }
+}
+
+fn parse_sol_source<'a>(
+    env: Env<'a>,
+    source: &str,
+    root_contract: Option<&str>,
+) -> Result<Term<'a>, String> {
+    let tree = parse_source_unit(source)?;
+    let registry = build_type_registry(&tree);
+    let mut doc_comments = extract_doc_comments(source);
+
+    encode_sol_source(env, &tree, root_contract, &registry, &mut doc_comments)
+}
+
+fn parse_source_unit(source: &str) -> Result<pt::SourceUnit, String> {
+    match solang_parser::parse(source, 0) {
+        Ok((tree, _comments)) => Ok(tree),
+        Err(diags) => {
+            let msgs: Vec<String> = diags.iter().map(|d| format!("{:?}", d)).collect();
+            Err(msgs.join("; "))
+        }
+    }
+}
+
+// --- Type registry ---
 
 #[derive(Clone)]
 struct SolStruct {
@@ -186,50 +124,458 @@ struct SolField {
     ty: String,
 }
 
+#[derive(Clone)]
+struct SolEnum {
+    name: String,
+    variants: Vec<String>,
+}
+
+struct PendingStruct {
+    canonical_name: String,
+    short_name: String,
+    fields: Vec<SolField>,
+}
+
+struct PendingEnum {
+    canonical_name: String,
+    short_name: String,
+    variants: Vec<String>,
+}
+
+struct TypeRegistry {
+    struct_defs: Vec<SolStruct>,
+    enum_defs: Vec<SolEnum>,
+    struct_lookup: HashMap<String, SolStruct>,
+    enum_lookup: HashSet<String>,
+    contract_lookup: HashSet<String>,
+}
+
 struct NatSpecComment {
     notice: String,
     params: Vec<(String, String)>,
     returns: Vec<(String, String)>,
 }
 
-// --- Solidity source encoding helpers ---
+fn build_type_registry(tree: &pt::SourceUnit) -> TypeRegistry {
+    let mut pending_structs: Vec<PendingStruct> = Vec::new();
+    let mut pending_enums: Vec<PendingEnum> = Vec::new();
+    let mut contract_lookup: HashSet<String> = HashSet::new();
 
-fn encode_sol_struct<'a>(env: Env<'a>, s: &pt::StructDefinition) -> Term<'a> {
-    let name_str = s.name.as_ref().map(|id| id.name.as_str()).unwrap_or("");
-    let fields: Vec<Term<'a>> = s
+    for part in &tree.0 {
+        match part {
+            pt::SourceUnitPart::ContractDefinition(contract) => {
+                let owner_name = contract
+                    .name
+                    .as_ref()
+                    .map(|id| id.name.clone())
+                    .unwrap_or_default();
+
+                if !owner_name.is_empty() {
+                    contract_lookup.insert(owner_name.clone());
+                }
+
+                for contract_part in &contract.parts {
+                    match contract_part {
+                        pt::ContractPart::StructDefinition(struct_def) => {
+                            register_contract_struct(
+                                &mut pending_structs,
+                                struct_def,
+                                &owner_name,
+                                &contract.ty,
+                            );
+                        }
+                        pt::ContractPart::EnumDefinition(enum_def) => {
+                            register_contract_enum(
+                                &mut pending_enums,
+                                enum_def,
+                                &owner_name,
+                                &contract.ty,
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            pt::SourceUnitPart::StructDefinition(struct_def) => {
+                pending_structs.push(PendingStruct {
+                    canonical_name: struct_def
+                        .name
+                        .as_ref()
+                        .map(|id| id.name.clone())
+                        .unwrap_or_default(),
+                    short_name: struct_def
+                        .name
+                        .as_ref()
+                        .map(|id| id.name.clone())
+                        .unwrap_or_default(),
+                    fields: collect_struct_fields(struct_def),
+                });
+            }
+            pt::SourceUnitPart::EnumDefinition(enum_def) => {
+                let name = enum_def
+                    .name
+                    .as_ref()
+                    .map(|id| id.name.clone())
+                    .unwrap_or_default();
+
+                pending_enums.push(PendingEnum {
+                    canonical_name: name.clone(),
+                    short_name: name,
+                    variants: collect_enum_variants(enum_def),
+                });
+            }
+            _ => {}
+        }
+    }
+
+    finalize_type_registry(pending_structs, pending_enums, contract_lookup)
+}
+
+fn finalize_type_registry(
+    pending_structs: Vec<PendingStruct>,
+    pending_enums: Vec<PendingEnum>,
+    contract_lookup: HashSet<String>,
+) -> TypeRegistry {
+    let mut struct_short_counts: HashMap<String, usize> = HashMap::new();
+    let mut enum_short_counts: HashMap<String, usize> = HashMap::new();
+
+    for pending in &pending_structs {
+        *struct_short_counts
+            .entry(pending.short_name.clone())
+            .or_insert(0) += 1;
+    }
+
+    for pending in &pending_enums {
+        *enum_short_counts
+            .entry(pending.short_name.clone())
+            .or_insert(0) += 1;
+    }
+
+    let struct_defs: Vec<SolStruct> = pending_structs
+        .iter()
+        .map(|pending| SolStruct {
+            name: pending.canonical_name.clone(),
+            fields: pending.fields.clone(),
+        })
+        .collect();
+
+    let enum_defs: Vec<SolEnum> = pending_enums
+        .iter()
+        .map(|pending| SolEnum {
+            name: pending.canonical_name.clone(),
+            variants: pending.variants.clone(),
+        })
+        .collect();
+
+    let mut struct_lookup: HashMap<String, SolStruct> = HashMap::new();
+
+    for struct_def in &struct_defs {
+        struct_lookup.insert(struct_def.name.clone(), struct_def.clone());
+    }
+
+    for pending in &pending_structs {
+        if struct_short_counts.get(&pending.short_name) == Some(&1) {
+            struct_lookup
+                .entry(pending.short_name.clone())
+                .or_insert_with(|| SolStruct {
+                    name: pending.canonical_name.clone(),
+                    fields: pending.fields.clone(),
+                });
+        }
+    }
+
+    let mut enum_lookup: HashSet<String> = HashSet::new();
+
+    for enum_def in &enum_defs {
+        enum_lookup.insert(enum_def.name.clone());
+    }
+
+    for pending in &pending_enums {
+        if enum_short_counts.get(&pending.short_name) == Some(&1) {
+            enum_lookup.insert(pending.short_name.clone());
+        }
+    }
+
+    TypeRegistry {
+        struct_defs,
+        enum_defs,
+        struct_lookup,
+        enum_lookup,
+        contract_lookup,
+    }
+}
+
+fn register_contract_struct(
+    pending_structs: &mut Vec<PendingStruct>,
+    struct_def: &pt::StructDefinition,
+    owner_name: &str,
+    contract_ty: &pt::ContractTy,
+) {
+    let short_name = struct_def
+        .name
+        .as_ref()
+        .map(|id| id.name.clone())
+        .unwrap_or_default();
+
+    let canonical_name = qualify_user_type(owner_name, contract_ty, &short_name);
+
+    pending_structs.push(PendingStruct {
+        canonical_name,
+        short_name,
+        fields: collect_struct_fields(struct_def),
+    });
+}
+
+fn register_contract_enum(
+    pending_enums: &mut Vec<PendingEnum>,
+    enum_def: &pt::EnumDefinition,
+    owner_name: &str,
+    contract_ty: &pt::ContractTy,
+) {
+    let short_name = enum_def
+        .name
+        .as_ref()
+        .map(|id| id.name.clone())
+        .unwrap_or_default();
+
+    let canonical_name = qualify_user_type(owner_name, contract_ty, &short_name);
+
+    pending_enums.push(PendingEnum {
+        canonical_name,
+        short_name,
+        variants: collect_enum_variants(enum_def),
+    });
+}
+
+fn qualify_user_type(owner_name: &str, contract_ty: &pt::ContractTy, short_name: &str) -> String {
+    match contract_ty {
+        pt::ContractTy::Library(_) if !owner_name.is_empty() => {
+            format!("{}.{}", owner_name, short_name)
+        }
+        _ => short_name.to_string(),
+    }
+}
+
+fn collect_struct_fields(struct_def: &pt::StructDefinition) -> Vec<SolField> {
+    struct_def
         .fields
         .iter()
-        .map(|f| {
-            let fname = f.name.as_ref().map(|id| id.name.as_str()).unwrap_or("");
-            let fty = expr_to_type_string(&f.ty);
-            let mut m = Term::map_new(env);
-            m = map_put(m, atoms::name().encode(env), fname.encode(env));
-            m = map_put(m, atoms::ty().encode(env), fty.as_str().encode(env));
-            m
+        .map(|field| SolField {
+            name: field
+                .name
+                .as_ref()
+                .map(|id| id.name.clone())
+                .unwrap_or_default(),
+            ty: expr_to_type_string(&field.ty),
+        })
+        .collect()
+}
+
+fn collect_enum_variants(enum_def: &pt::EnumDefinition) -> Vec<String> {
+    enum_def
+        .values
+        .iter()
+        .map(|value| value.as_ref().map(|id| id.name.clone()).unwrap_or_default())
+        .collect()
+}
+
+// --- Solidity source encoding helpers ---
+
+fn encode_sol_source<'a>(
+    env: Env<'a>,
+    tree: &pt::SourceUnit,
+    root_contract: Option<&str>,
+    registry: &TypeRegistry,
+    doc_comments: &mut Vec<(usize, NatSpecComment)>,
+) -> Result<Term<'a>, String> {
+    let sol_structs: Vec<Term<'a>> = registry
+        .struct_defs
+        .iter()
+        .map(|struct_def| encode_sol_struct(env, struct_def, registry))
+        .collect();
+
+    let sol_enums: Vec<Term<'a>> = registry
+        .enum_defs
+        .iter()
+        .map(|enum_def| encode_sol_enum(env, enum_def))
+        .collect();
+
+    let mut sol_constants: Vec<Term<'a>> = Vec::new();
+    let mut sol_functions: Vec<Term<'a>> = Vec::new();
+    let mut sol_events: Vec<Term<'a>> = Vec::new();
+    let mut sol_errors: Vec<Term<'a>> = Vec::new();
+    let mut sol_constructor: Term<'a> = rustler::types::atom::nil().encode(env);
+    let mut root_found = root_contract.is_none();
+
+    for part in &tree.0 {
+        match part {
+            pt::SourceUnitPart::ContractDefinition(contract) => {
+                for contract_part in &contract.parts {
+                    if let pt::ContractPart::VariableDefinition(var) = contract_part {
+                        if let Some(constant) = encode_sol_constant(env, var, registry) {
+                            sol_constants.push(constant);
+                        }
+                    }
+                }
+
+                let contract_name = contract
+                    .name
+                    .as_ref()
+                    .map(|id| id.name.as_str())
+                    .unwrap_or("");
+
+                let is_target = match root_contract {
+                    Some(target) => contract_name == target,
+                    None => true,
+                };
+
+                if !is_target {
+                    continue;
+                }
+
+                root_found = true;
+
+                for contract_part in &contract.parts {
+                    match contract_part {
+                        pt::ContractPart::FunctionDefinition(function_def) => {
+                            match &function_def.ty {
+                                pt::FunctionTy::Constructor => {
+                                    sol_constructor =
+                                        encode_sol_constructor(env, function_def, registry);
+                                }
+                                pt::FunctionTy::Function => {
+                                    let natspec = take_natspec_for_offset(
+                                        doc_comments,
+                                        function_def.loc.start(),
+                                    );
+                                    sol_functions.push(encode_sol_function(
+                                        env,
+                                        function_def,
+                                        natspec.as_ref(),
+                                        registry,
+                                    ));
+                                }
+                                _ => {}
+                            }
+                        }
+                        pt::ContractPart::EventDefinition(event_def) => {
+                            sol_events.push(encode_sol_event(env, event_def, registry));
+                        }
+                        pt::ContractPart::ErrorDefinition(error_def) => {
+                            sol_errors.push(encode_sol_error(env, error_def, registry));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            pt::SourceUnitPart::VariableDefinition(var) => {
+                if let Some(constant) = encode_sol_constant(env, var, registry) {
+                    sol_constants.push(constant);
+                }
+            }
+            pt::SourceUnitPart::FunctionDefinition(function_def) if root_contract.is_none() => {
+                if let pt::FunctionTy::Function = &function_def.ty {
+                    let natspec = take_natspec_for_offset(doc_comments, function_def.loc.start());
+                    sol_functions.push(encode_sol_function(
+                        env,
+                        function_def,
+                        natspec.as_ref(),
+                        registry,
+                    ));
+                }
+            }
+            pt::SourceUnitPart::EventDefinition(event_def) if root_contract.is_none() => {
+                sol_events.push(encode_sol_event(env, event_def, registry));
+            }
+            pt::SourceUnitPart::ErrorDefinition(error_def) if root_contract.is_none() => {
+                sol_errors.push(encode_sol_error(env, error_def, registry));
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(target) = root_contract {
+        if !root_found {
+            return Err(format!("root contract `{}` not found", target));
+        }
+    }
+
+    let mut map = Term::map_new(env);
+    map = map_put(
+        map,
+        atoms::functions().encode(env),
+        sol_functions.encode(env),
+    );
+    map = map_put(map, atoms::events().encode(env), sol_events.encode(env));
+    map = map_put(map, atoms::errors().encode(env), sol_errors.encode(env));
+    map = map_put(map, atoms::constructor().encode(env), sol_constructor);
+    map = map_put(map, atoms::structs().encode(env), sol_structs.encode(env));
+    map = map_put(map, atoms::enums().encode(env), sol_enums.encode(env));
+    map = map_put(
+        map,
+        atoms::constants().encode(env),
+        sol_constants.encode(env),
+    );
+
+    Ok(map)
+}
+
+fn encode_sol_struct<'a>(
+    env: Env<'a>,
+    struct_def: &SolStruct,
+    registry: &TypeRegistry,
+) -> Term<'a> {
+    let fields: Vec<Term<'a>> = struct_def
+        .fields
+        .iter()
+        .map(|field| {
+            let mut map = Term::map_new(env);
+            map = map_put(
+                map,
+                atoms::name().encode(env),
+                field.name.as_str().encode(env),
+            );
+            map = map_put(
+                map,
+                atoms::ty().encode(env),
+                normalize_struct_field_type(&field.ty, registry).encode(env),
+            );
+            map
         })
         .collect();
 
     let mut map = Term::map_new(env);
-    map = map_put(map, atoms::name().encode(env), name_str.encode(env));
+    map = map_put(
+        map,
+        atoms::name().encode(env),
+        struct_def.name.as_str().encode(env),
+    );
     map = map_put(map, atoms::fields().encode(env), fields.encode(env));
     map
 }
 
-fn encode_sol_enum<'a>(env: Env<'a>, e: &pt::EnumDefinition) -> Term<'a> {
-    let name_str = e.name.as_ref().map(|id| id.name.as_str()).unwrap_or("");
-    let variants: Vec<&str> = e
-        .values
+fn encode_sol_enum<'a>(env: Env<'a>, enum_def: &SolEnum) -> Term<'a> {
+    let variants: Vec<&str> = enum_def
+        .variants
         .iter()
-        .map(|v| v.as_ref().map(|id| id.name.as_str()).unwrap_or(""))
+        .map(|variant| variant.as_str())
         .collect();
 
     let mut map = Term::map_new(env);
-    map = map_put(map, atoms::name().encode(env), name_str.encode(env));
+    map = map_put(
+        map,
+        atoms::name().encode(env),
+        enum_def.name.as_str().encode(env),
+    );
     map = map_put(map, atoms::variants().encode(env), variants.encode(env));
     map
 }
 
-fn encode_sol_constant<'a>(env: Env<'a>, v: &pt::VariableDefinition) -> Option<Term<'a>> {
+fn encode_sol_constant<'a>(
+    env: Env<'a>,
+    v: &pt::VariableDefinition,
+    registry: &TypeRegistry,
+) -> Option<Term<'a>> {
     // Only include constant/immutable variables
     let is_constant = v.attrs.iter().any(|a| {
         matches!(
@@ -242,7 +588,7 @@ fn encode_sol_constant<'a>(env: Env<'a>, v: &pt::VariableDefinition) -> Option<T
     }
 
     let name_str = v.name.as_ref().map(|id| id.name.as_str()).unwrap_or("");
-    let ty_str = expr_to_type_string(&v.ty);
+    let ty_str = normalize_struct_field_type(&expr_to_type_string(&v.ty), registry);
     let val_str = v
         .initializer
         .as_ref()
@@ -252,7 +598,11 @@ fn encode_sol_constant<'a>(env: Env<'a>, v: &pt::VariableDefinition) -> Option<T
     let mut map = Term::map_new(env);
     map = map_put(map, atoms::name().encode(env), name_str.encode(env));
     map = map_put(map, atoms::ty().encode(env), ty_str.as_str().encode(env));
-    map = map_put(map, atoms::value().encode(env), val_str.as_str().encode(env));
+    map = map_put(
+        map,
+        atoms::value().encode(env),
+        val_str.as_str().encode(env),
+    );
     Some(map)
 }
 
@@ -260,7 +610,7 @@ fn encode_sol_function<'a>(
     env: Env<'a>,
     f: &pt::FunctionDefinition,
     natspec: Option<&NatSpecComment>,
-    struct_defs: &[SolStruct],
+    registry: &TypeRegistry,
 ) -> Term<'a> {
     let name_str = f.name.as_ref().map(|id| id.name.as_str()).unwrap_or("");
 
@@ -268,26 +618,26 @@ fn encode_sol_function<'a>(
     let input_types: Vec<String> = f
         .params
         .iter()
-        .map(|(_, p)| param_to_canonical_type(p, struct_defs))
+        .map(|(_, p)| param_to_canonical_type(p, registry))
         .collect();
 
     let ins: Vec<Term<'a>> = f
         .params
         .iter()
-        .map(|(_, p)| encode_sol_param(env, p, struct_defs))
+        .map(|(_, p)| encode_sol_param(env, p, registry))
         .collect();
 
     // Build outputs
     let output_types: Vec<String> = f
         .returns
         .iter()
-        .map(|(_, p)| param_to_canonical_type(p, struct_defs))
+        .map(|(_, p)| param_to_canonical_type(p, registry))
         .collect();
 
     let outs: Vec<Term<'a>> = f
         .returns
         .iter()
-        .map(|(_, p)| encode_sol_param(env, p, struct_defs))
+        .map(|(_, p)| encode_sol_param(env, p, registry))
         .collect();
 
     // Build signature: name(type1,type2)
@@ -306,7 +656,11 @@ fn encode_sol_function<'a>(
     let natspec_term = match natspec {
         Some(ns) => {
             let mut m = Term::map_new(env);
-            m = map_put(m, atoms::notice().encode(env), ns.notice.as_str().encode(env));
+            m = map_put(
+                m,
+                atoms::notice().encode(env),
+                ns.notice.as_str().encode(env),
+            );
 
             let mut pm = Term::map_new(env);
             for (k, v) in &ns.params {
@@ -326,13 +680,21 @@ fn encode_sol_function<'a>(
 
     let mut map = Term::map_new(env);
     map = map_put(map, atoms::name().encode(env), name_str.encode(env));
-    map = map_put(map, atoms::signature().encode(env), sig.as_str().encode(env));
+    map = map_put(
+        map,
+        atoms::signature().encode(env),
+        sig.as_str().encode(env),
+    );
     map = map_put(
         map,
         atoms::selector().encode(env),
         selector.as_str().encode(env),
     );
-    map = map_put(map, atoms::return_type().encode(env), ret.as_str().encode(env));
+    map = map_put(
+        map,
+        atoms::return_type().encode(env),
+        ret.as_str().encode(env),
+    );
     map = map_put(
         map,
         atoms::state_mutability().encode(env),
@@ -347,12 +709,12 @@ fn encode_sol_function<'a>(
 fn encode_sol_constructor<'a>(
     env: Env<'a>,
     f: &pt::FunctionDefinition,
-    struct_defs: &[SolStruct],
+    registry: &TypeRegistry,
 ) -> Term<'a> {
     let ins: Vec<Term<'a>> = f
         .params
         .iter()
-        .map(|(_, p)| encode_sol_param(env, p, struct_defs))
+        .map(|(_, p)| encode_sol_param(env, p, registry))
         .collect();
 
     let mutability = sol_function_mutability(f);
@@ -370,7 +732,7 @@ fn encode_sol_constructor<'a>(
 fn encode_sol_event<'a>(
     env: Env<'a>,
     e: &pt::EventDefinition,
-    struct_defs: &[SolStruct],
+    registry: &TypeRegistry,
 ) -> Term<'a> {
     let name_str = e.name.as_ref().map(|id| id.name.as_str()).unwrap_or("");
 
@@ -379,7 +741,7 @@ fn encode_sol_event<'a>(
         .iter()
         .map(|p| {
             let raw = expr_to_type_string(&p.ty);
-            type_to_canonical(&raw, struct_defs)
+            type_to_canonical(&raw, registry)
         })
         .collect();
 
@@ -392,16 +754,20 @@ fn encode_sol_event<'a>(
         .map(|p| {
             let pname = p.name.as_ref().map(|id| id.name.as_str()).unwrap_or("");
             let raw_ty = expr_to_type_string(&p.ty);
-            let (canonical_ty, components) = resolve_struct_type(&raw_ty, struct_defs);
+            let (canonical_ty, components) = resolve_type_info(&raw_ty, registry);
 
             let comps: Vec<Term<'a>> = components
                 .iter()
-                .map(|f| encode_sol_field(env, f, struct_defs))
+                .map(|field| encode_sol_field(env, field, registry))
                 .collect();
 
             let mut m = Term::map_new(env);
             m = map_put(m, atoms::name().encode(env), pname.encode(env));
-            m = map_put(m, atoms::ty().encode(env), canonical_ty.as_str().encode(env));
+            m = map_put(
+                m,
+                atoms::ty().encode(env),
+                canonical_ty.as_str().encode(env),
+            );
             m = map_put(m, atoms::indexed().encode(env), p.indexed.encode(env));
             m = map_put(m, atoms::components().encode(env), comps.encode(env));
             m
@@ -412,7 +778,11 @@ fn encode_sol_event<'a>(
 
     let mut map = Term::map_new(env);
     map = map_put(map, atoms::name().encode(env), name_str.encode(env));
-    map = map_put(map, atoms::signature().encode(env), sig.as_str().encode(env));
+    map = map_put(
+        map,
+        atoms::signature().encode(env),
+        sig.as_str().encode(env),
+    );
     map = map_put(
         map,
         atoms::topic().encode(env),
@@ -430,7 +800,7 @@ fn encode_sol_event<'a>(
 fn encode_sol_error<'a>(
     env: Env<'a>,
     e: &pt::ErrorDefinition,
-    struct_defs: &[SolStruct],
+    registry: &TypeRegistry,
 ) -> Term<'a> {
     let name_str = e.name.as_ref().map(|id| id.name.as_str()).unwrap_or("");
 
@@ -439,7 +809,7 @@ fn encode_sol_error<'a>(
         .iter()
         .map(|p| {
             let raw = expr_to_type_string(&p.ty);
-            type_to_canonical(&raw, struct_defs)
+            type_to_canonical(&raw, registry)
         })
         .collect();
 
@@ -452,16 +822,20 @@ fn encode_sol_error<'a>(
         .map(|p| {
             let pname = p.name.as_ref().map(|id| id.name.as_str()).unwrap_or("");
             let raw_ty = expr_to_type_string(&p.ty);
-            let (canonical_ty, components) = resolve_struct_type(&raw_ty, struct_defs);
+            let (canonical_ty, components) = resolve_type_info(&raw_ty, registry);
 
             let comps: Vec<Term<'a>> = components
                 .iter()
-                .map(|f| encode_sol_field(env, f, struct_defs))
+                .map(|field| encode_sol_field(env, field, registry))
                 .collect();
 
             let mut m = Term::map_new(env);
             m = map_put(m, atoms::name().encode(env), pname.encode(env));
-            m = map_put(m, atoms::ty().encode(env), canonical_ty.as_str().encode(env));
+            m = map_put(
+                m,
+                atoms::ty().encode(env),
+                canonical_ty.as_str().encode(env),
+            );
             m = map_put(m, atoms::components().encode(env), comps.encode(env));
             m
         })
@@ -469,7 +843,11 @@ fn encode_sol_error<'a>(
 
     let mut map = Term::map_new(env);
     map = map_put(map, atoms::name().encode(env), name_str.encode(env));
-    map = map_put(map, atoms::signature().encode(env), sig.as_str().encode(env));
+    map = map_put(
+        map,
+        atoms::signature().encode(env),
+        sig.as_str().encode(env),
+    );
     map = map_put(
         map,
         atoms::selector().encode(env),
@@ -482,28 +860,28 @@ fn encode_sol_error<'a>(
 fn encode_sol_param<'a>(
     env: Env<'a>,
     p: &Option<pt::Parameter>,
-    struct_defs: &[SolStruct],
+    registry: &TypeRegistry,
 ) -> Term<'a> {
     match p {
         Some(param) => {
-            let pname = param
-                .name
-                .as_ref()
-                .map(|id| id.name.as_str())
-                .unwrap_or("");
+            let pname = param.name.as_ref().map(|id| id.name.as_str()).unwrap_or("");
             let raw_ty = expr_to_type_string(&param.ty);
 
             // Check if the type references a known struct
-            let (canonical_ty, components) = resolve_struct_type(&raw_ty, struct_defs);
+            let (canonical_ty, components) = resolve_type_info(&raw_ty, registry);
 
             let comps: Vec<Term<'a>> = components
                 .iter()
-                .map(|f| encode_sol_field(env, f, struct_defs))
+                .map(|field| encode_sol_field(env, field, registry))
                 .collect();
 
             let mut m = Term::map_new(env);
             m = map_put(m, atoms::name().encode(env), pname.encode(env));
-            m = map_put(m, atoms::ty().encode(env), canonical_ty.as_str().encode(env));
+            m = map_put(
+                m,
+                atoms::ty().encode(env),
+                canonical_ty.as_str().encode(env),
+            );
             m = map_put(m, atoms::components().encode(env), comps.encode(env));
             m
         }
@@ -525,75 +903,113 @@ fn encode_sol_param<'a>(
 /// Returns (canonical_type, components) where:
 /// - If it's a struct: ("tuple", [fields...]) or ("tuple[]", [fields...])
 /// - If it's a primitive: (type_string, [])
-fn resolve_struct_type(ty: &str, struct_defs: &[SolStruct]) -> (String, Vec<SolField>) {
-    // Check for array suffix
-    let (base_ty, suffix) = if ty.ends_with("[]") {
-        (&ty[..ty.len() - 2], "[]")
-    } else {
-        (ty, "")
-    };
+fn resolve_type_info(ty: &str, registry: &TypeRegistry) -> (String, Vec<SolField>) {
+    let (base_ty, suffix) = split_array_suffix(ty);
 
-    // Look up in struct definitions
-    for s in struct_defs {
-        if s.name == base_ty {
-            let canonical = format!("tuple{}", suffix);
-            return (canonical, s.fields.clone());
-        }
+    if let Some(struct_def) = registry.struct_lookup.get(&base_ty) {
+        return (format!("tuple{}", suffix), struct_def.fields.clone());
     }
 
-    // Not a struct — return as-is
-    (ty.to_string(), Vec::new())
+    if registry.contract_lookup.contains(&base_ty) {
+        return (format!("address{}", suffix), Vec::new());
+    }
+
+    if registry.enum_lookup.contains(&base_ty) {
+        return (format!("uint8{}", suffix), Vec::new());
+    }
+
+    (format!("{}{}", base_ty, suffix), Vec::new())
 }
 
 /// Recursively resolve a type string to its canonical ABI form.
 /// Struct names become expanded tuple types (e.g., "UserData" → "(uint256,address,bool)").
 /// Handles nested structs: a struct field that references another struct is expanded recursively.
-fn type_to_canonical(ty: &str, struct_defs: &[SolStruct]) -> String {
-    let (base_ty, suffix) = if ty.ends_with("[]") {
-        (&ty[..ty.len() - 2], "[]")
-    } else {
-        (ty, "")
-    };
+fn type_to_canonical(ty: &str, registry: &TypeRegistry) -> String {
+    let (base_ty, suffix) = split_array_suffix(ty);
 
-    for s in struct_defs {
-        if s.name == base_ty {
-            let inner: Vec<String> = s
-                .fields
-                .iter()
-                .map(|f| type_to_canonical(&f.ty, struct_defs))
-                .collect();
-            return format!("({}){}", inner.join(","), suffix);
-        }
+    if let Some(struct_def) = registry.struct_lookup.get(&base_ty) {
+        let inner: Vec<String> = struct_def
+            .fields
+            .iter()
+            .map(|field| type_to_canonical(&field.ty, registry))
+            .collect();
+        return format!("({}){}", inner.join(","), suffix);
+    }
+
+    if registry.contract_lookup.contains(&base_ty) {
+        return format!("address{}", suffix);
+    }
+
+    if registry.enum_lookup.contains(&base_ty) {
+        return format!("uint8{}", suffix);
     }
 
     format!("{}{}", base_ty, suffix)
 }
 
 /// Encode a SolField as a Rustler term, recursively resolving nested struct types.
-fn encode_sol_field<'a>(env: Env<'a>, field: &SolField, struct_defs: &[SolStruct]) -> Term<'a> {
-    let (canonical_ty, components) = resolve_struct_type(&field.ty, struct_defs);
+fn encode_sol_field<'a>(env: Env<'a>, field: &SolField, registry: &TypeRegistry) -> Term<'a> {
+    let (canonical_ty, components) = resolve_type_info(&field.ty, registry);
 
     let comps: Vec<Term<'a>> = components
         .iter()
-        .map(|f| encode_sol_field(env, f, struct_defs))
+        .map(|nested_field| encode_sol_field(env, nested_field, registry))
         .collect();
 
     let mut m = Term::map_new(env);
-    m = map_put(m, atoms::name().encode(env), field.name.as_str().encode(env));
-    m = map_put(m, atoms::ty().encode(env), canonical_ty.as_str().encode(env));
+    m = map_put(
+        m,
+        atoms::name().encode(env),
+        field.name.as_str().encode(env),
+    );
+    m = map_put(
+        m,
+        atoms::ty().encode(env),
+        canonical_ty.as_str().encode(env),
+    );
     m = map_put(m, atoms::components().encode(env), comps.encode(env));
     m
 }
 
 /// Get the canonical type for a parameter, resolving struct references to tuple types.
-fn param_to_canonical_type(p: &Option<pt::Parameter>, struct_defs: &[SolStruct]) -> String {
+fn param_to_canonical_type(p: &Option<pt::Parameter>, registry: &TypeRegistry) -> String {
     match p {
         Some(param) => {
             let raw = expr_to_type_string(&param.ty);
-            type_to_canonical(&raw, struct_defs)
+            type_to_canonical(&raw, registry)
         }
         None => String::new(),
     }
+}
+
+fn normalize_struct_field_type(ty: &str, registry: &TypeRegistry) -> String {
+    let (base_ty, suffix) = split_array_suffix(ty);
+
+    if let Some(struct_def) = registry.struct_lookup.get(&base_ty) {
+        return format!("{}{}", struct_def.name, suffix);
+    }
+
+    if registry.contract_lookup.contains(&base_ty) {
+        return format!("address{}", suffix);
+    }
+
+    if registry.enum_lookup.contains(&base_ty) {
+        return format!("uint8{}", suffix);
+    }
+
+    format!("{}{}", base_ty, suffix)
+}
+
+fn split_array_suffix(ty: &str) -> (String, String) {
+    let mut base_ty = ty.to_string();
+    let mut suffix = String::new();
+
+    while base_ty.ends_with("[]") {
+        base_ty.truncate(base_ty.len() - 2);
+        suffix.push_str("[]");
+    }
+
+    (base_ty, suffix)
 }
 
 // --- Type expression to string conversion ---
@@ -615,9 +1031,13 @@ fn expr_to_type_string(expr: &pt::Expression) -> String {
         pt::Expression::ArraySubscript(_, base, _) => {
             format!("{}[]", expr_to_type_string(base))
         }
+        pt::Expression::Parenthesis(_, expr) => expr_to_type_string(expr),
         pt::Expression::Variable(id) => {
             // This handles custom type references (struct names, enum names)
             id.name.clone()
+        }
+        pt::Expression::MemberAccess(_, expr, member) => {
+            format!("{}.{}", expr_to_type_string(expr), member.name)
         }
         _ => format!("{:?}", expr),
     }
@@ -648,6 +1068,39 @@ fn sol_function_mutability(f: &pt::FunctionDefinition) -> &'static str {
         }
     }
     "nonpayable"
+}
+
+fn collect_imports(tree: &pt::SourceUnit) -> Vec<String> {
+    tree.0
+        .iter()
+        .filter_map(|part| match part {
+            pt::SourceUnitPart::ImportDirective(import) => Some(import_to_path_string(import)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn import_to_path_string(import: &pt::Import) -> String {
+    match import {
+        pt::Import::Plain(path, _)
+        | pt::Import::GlobalSymbol(path, _, _)
+        | pt::Import::Rename(path, _, _) => import_path_to_string(path),
+    }
+}
+
+fn import_path_to_string(path: &pt::ImportPath) -> String {
+    match path {
+        pt::ImportPath::Filename(literal) => literal.string.clone(),
+        pt::ImportPath::Path(identifier_path) => identifier_path_to_string(identifier_path),
+    }
+}
+
+fn identifier_path_to_string(path: &pt::IdentifierPath) -> String {
+    path.identifiers
+        .iter()
+        .map(|identifier| identifier.name.as_str())
+        .collect::<Vec<&str>>()
+        .join(".")
 }
 
 // --- Keccak-256 via tiny-keccak ---
@@ -799,7 +1252,10 @@ fn parse_natspec_lines(lines: &[&str]) -> Option<NatSpecComment> {
             if let Some(pos) = rest.find(' ') {
                 returns.push((rest[..pos].to_string(), rest[pos + 1..].to_string()));
             }
-        } else if line.starts_with("@title ") || line.starts_with("@dev ") || line.starts_with("@author ") {
+        } else if line.starts_with("@title ")
+            || line.starts_with("@dev ")
+            || line.starts_with("@author ")
+        {
             // Skip @title, @dev, @author
         } else if !line.is_empty() && notice.is_empty() {
             // Bare doc comment without tag — treat as notice
@@ -879,9 +1335,17 @@ fn encode_function<'a>(env: Env<'a>, f: &Function) -> Term<'a> {
 
     let mut map = Term::map_new(env);
     map = map_put(map, atoms::name().encode(env), f.name.as_str().encode(env));
-    map = map_put(map, atoms::signature().encode(env), sig.as_str().encode(env));
+    map = map_put(
+        map,
+        atoms::signature().encode(env),
+        sig.as_str().encode(env),
+    );
     map = map_put(map, atoms::selector().encode(env), sel.as_str().encode(env));
-    map = map_put(map, atoms::return_type().encode(env), ret.as_str().encode(env));
+    map = map_put(
+        map,
+        atoms::return_type().encode(env),
+        ret.as_str().encode(env),
+    );
     map = map_put(
         map,
         atoms::state_mutability().encode(env),
@@ -896,12 +1360,24 @@ fn encode_event<'a>(env: Env<'a>, e: &Event) -> Term<'a> {
     let sig = e.signature();
     let topic_hash = format!("0x{}", hex::encode(e.selector().as_ref() as &[u8]));
 
-    let ins: Vec<Term<'a>> = e.inputs.iter().map(|p| encode_event_param(env, p)).collect();
+    let ins: Vec<Term<'a>> = e
+        .inputs
+        .iter()
+        .map(|p| encode_event_param(env, p))
+        .collect();
 
     let mut map = Term::map_new(env);
     map = map_put(map, atoms::name().encode(env), e.name.as_str().encode(env));
-    map = map_put(map, atoms::signature().encode(env), sig.as_str().encode(env));
-    map = map_put(map, atoms::topic().encode(env), topic_hash.as_str().encode(env));
+    map = map_put(
+        map,
+        atoms::signature().encode(env),
+        sig.as_str().encode(env),
+    );
+    map = map_put(
+        map,
+        atoms::topic().encode(env),
+        topic_hash.as_str().encode(env),
+    );
     map = map_put(map, atoms::anonymous().encode(env), e.anonymous.encode(env));
     map = map_put(map, atoms::inputs().encode(env), ins.encode(env));
     map
@@ -915,7 +1391,11 @@ fn encode_error<'a>(env: Env<'a>, e: &AbiError) -> Term<'a> {
 
     let mut map = Term::map_new(env);
     map = map_put(map, atoms::name().encode(env), e.name.as_str().encode(env));
-    map = map_put(map, atoms::signature().encode(env), sig.as_str().encode(env));
+    map = map_put(
+        map,
+        atoms::signature().encode(env),
+        sig.as_str().encode(env),
+    );
     map = map_put(map, atoms::selector().encode(env), sel.as_str().encode(env));
     map = map_put(map, atoms::inputs().encode(env), ins.encode(env));
     map

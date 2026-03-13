@@ -458,6 +458,91 @@ defmodule Onchain.SolidityTest do
     end
   end
 
+  describe "resolve_sol_file/2" do
+    test "resolves a real DefiSaver file graph with relative imports" do
+      path =
+        Path.join(
+          @priv_contracts,
+          "real/defisaver-v3-contracts/contracts/interfaces/protocols/aaveV3/IPoolV3.sol"
+        )
+
+      assert {:ok, resolution} = Solidity.resolve_sol_file(path)
+      assert resolution.root_contract == "IPoolV3"
+      assert Enum.any?(resolution.files, &String.ends_with?(&1, "IPoolV3.sol"))
+      assert Enum.any?(resolution.files, &String.ends_with?(&1, "DataTypes.sol"))
+      assert Enum.any?(resolution.files, &String.ends_with?(&1, "IPoolAddressesProvider.sol"))
+      assert String.contains?(resolution.source, "interface IPoolV3")
+      assert String.contains?(resolution.source, "library DataTypes")
+    end
+
+    test "resolves a real Aave file graph with remappings" do
+      path =
+        Path.join(
+          @priv_contracts,
+          "real/aave-v3-periphery/contracts/misc/interfaces/IUiPoolDataProviderV3.sol"
+        )
+
+      assert {:ok, resolution} = Solidity.resolve_sol_file(path)
+      assert resolution.root_contract == "IUiPoolDataProviderV3"
+      assert Enum.any?(resolution.files, &String.ends_with?(&1, "IUiPoolDataProviderV3.sol"))
+
+      assert Enum.any?(
+               resolution.files,
+               &String.ends_with?(&1, "lib/aave-v3-core/contracts/interfaces/IPoolAddressesProvider.sol")
+             )
+    end
+  end
+
+  describe "parse_sol_file/2 with real fixtures" do
+    test "parses DefiSaver relative imports, namespaced structs, and imported contract types" do
+      path =
+        Path.join(
+          @priv_contracts,
+          "real/defisaver-v3-contracts/contracts/interfaces/protocols/aaveV3/IPoolV3.sol"
+        )
+
+      assert {:ok, result} = Solidity.parse_sol_file(path)
+
+      assert Enum.any?(result.functions, &(&1.name == "getReserveData"))
+      refute Enum.any?(result.functions, &(&1.name == "getMarketId"))
+
+      get_reserve_data = Enum.find(result.functions, &(&1.name == "getReserveData"))
+
+      assert get_reserve_data.return_type ==
+               "(((uint256),uint128,uint128,uint128,uint128,uint128,uint40,uint16,address,address,address,address,uint128,uint128,uint128))"
+
+      assert [reserve_output] = get_reserve_data.outputs
+      assert reserve_output.ty == "tuple"
+      assert length(reserve_output.components) == 15
+
+      configuration = Enum.at(reserve_output.components, 0)
+      assert configuration.name == "configuration"
+      assert configuration.ty == "tuple"
+      assert [%{name: "data", ty: "uint256"}] = configuration.components
+
+      addresses_provider = Enum.find(result.functions, &(&1.name == "ADDRESSES_PROVIDER"))
+      assert addresses_provider.return_type == "(address)"
+      assert [%{name: "", ty: "address"}] = addresses_provider.outputs
+    end
+
+    test "parses Aave remapped imports and canonicalizes imported interface params" do
+      path =
+        Path.join(
+          @priv_contracts,
+          "real/aave-v3-periphery/contracts/misc/interfaces/IUiPoolDataProviderV3.sol"
+        )
+
+      assert {:ok, result} = Solidity.parse_sol_file(path)
+
+      assert Enum.any?(result.functions, &(&1.name == "getReservesData"))
+      refute Enum.any?(result.functions, &(&1.name == "getMarketId"))
+
+      get_reserves_data = Enum.find(result.functions, &(&1.name == "getReservesData"))
+      assert get_reserves_data.signature == "getReservesData(address)"
+      assert [%{name: "provider", ty: "address"}] = get_reserves_data.inputs
+    end
+  end
+
   describe "roundtrip with Onchain.ABI" do
     test "parsed signatures produce matching selectors when encoded" do
       json = File.read!(Path.join(@priv_abis, "aave_pool.json"))

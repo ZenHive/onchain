@@ -87,7 +87,7 @@ Drop a `.sol` file, get a typed Elixir module. Rustler NIF using Alloy to parse 
 |---|------|--------|---|---|---|-----|--------|
 | 24 | Rustler NIF: Solidity ABI parser via Alloy | ✅ | 5 | 9 | 9 | 1.80 🚀 | `Onchain.Solidity` (native) |
 | 25 | Contract codegen macro (`use Onchain.Contract.Generator, sol: "..."`) | ✅ | 6 | 10 | 9 | 1.58 🚀 | `Onchain.Contract.Generator` |
-| 25b | Solidity import/remapping resolution for multi-file codegen | ⬜ | 5 | 9 | 8 | 1.80 🚀 | `Onchain.Contract.Generator` |
+| 25b | Solidity import/remapping resolution for multi-file codegen | ✅ | 5 | 9 | 8 | 1.80 🚀 | `Onchain.Contract.Generator` |
 
 **Task descriptions:**
 
@@ -100,6 +100,8 @@ Drop a `.sol` file, get a typed Elixir module. Rustler NIF using Alloy to parse 
 ---
 
 ## Phase 6: Local EVM Simulation
+
+**Agent economy note:** AI agents are a primary consumer of onchain's capabilities. An autonomous agent managing DeFi positions needs exactly this stack: read health factors and collateral ratios (ephemeral reads), simulate rebalancing strategies before committing gas (revm), sign and submit transactions programmatically (Signer), and interact with any verified contract via codegen (no hand-coded ABIs). The simulation layer is especially critical — agents explore strategy space cheaply ("what if I add 10 ETH collateral?") before spending real money. Human traders use dashboards; agents use `eth_call` and `revm_simulate` directly. See [AGENT_WISHLIST.md](AGENT_WISHLIST.md) for detailed scenarios.
 
 Simulate contract execution locally without hitting the chain. Reuses the Rustler NIF infrastructure from Phase 5. The user runs reth full nodes — optional enhanced features when connected to one, but core functionality works with any RPC.
 
@@ -156,6 +158,48 @@ Read-layer primitives for wallet analytics and on-chain intelligence (Arkham-sty
 **33 — ERC-721/ERC-1155 reads.** Read-only NFT queries: `ownerOf/3`, `tokenURI/3`, `balanceOf/3` for ERC-721; `balanceOf/4`, `uri/3` for ERC-1155. Same pattern as task 20 (ERC-20 reads) — eth_call wrappers with known ABIs. Needed for complete portfolio tracking beyond fungible tokens.
 
 **34 — ENS resolution.** Forward resolution (`vitalik.eth` → `0xd8dA...`) and reverse resolution (`0xd8dA...` → `vitalik.eth`). Small contract surface, high impact for analytics UIs. Every address label in Arkham-style dashboards benefits from ENS names where available.
+
+---
+
+## Future Consumer Use Cases
+
+These are example consumer directions built on top of the current and planned primitives. They are not separate core-library tasks, but they help clarify what the roadmap is enabling.
+
+### DeFiSaver-Style Consumer Stack
+
+1. **Smart wallet / proxy layer.** Support DSProxy/Safe-style execution, wallet discovery, ownership checks, and proxy-aware transaction helpers.
+   Example apps: smart wallet dashboard, proxy migration tool, delegated execution backend.
+2. **Action layer.** Move from raw contract calls to semantic actions like supply, borrow, swap collateral, repay with collateral, close position, and refinance.
+   Example apps: one-click Aave helper, protocol action library, position rebalance assistant.
+3. **Simulation layer.** Preview actions and multi-step recipes locally before broadcast: success/failure, revert reason, gas, state deltas, expected health factor, and slippage impact.
+   Example apps: recipe preview, safe execution checks, what-if testing lab.
+4. **Trigger + automation engine.** Persistent triggers for health factor, LTV, oracle prices, and time windows, plus retries, dedupe, and idempotent execution.
+   Example apps: auto-repay, auto-boost, liquidation shield, treasury risk automation.
+5. **Product layer.** User-facing API/UI, strategy storage, notifications, audit trail, execution history, permissions, and policy controls.
+   Example apps: DeFiSaver-style SaaS, operator console, managed automation platform.
+
+### Where Rust Helps Most
+
+- Local EVM simulation (`revm`) for recipe preview, flash-loan flow simulation, revert decoding, and state-diff analysis
+- Trace-heavy and EVM-heavy work such as execution traces, bytecode inspection, and fast batch state analysis
+- Parser/compiler-adjacent infrastructure such as Solidity parsing and ABI extraction
+
+### Where Elixir Macros Help Most
+
+- Contract wrapper generation from ABI and `.sol` sources
+- Action DSLs that generate encoders, docs, typespecs, and validation scaffolding
+- Recipe DSLs that turn multi-step workflows into structured, typed execution plans
+- Trigger schemas and other repetitive protocol-specific declarations
+
+### Example Future Consumer Apps
+
+- Aave auto-repay bot
+- Liquidation protection service
+- One-click deleverage / close-position flow
+- Collateral swap assistant
+- Debt migration tool across protocol versions
+- Treasury risk console for multiple wallets
+- Strategy preview sandbox before live execution
 
 ---
 

@@ -54,7 +54,9 @@ defmodule Onchain.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:doctor, "~> 0.22", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.39", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.39", only: :dev, runtime: false},
+      {:ex_dna, "~> 1.1", only: [:dev, :test], runtime: false},
+      {:ex_ast, "~> 0.2", only: [:dev, :test], runtime: false}
     ]
   end
 

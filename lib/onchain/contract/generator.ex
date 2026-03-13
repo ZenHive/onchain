@@ -18,6 +18,11 @@ defmodule Onchain.Contract.Generator do
           sol: File.read!("priv/contracts/IPool.sol")
       end
 
+      defmodule MyApp.UiPool do
+        use Onchain.Contract.Generator,
+          sol_file: "priv/contracts/real/aave/IUiPoolDataProviderV3.sol"
+      end
+
   ## Generated Functions
 
   For each ABI function, generates:
@@ -65,8 +70,11 @@ defmodule Onchain.Contract.Generator do
   @doc false
   defmacro __before_compile__(env) do
     opts = Module.get_attribute(env.module, :__contract_opts__)
-    abi = resolve_abi(opts)
-    is_sol = Keyword.has_key?(opts, :sol)
+    %{abi: abi, is_sol: is_sol, external_files: external_files} = resolve_contract_input(opts, env)
+
+    Enum.each(external_files, fn file ->
+      Module.put_attribute(env.module, :external_resource, file)
+    end)
 
     functions = abi.functions
     {read_fns, write_fns} = split_by_mutability(functions)
@@ -93,19 +101,55 @@ defmodule Onchain.Contract.Generator do
 
   @doc false
   def resolve_abi(opts) do
+    resolve_contract_input(opts, nil).abi
+  end
+
+  @doc false
+  # Resolves compile-time contract inputs, including real Solidity file graphs.
+  def resolve_contract_input(opts, env) do
     cond do
       sol = Keyword.get(opts, :sol) ->
-        Onchain.Solidity.parse_sol!(sol)
+        %{abi: Onchain.Solidity.parse_sol!(sol), is_sol: true, external_files: []}
+
+      file = Keyword.get(opts, :sol_file) ->
+        resolve_sol_file_input(file, opts, env)
 
       json = Keyword.get(opts, :abi_json) ->
-        Onchain.Solidity.parse_abi_json!(json)
+        %{abi: Onchain.Solidity.parse_abi_json!(json), is_sol: false, external_files: []}
 
       file = Keyword.get(opts, :abi_file) ->
-        Onchain.Solidity.parse_abi_file!(file)
+        %{abi: Onchain.Solidity.parse_abi_file!(file), is_sol: false, external_files: []}
 
       true ->
-        raise ArgumentError, "use Onchain.Contract.Generator requires :sol, :abi_json, or :abi_file option"
+        raise ArgumentError,
+              "use Onchain.Contract.Generator requires :sol, :sol_file, :abi_json, or :abi_file option"
     end
+  end
+
+  @doc false
+  # Resolves a root Solidity file relative to the caller module and parses the selected contract.
+  defp resolve_sol_file_input(file, opts, env) do
+    sol_path = expand_sol_file_path(file, env)
+    sol_opts = Keyword.take(opts, [:remappings, :root_contract])
+    resolution = Onchain.Solidity.resolve_sol_file!(sol_path, sol_opts)
+
+    abi =
+      case Onchain.Solidity.__parse_sol_root__(resolution.source, resolution.root_contract) do
+        {:ok, parsed} -> parsed
+        {:error, {:parse_error, reason}} -> raise "Solidity parse failed: #{reason}"
+        {:error, reason} -> raise "Solidity parse failed: #{inspect(reason)}"
+      end
+
+    %{abi: abi, is_sol: true, external_files: resolution.files}
+  end
+
+  @doc false
+  # Expands sol_file paths relative to the caller file when available.
+  defp expand_sol_file_path(file, nil), do: Path.expand(file)
+
+  @doc false
+  defp expand_sol_file_path(file, env) do
+    Path.expand(file, Path.dirname(env.file))
   end
 
   # --- Name Conversion ---

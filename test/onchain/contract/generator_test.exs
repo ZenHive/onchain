@@ -26,6 +26,28 @@ defmodule Onchain.Contract.GeneratorTest do
       sol: File.read!(Path.join(:code.priv_dir(:onchain), "contracts/test_interface.sol"))
   end
 
+  # Real Solidity file module (DefiSaver, relative imports)
+  defmodule DefiSaverPoolModule do
+    @moduledoc false
+    use Generator,
+      sol_file:
+        Path.join(
+          :code.priv_dir(:onchain),
+          "contracts/real/defisaver-v3-contracts/contracts/interfaces/protocols/aaveV3/IPoolV3.sol"
+        )
+  end
+
+  # Real Solidity file module (Aave, remappings)
+  defmodule AaveUiPoolModule do
+    @moduledoc false
+    use Generator,
+      sol_file:
+        Path.join(
+          :code.priv_dir(:onchain),
+          "contracts/real/aave-v3-periphery/contracts/misc/interfaces/IUiPoolDataProviderV3.sol"
+        )
+  end
+
   # Overloaded function module
   defmodule OverloadModule do
     @moduledoc false
@@ -283,7 +305,7 @@ defmodule Onchain.Contract.GeneratorTest do
 
   describe "resolve_abi/1" do
     test "raises on missing options" do
-      assert_raise ArgumentError, ~r/requires :sol, :abi_json, or :abi_file/, fn ->
+      assert_raise ArgumentError, ~r/requires :sol, :sol_file, :abi_json, or :abi_file/, fn ->
         Generator.resolve_abi([])
       end
     end
@@ -297,6 +319,92 @@ defmodule Onchain.Contract.GeneratorTest do
     test "parses valid ABI JSON" do
       result = Generator.resolve_abi(abi_json: "[]")
       assert result.functions == []
+    end
+  end
+
+  describe "sol_file option" do
+    test "compiles a real DefiSaver interface with relative imports" do
+      assert function_exported?(DefiSaverPoolModule, :get_reserve_data, 2)
+      assert function_exported?(DefiSaverPoolModule, :get_reserve_data, 3)
+      assert function_exported?(DefiSaverPoolModule, :addresses_provider, 1)
+      assert function_exported?(DefiSaverPoolModule, :addresses_provider, 2)
+    end
+
+    test "compiles a real Aave interface with remappings" do
+      assert function_exported?(AaveUiPoolModule, :get_reserves_list, 2)
+      assert function_exported?(AaveUiPoolModule, :get_reserves_list, 3)
+      assert function_exported?(AaveUiPoolModule, :get_reserves_data, 2)
+      assert function_exported?(AaveUiPoolModule, :get_reserves_data, 3)
+      assert function_exported?(AaveUiPoolModule, :get_user_reserves_data, 3)
+      assert function_exported?(AaveUiPoolModule, :get_user_reserves_data, 4)
+    end
+
+    test "only exposes root contract functions in generated abi" do
+      defi_abi = DefiSaverPoolModule.__contract_abi__()
+      aave_abi = AaveUiPoolModule.__contract_abi__()
+
+      assert Enum.any?(defi_abi.functions, &(&1.name == "getReserveData"))
+      refute Enum.any?(defi_abi.functions, &(&1.name == "getMarketId"))
+
+      assert Enum.any?(aave_abi.functions, &(&1.name == "getReservesData"))
+      refute Enum.any?(aave_abi.functions, &(&1.name == "getMarketId"))
+    end
+
+    test "generates imported struct modules for namespaced library types" do
+      reserve_data = Module.concat(DefiSaverPoolModule, "DataTypes.ReserveData")
+      reserve_configuration_map = Module.concat(DefiSaverPoolModule, "DataTypes.ReserveConfigurationMap")
+
+      calculate_user_account_data_params =
+        Module.concat(DefiSaverPoolModule, "DataTypes.CalculateUserAccountDataParams")
+
+      assert function_exported?(reserve_data, :from_raw, 1)
+      assert function_exported?(reserve_configuration_map, :from_raw, 1)
+      assert function_exported?(calculate_user_account_data_params, :from_raw, 1)
+    end
+
+    test "from_raw/1 recursively converts imported nested structs" do
+      calculate_user_account_data_params =
+        Module.concat(DefiSaverPoolModule, "DataTypes.CalculateUserAccountDataParams")
+
+      user_configuration_map = Module.concat(DefiSaverPoolModule, "DataTypes.UserConfigurationMap")
+
+      raw = {{123}, 456, <<1::160>>, <<2::160>>, 7}
+      result = calculate_user_account_data_params.from_raw(raw)
+
+      assert result.__struct__ == calculate_user_account_data_params
+      assert result.user_config.__struct__ == user_configuration_map
+      assert result.user_config.data == 123
+      assert result.reserves_count == 456
+      assert is_binary(result.user)
+      assert String.starts_with?(result.user, "0x")
+      assert is_binary(result.oracle)
+      assert String.starts_with?(result.oracle, "0x")
+      assert result.user_e_mode_category == 7
+    end
+
+    test "tracks resolved source files as external resources" do
+      defi_resources =
+        :attributes
+        |> DefiSaverPoolModule.__info__()
+        |> Keyword.get_values(:external_resource)
+        |> List.flatten()
+
+      aave_resources =
+        :attributes
+        |> AaveUiPoolModule.__info__()
+        |> Keyword.get_values(:external_resource)
+        |> List.flatten()
+
+      assert Enum.any?(defi_resources, &String.ends_with?(&1, "IPoolV3.sol"))
+      assert Enum.any?(defi_resources, &String.ends_with?(&1, "DataTypes.sol"))
+      assert Enum.any?(defi_resources, &String.ends_with?(&1, "IPoolAddressesProvider.sol"))
+
+      assert Enum.any?(aave_resources, &String.ends_with?(&1, "IUiPoolDataProviderV3.sol"))
+
+      assert Enum.any?(
+               aave_resources,
+               &String.ends_with?(&1, "lib/aave-v3-core/contracts/interfaces/IPoolAddressesProvider.sol")
+             )
     end
   end
 end
