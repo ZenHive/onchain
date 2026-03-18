@@ -4,6 +4,25 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+## Code Health
+
+### Task 36: Extract Shared RPC Helpers
+**Completed** | [D:3/B:6/U:5 → Eff:1.83]
+
+**What was done:**
+- Extracted 7 duplicated private functions from `Onchain.RPC` and `Onchain.Trace` into new `Onchain.RPC.Helpers` module
+- Functions: `do_rpc/3`, `ensure_hex_address/1`, `ensure_hex_data/1`, `normalize_block/1`, `ensure_tx_hash/1`, `to_signet_opts/1`, `rename_key/3`
+- Both modules now `import Onchain.RPC.Helpers` — call sites unchanged
+- Fixed `String.length` → `byte_size` bug in `ensure_tx_hash/1` (O(n) → O(1), semantically correct for ASCII hex)
+
+**Files:**
+- `lib/onchain/rpc/helpers.ex` (new)
+- `lib/onchain/rpc.ex` (modified — removed extracted functions, added import)
+- `lib/onchain/trace.ex` (modified — removed extracted functions, added import)
+- `test/onchain/rpc/helpers_test.exs` (new — direct unit tests for helpers)
+
+---
+
 ## Phase 6: Local EVM Simulation
 
 ### Task 27: Debug/Trace API Module

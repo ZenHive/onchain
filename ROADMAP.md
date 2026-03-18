@@ -122,7 +122,7 @@ Simulate contract execution locally without hitting the chain. Reuses the Rustle
 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
-| 36 | Extract shared RPC helpers (DRY: 7 duplicated functions between RPC + Trace) | ⬜ `[P]` | 3 | 6 | 5 | 1.83 🚀 | `Onchain.RPC.Helpers` |
+| 36 | Extract shared RPC helpers (DRY: 7 duplicated functions between RPC + Trace) | ✅ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.RPC.Helpers` |
 
 **Task descriptions:**
 
