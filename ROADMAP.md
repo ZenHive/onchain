@@ -108,13 +108,25 @@ Simulate contract execution locally without hitting the chain. Reuses the Rustle
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
 | 26 | Rustler NIF: revm local EVM execution | ✅ | 6 | 10 | 9 | 1.58 🚀 | `Onchain.EVM` (native) |
-| 27 | Optional reth-enhanced module (trace/debug APIs) | ⬜ | 4 | 7 | 6 | 1.63 🚀 | `Onchain.Reth` |
+| 27 | Debug/trace API module (trace transaction, trace call, storage reads) | ✅ | 4 | 7 | 6 | 1.63 🚀 | `Onchain.Trace` |
 
 **Task descriptions:**
 
 **26 — revm NIF.** Rustler NIF wrapping revm for local EVM execution. Fork mainnet state (from any RPC or local reth node), simulate transactions locally — zero gas, zero latency. Core use cases: aave_sim runs hundreds of "what if" scenarios in milliseconds (supply X, borrow Y, price drops Z%); blockwatch tests liquidation thresholds without on-chain risk. Thin bridge: "give me state fork + transaction, return execution result." Reuses the Rustler infrastructure from task 24.
 
 **27 — Optional reth module.** When connected to a local reth node, expose enhanced APIs beyond standard JSON-RPC: `debug_traceTransaction`, `trace_call`, direct state access. NOT a core dependency — the library works with any RPC endpoint. This module detects reth availability and unlocks richer simulation/debugging capabilities. Also enables faster state forking for revm (local node vs remote RPC). Depends on task 26.
+
+---
+
+## Code Health
+
+| # | Task | Status | D | B | U | Eff | Module |
+|---|------|--------|---|---|---|-----|--------|
+| 36 | Extract shared RPC helpers (DRY: 7 duplicated functions between RPC + Trace) | ⬜ `[P]` | 3 | 6 | 5 | 1.83 🚀 | `Onchain.RPC.Helpers` |
+
+**Task descriptions:**
+
+**36 — Extract shared RPC helpers.** `Onchain.RPC` and `Onchain.Trace` share 7 identical private functions (`do_rpc/3`, `ensure_hex_address/1`, `ensure_hex_data/1`, `normalize_block/1`, `ensure_tx_hash/1`, `to_signet_opts/1`, `rename_key/3`) plus 3 constants (`@block_tags`, `@tx_hash_hex_length`, `@default_timeout_ms`). Extract to a shared module (e.g. `Onchain.RPC.Helpers`) and import/delegate from both. Found during Task 27 code review. Any future RPC-adjacent module will need these same helpers.
 
 ---
 
@@ -237,7 +249,7 @@ lib/
     erc20.ex                      # reads: balanceOf, allowance, decimals, symbol
                                   # writes: approve, transfer
     evm.ex                        # Rustler NIF: revm local EVM execution
-    reth.ex                       # optional reth-enhanced APIs (trace, debug)
+    trace.ex                      # debug/trace APIs (trace_transaction, trace_call, storage_at)
     dex/
       router.ex                   # DEX swap routing across pools
     mev.ex                        # MEV protection, private tx submission

@@ -30,6 +30,7 @@ defmodule Onchain do
       Onchain.Log,
       Onchain.Multicall,
       Onchain.EVM,
+      Onchain.Trace,
       Onchain.Signer,
       Onchain.Aave.Contracts,
       Onchain.Aave.Math,

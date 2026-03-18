@@ -6,6 +6,34 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 6: Local EVM Simulation
 
+### Task 27: Debug/Trace API Module
+**Completed** | [D:4/B:7/U:6 → Eff:1.63]
+
+**What was done:**
+- Created `Onchain.Trace` module (pure Elixir, no NIF) wrapping debug/trace JSON-RPC methods
+- `trace_transaction/2` — full execution trace of a mined tx via `debug_traceTransaction`
+- `trace_call/3` — trace a call without mining via `debug_traceCall`
+- `storage_at/3` — read arbitrary contract storage slots via `eth_getStorageAt`
+- `available?/1` — probe whether connected node supports debug/trace APIs
+- Supports `callTracer` (default) and `prestateTracer` tracer types
+- Bang variants for all three main functions
+- Input validation matching `Onchain.RPC` patterns (address, tx hash, block, slot)
+- Descripex self-describing API metadata
+- Named `Onchain.Trace` (not `Onchain.Reth`) because debug/trace APIs are standard JSON-RPC extensions supported by reth, geth, Erigon, and Nethermind
+
+**Design decisions:**
+- No custom structs for trace output — trace shape varies by tracer type, raw maps are the honest API
+- `storage_at` included here as the "direct state access" primitive rather than in `Onchain.RPC`
+- No Rust NIF needed — all methods are standard JSON-RPC calls via `Signet.RPC.send_rpc/3`
+
+**Files:**
+- `lib/onchain/trace.ex` (new)
+- `lib/onchain.ex` (modified — added `Onchain.Trace` to Discoverable modules)
+- `test/onchain/trace_test.exs` (new — unit tests)
+- `test/onchain/trace_integration_test.exs` (new — integration tests, tagged `:trace`)
+
+---
+
 ### Task 26: Rustler NIF — revm Local EVM Execution
 **Completed** | [D:6/B:10/U:9 → Eff:1.58]
 
