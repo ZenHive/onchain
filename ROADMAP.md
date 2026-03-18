@@ -107,7 +107,7 @@ Simulate contract execution locally without hitting the chain. Reuses the Rustle
 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
-| 26 | Rustler NIF: revm local EVM execution | ⬜ | 6 | 10 | 9 | 1.58 🚀 | `Onchain.EVM` (native) |
+| 26 | Rustler NIF: revm local EVM execution | ✅ | 6 | 10 | 9 | 1.58 🚀 | `Onchain.EVM` (native) |
 | 27 | Optional reth-enhanced module (trace/debug APIs) | ⬜ | 4 | 7 | 6 | 1.63 🚀 | `Onchain.Reth` |
 
 **Task descriptions:**

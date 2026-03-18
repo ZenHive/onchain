@@ -4,6 +4,33 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+## Phase 6: Local EVM Simulation
+
+### Task 26: Rustler NIF — revm Local EVM Execution
+**Completed** | [D:6/B:10/U:9 → Eff:1.58]
+
+**What was done:**
+- Created `native/onchain_evm/` Rustler NIF crate wrapping revm 19 with alloy 0.7 for RPC-forked EVM simulation
+- Three NIF functions (`nif_simulate_call`, `nif_simulate_transaction`, `nif_simulate_batch`) running on DirtyIo scheduler
+- `simulate_call/3` — read-only call simulation returning hex output compatible with `ABI.decode_response/2`
+- `simulate_transaction/3` — full tx simulation returning `%{success, gas_used, output, logs}` map
+- `simulate_batch/2` — multiple calls on a single forked state (shared CacheDB)
+- State overrides support: balance, nonce, code, and storage slot overrides per address
+- Fork at specific block number or latest
+- Input validation using `Address.validate/1` and `Hex.valid?/1` with descriptive error tuples
+- Bang variants for all three functions
+- Descripex self-describing API metadata
+
+**Files:**
+- `native/onchain_evm/Cargo.toml` (new)
+- `native/onchain_evm/src/lib.rs` (new)
+- `lib/onchain/evm.ex` (new)
+- `lib/onchain.ex` (modified — added `Onchain.EVM` to Discoverable modules)
+- `test/onchain/evm_test.exs` (new — unit tests)
+- `test/onchain/evm_integration_test.exs` (new — integration tests)
+
+---
+
 ## Phase 5: Contract Codegen
 
 ### Task 25b: Solidity Import/Remapping Resolution for Multi-File Codegen
