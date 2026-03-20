@@ -4,6 +4,53 @@ Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+## Code Review Fixes (Rust NIFs + Elixir)
+
+### Fix: Batch simulation, defensive parsing, array handling, NatSpec
+**Completed** | Code review findings
+
+**What was done:**
+- **Rust EVM NIF:** Switched `do_simulate_batch` from `transact()` to `transact_commit()` — state changes now persist between sequential calls in a batch (previously each call saw the original fork state, breaking dependent sequences like approve→transfer)
+- **Rust Solidity NIF:** Fixed two-layer bug in fixed-size array handling — `expr_to_type_string` now preserves array size from AST (`uint256[3]` no longer becomes `uint256[]`), and `split_array_suffix` now strips both dynamic `[]` and fixed-size `[N]` suffixes for type registry lookups
+- **Rust Solidity NIF:** Added `@returns` (plural) NatSpec tag parsing alongside `@return` — many real-world contracts use the plural form
+- **Rust Solidity NIF:** Extracted `MAX_NATSPEC_DISTANCE_BYTES` constant (was magic number `100`)
+- **Elixir RPC:** `parse_address` and `parse_hex_integer` now use non-raising variants (`checksum/1`, `to_integer/1`) to handle malformed RPC responses gracefully instead of crashing
+- **Elixir RPC:** Deduplicated `@block_tags` — single source of truth in `Onchain.RPC.Helpers`, referenced at compile time in `Onchain.RPC`
+- **Elixir Wallet:** `balance!/2` now raises "balance failed" instead of "get_balance failed"
+
+**Files:**
+- `native/onchain_evm/src/lib.rs` (modified — `transact_commit()` in batch loop)
+- `native/onchain_solidity/src/lib.rs` (modified — array handling, `@returns`, constant extraction)
+- `lib/onchain/rpc.ex` (modified — defensive parsing, deduplicated `@block_tags`)
+- `lib/onchain/rpc/helpers.ex` (modified — exposed `block_tags/0`)
+- `lib/onchain/wallet.ex` (modified — inline `balance!`)
+- `test/onchain/wallet_test.exs` (modified — updated error message assertion)
+
+---
+
+## Phase 8: Chain Intelligence Primitives
+
+### Task 30: Wallet Primitives
+**Completed** | [D:3/B:8/U:9 → Eff:2.83]
+
+**What was done:**
+- Added `eth_get_code/2` to `Onchain.RPC` — fetches contract bytecode, returns `"0x"` for EOAs
+- Added `get_transaction_by_hash/2` to `Onchain.RPC` — fetches full transaction details with parsed fields (addresses checksummed, hex integers decoded)
+- Created `Onchain.Wallet` convenience module with `classify/2` (`:eoa` or `:contract`) and `balance/2` (native ETH in wei)
+- Bang variants for all new functions
+- Descripex self-describing API metadata on all functions
+
+**Files:**
+- `lib/onchain/rpc.ex` (modified — added `eth_get_code`, `get_transaction_by_hash`, `parse_transaction/1`)
+- `lib/onchain/wallet.ex` (new — thin convenience layer over RPC)
+- `test/onchain/rpc_test.exs` (modified — unit tests for new methods)
+- `test/onchain/wallet_test.exs` (new — unit tests)
+- `test/onchain/rpc/code_integration_test.exs` (new — WETH contract vs EOA)
+- `test/onchain/rpc/transaction_integration_test.exs` (new — parsed fields verification)
+- `test/onchain/wallet_integration_test.exs` (new — classify + balance integration)
+
+---
+
 ## Code Health
 
 ### Task 36: Extract Shared RPC Helpers

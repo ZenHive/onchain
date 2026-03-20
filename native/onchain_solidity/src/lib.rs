@@ -44,6 +44,10 @@ mod atoms {
     }
 }
 
+/// Maximum byte distance between a doc comment's target offset and a function's
+/// start offset for the comment to be associated with that function.
+const MAX_NATSPEC_DISTANCE_BYTES: usize = 100;
+
 // --- NIF functions ---
 
 #[rustler::nif]
@@ -592,7 +596,7 @@ fn encode_sol_constant<'a>(
     let val_str = v
         .initializer
         .as_ref()
-        .map(|e| expr_to_value_string(e))
+        .map(expr_to_value_string)
         .unwrap_or_default();
 
     let mut map = Term::map_new(env);
@@ -921,17 +925,29 @@ fn resolve_type_info(ty: &str, registry: &TypeRegistry) -> (String, Vec<SolField
     (format!("{}{}", base_ty, suffix), Vec::new())
 }
 
+/// Maximum recursion depth for struct expansion to prevent stack overflow
+/// on malformed Solidity with circular struct references.
+const MAX_TYPE_RECURSION_DEPTH: usize = 10;
+
 /// Recursively resolve a type string to its canonical ABI form.
 /// Struct names become expanded tuple types (e.g., "UserData" → "(uint256,address,bool)").
 /// Handles nested structs: a struct field that references another struct is expanded recursively.
 fn type_to_canonical(ty: &str, registry: &TypeRegistry) -> String {
+    type_to_canonical_inner(ty, registry, 0)
+}
+
+fn type_to_canonical_inner(ty: &str, registry: &TypeRegistry, depth: usize) -> String {
+    if depth > MAX_TYPE_RECURSION_DEPTH {
+        return ty.to_string();
+    }
+
     let (base_ty, suffix) = split_array_suffix(ty);
 
     if let Some(struct_def) = registry.struct_lookup.get(&base_ty) {
         let inner: Vec<String> = struct_def
             .fields
             .iter()
-            .map(|field| type_to_canonical(&field.ty, registry))
+            .map(|field| type_to_canonical_inner(&field.ty, registry, depth + 1))
             .collect();
         return format!("({}){}", inner.join(","), suffix);
     }
@@ -1004,9 +1020,22 @@ fn split_array_suffix(ty: &str) -> (String, String) {
     let mut base_ty = ty.to_string();
     let mut suffix = String::new();
 
-    while base_ty.ends_with("[]") {
-        base_ty.truncate(base_ty.len() - 2);
-        suffix.push_str("[]");
+    loop {
+        if base_ty.ends_with("[]") {
+            base_ty.truncate(base_ty.len() - 2);
+            suffix.insert_str(0, "[]");
+        } else if let Some(bracket_pos) = base_ty.rfind('[') {
+            let inside = &base_ty[bracket_pos + 1..base_ty.len() - 1];
+            if base_ty.ends_with(']') && inside.chars().all(|c| c.is_ascii_digit()) && !inside.is_empty() {
+                let array_suffix = &base_ty[bracket_pos..];
+                suffix.insert_str(0, array_suffix);
+                base_ty.truncate(bracket_pos);
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
     }
 
     (base_ty, suffix)
@@ -1028,8 +1057,11 @@ fn expr_to_type_string(expr: &pt::Expression) -> String {
             pt::Type::Mapping { .. } => "mapping".to_string(),
             _ => format!("{:?}", ty),
         },
-        pt::Expression::ArraySubscript(_, base, _) => {
-            format!("{}[]", expr_to_type_string(base))
+        pt::Expression::ArraySubscript(_, base, size) => {
+            match size {
+                Some(size_expr) => format!("{}[{}]", expr_to_type_string(base), expr_to_value_string(size_expr)),
+                None => format!("{}[]", expr_to_type_string(base)),
+            }
         }
         pt::Expression::Parenthesis(_, expr) => expr_to_type_string(expr),
         pt::Expression::Variable(id) => {
@@ -1057,15 +1089,12 @@ fn expr_to_value_string(expr: &pt::Expression) -> String {
 
 fn sol_function_mutability(f: &pt::FunctionDefinition) -> &'static str {
     for attr in &f.attributes {
-        match attr {
-            pt::FunctionAttribute::Mutability(m) => match m {
-                pt::Mutability::Pure(_) => return "pure",
-                pt::Mutability::View(_) => return "view",
-                pt::Mutability::Payable(_) => return "payable",
-                pt::Mutability::Constant(_) => return "view",
-            },
-            _ => {}
-        }
+        if let pt::FunctionAttribute::Mutability(m) = attr { match m {
+            pt::Mutability::Pure(_) => return "pure",
+            pt::Mutability::View(_) => return "view",
+            pt::Mutability::Payable(_) => return "payable",
+            pt::Mutability::Constant(_) => return "view",
+        } }
     }
     "nonpayable"
 }
@@ -1120,7 +1149,7 @@ fn compute_selector(signature: &str) -> String {
 
 fn compute_topic_hash(signature: &str) -> String {
     let hash = keccak256(signature.as_bytes());
-    format!("0x{}", hex::encode(&hash))
+    format!("0x{}", hex::encode(hash))
 }
 
 // --- NatSpec comment extraction ---
@@ -1247,8 +1276,12 @@ fn parse_natspec_lines(lines: &[&str]) -> Option<NatSpecComment> {
             if let Some(pos) = rest.find(' ') {
                 params.push((rest[..pos].to_string(), rest[pos + 1..].to_string()));
             }
-        } else if line.starts_with("@return ") {
-            let rest = line.trim_start_matches("@return ");
+        } else if line.starts_with("@return ") || line.starts_with("@returns ") {
+            let rest = if line.starts_with("@returns ") {
+                line.trim_start_matches("@returns ")
+            } else {
+                line.trim_start_matches("@return ")
+            };
             if let Some(pos) = rest.find(' ') {
                 returns.push((rest[..pos].to_string(), rest[pos + 1..].to_string()));
             }
@@ -1296,7 +1329,7 @@ fn take_natspec_for_offset(
 
     // Only match if within ~100 bytes (a couple lines of whitespace)
     match best_idx {
-        Some(idx) if best_distance < 100 => {
+        Some(idx) if best_distance < MAX_NATSPEC_DISTANCE_BYTES => {
             let (_, ns) = doc_comments.remove(idx);
             Some(ns)
         }
@@ -1445,7 +1478,7 @@ fn build_return_type(outputs: &[Param]) -> String {
         return String::from("()");
     }
 
-    let types: Vec<String> = outputs.iter().map(|p| canonical_type(p)).collect();
+    let types: Vec<String> = outputs.iter().map(canonical_type).collect();
     format!("({})", types.join(","))
 }
 
@@ -1462,7 +1495,7 @@ fn canonical_type(p: &Param) -> String {
         } else {
             ""
         };
-        let inner: Vec<String> = p.components.iter().map(|c| canonical_type(c)).collect();
+        let inner: Vec<String> = p.components.iter().map(canonical_type).collect();
         format!("({}){}", inner.join(","), suffix)
     }
 }

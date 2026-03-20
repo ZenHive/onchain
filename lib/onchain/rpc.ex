@@ -40,11 +40,17 @@ defmodule Onchain.RPC do
   | `get_transaction_receipt!/2` | Same, raises on error |
   | `get_transaction_count/2` | Account nonce (tx count) |
   | `get_transaction_count!/2` | Same, raises on error |
+  | `eth_get_code/2` | Contract bytecode (or "0x" for EOAs) |
+  | `eth_get_code!/2` | Same, raises on error |
+  | `get_transaction_by_hash/2` | Full transaction details by hash |
+  | `get_transaction_by_hash!/2` | Same, raises on error |
   """
 
   use Descripex, namespace: "/rpc"
 
   import Onchain.RPC.Helpers
+
+  require Logger
 
   # --- eth_call ---
 
@@ -222,8 +228,7 @@ defmodule Onchain.RPC do
     }
   )
 
-  # NOTE: Also defined in Onchain.RPC.Helpers for normalize_block/1 — keep in sync
-  @block_tags ~w(latest finalized pending earliest safe)
+  @block_tags Onchain.RPC.Helpers.block_tags()
 
   @spec get_block_by_number(integer() | String.t(), keyword()) ::
           {:ok, map()} | {:error, term()}
@@ -389,6 +394,88 @@ defmodule Onchain.RPC do
     end
   end
 
+  # --- eth_get_code ---
+
+  api(:eth_get_code, "Fetch contract bytecode at an address (eth_getCode).",
+    params: [
+      address: [kind: :value, description: "Account address as 0x hex string or 20-byte binary"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout, :block"]
+    ],
+    returns: %{
+      type: "{:ok, hex_string} | {:error, term}",
+      description: "0x-prefixed bytecode hex string, or \"0x\" for EOA addresses",
+      example: ~s("0x" for EOAs, "0x6080604052..." for contracts)
+    }
+  )
+
+  @spec eth_get_code(String.t() | binary(), keyword()) :: {:ok, String.t()} | {:error, term()}
+  def eth_get_code(address, opts \\ []) do
+    with {:ok, hex_addr} <- ensure_hex_address(address),
+         {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")) do
+      do_rpc("eth_getCode", [hex_addr, block], to_signet_opts(opts))
+    end
+  end
+
+  # --- eth_get_code! ---
+
+  api(:eth_get_code!, "Fetch contract bytecode at an address. Raises on error.",
+    params: [
+      address: [kind: :value, description: "Account address as 0x hex string or 20-byte binary"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout, :block"]
+    ],
+    returns: %{type: :string, description: "0x-prefixed bytecode hex string"}
+  )
+
+  @spec eth_get_code!(String.t() | binary(), keyword()) :: String.t()
+  def eth_get_code!(address, opts \\ []) do
+    case eth_get_code(address, opts) do
+      {:ok, result} -> result
+      {:error, reason} -> raise "eth_get_code failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- get_transaction_by_hash ---
+
+  api(:get_transaction_by_hash, "Get full transaction details by hash (eth_getTransactionByHash).",
+    params: [
+      tx_hash: [kind: :value, description: "0x-prefixed hex transaction hash"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{
+      type: "{:ok, map | nil} | {:error, term}",
+      description: "Parsed transaction map, or nil if the transaction is unknown"
+    }
+  )
+
+  @spec get_transaction_by_hash(String.t(), keyword()) :: {:ok, map() | nil} | {:error, term()}
+  def get_transaction_by_hash(tx_hash, opts \\ []) do
+    with {:ok, _hex} <- ensure_tx_hash(tx_hash) do
+      case do_rpc("eth_getTransactionByHash", [tx_hash], to_signet_opts(opts)) do
+        {:ok, nil} -> {:ok, nil}
+        {:ok, tx} when is_map(tx) -> {:ok, parse_transaction(tx)}
+        error -> error
+      end
+    end
+  end
+
+  # --- get_transaction_by_hash! ---
+
+  api(:get_transaction_by_hash!, "Get full transaction details by hash. Raises on error.",
+    params: [
+      tx_hash: [kind: :value, description: "0x-prefixed hex transaction hash"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{type: "map | nil", description: "Parsed transaction map or nil"}
+  )
+
+  @spec get_transaction_by_hash!(String.t(), keyword()) :: map() | nil
+  def get_transaction_by_hash!(tx_hash, opts \\ []) do
+    case get_transaction_by_hash(tx_hash, opts) do
+      {:ok, result} -> result
+      {:error, reason} -> raise "get_transaction_by_hash failed: #{inspect(reason)}"
+    end
+  end
+
   # --- eth_get_logs ---
 
   api(:eth_get_logs, "Fetch event logs matching a filter (eth_getLogs).",
@@ -525,14 +612,53 @@ defmodule Onchain.RPC do
   end
 
   @doc false
+  # Parses a raw transaction map from the RPC response into atom-keyed map.
+  @spec parse_transaction(map()) :: map()
+  defp parse_transaction(tx) when is_map(tx) do
+    %{
+      hash: tx["hash"],
+      nonce: parse_hex_integer(tx["nonce"]),
+      block_hash: tx["blockHash"],
+      block_number: parse_hex_integer(tx["blockNumber"]),
+      transaction_index: parse_hex_integer(tx["transactionIndex"]),
+      from: parse_address(tx["from"]),
+      to: parse_address(tx["to"]),
+      value: parse_hex_integer(tx["value"]),
+      gas: parse_hex_integer(tx["gas"]),
+      gas_price: parse_hex_integer(tx["gasPrice"]),
+      max_fee_per_gas: parse_hex_integer(tx["maxFeePerGas"]),
+      max_priority_fee_per_gas: parse_hex_integer(tx["maxPriorityFeePerGas"]),
+      input: tx["input"],
+      type: parse_hex_integer(tx["type"]),
+      chain_id: parse_hex_integer(tx["chainId"])
+    }
+  end
+
+  @doc false
   # Parses a hex address string to checksummed format.
   @spec parse_address(String.t() | nil) :: String.t() | nil
   defp parse_address(nil), do: nil
-  defp parse_address(hex), do: Onchain.Address.checksum!(hex)
+
+  defp parse_address(hex) do
+    case Onchain.Address.checksum(hex) do
+      {:ok, checksummed} -> checksummed
+      {:error, _} -> hex
+    end
+  end
 
   @doc false
   # Parses a hex integer string, returning nil for nil input.
   @spec parse_hex_integer(String.t() | nil) :: non_neg_integer() | nil
   defp parse_hex_integer(nil), do: nil
-  defp parse_hex_integer(hex), do: Onchain.Hex.to_integer!(hex)
+
+  defp parse_hex_integer(hex) do
+    case Onchain.Hex.to_integer(hex) do
+      {:ok, n} ->
+        n
+
+      {:error, _} ->
+        Logger.debug("Failed to parse hex integer from RPC response: #{inspect(hex)}")
+        nil
+    end
+  end
 end

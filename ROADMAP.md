@@ -123,6 +123,7 @@ Simulate contract execution locally without hitting the chain. Reuses the Rustle
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
 | 36 | Extract shared RPC helpers (DRY: 7 duplicated functions between RPC + Trace) | ✅ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.RPC.Helpers` |
+| — | Code review fixes: batch state commit, defensive parsing, array handling, NatSpec | ✅ | — | — | — | — | Multiple |
 
 **Task descriptions:**
 
@@ -153,7 +154,7 @@ Read-layer primitives for wallet analytics and on-chain intelligence (Arkham-sty
 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
-| 30 | Wallet primitives (eth_getBalance, eth_getCode, eth_getTransactionByHash) | ⬜ | 3 | 8 | 9 | 2.83 🎯 | `Onchain.RPC` + `Onchain.Wallet` |
+| 30 | Wallet primitives (eth_getBalance, eth_getCode, eth_getTransactionByHash) | ✅ | 3 | 8 | 9 | 2.83 🎯 | `Onchain.RPC` + `Onchain.Wallet` |
 | 31 | Real-time subscriptions (eth_subscribe: newHeads, pendingTx, logs) | ⬜ | 5 | 9 | 8 | 1.70 🚀 | `Onchain.Subscription` |
 | 32 | Transfer event parser (ERC-20/721/1155 → normalized structs) | ⬜ | 3 | 9 | 9 | 3.00 🎯 | `Onchain.Transfer` |
 | 33 | ERC-721/ERC-1155 read operations (NFT tracking) | ⬜ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.ERC721` + `Onchain.ERC1155` |

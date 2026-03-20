@@ -9,6 +9,9 @@ defmodule Onchain.RPC.Helpers do
   @tx_hash_hex_length 66
 
   @doc false
+  def block_tags, do: @block_tags
+
+  @doc false
   # Sends an RPC request and normalizes the error format.
   # Signet.RPC.send_rpc/3 spec says errors are always %{code: int, message: str},
   # but runtime errors include non-map values (Finch timeouts, connection refused).

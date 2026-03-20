@@ -475,10 +475,11 @@ fn do_simulate_batch<'a>(
             .build();
 
         let result = evm
-            .transact()
+            .transact_commit()
             .map_err(|e| EvmError::ExecutionError(format!("{}", e)))?;
 
-        results.push(extract_tx_result(result.result)?);
+        // transact_commit returns ExecutionResult directly (not ResultAndState)
+        results.push(extract_tx_result(result)?);
     }
 
     Ok(results)
