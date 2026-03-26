@@ -40,6 +40,8 @@ defmodule Onchain do
       Onchain.Aave.Types.UserAccountData,
       Onchain.Aave.Types.AggregatedReserveData,
       Onchain.Aave.Types.BaseCurrencyInfo,
-      Onchain.Aave.Types.UserReserveData
+      Onchain.Aave.Types.UserReserveData,
+      Onchain.Transfer,
+      Onchain.ENS
     ]
 end

@@ -18,6 +18,8 @@ Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) a
 @~/.claude/includes/ex-unit-json.md
 @~/.claude/includes/dialyzer-json.md
 @~/.claude/includes/library-design.md
+@~/.claude/includes/elixir-volt.md
+@~/.claude/includes/quickbeam.md
 
 ## Portfolio Context
 
@@ -58,26 +60,45 @@ This repo is part of a three-library portfolio. The boundary is **ephemeral vs d
 
 ```
 lib/onchain/
-  hex.ex          # hex<->binary, hex<->integer, 0x prefix
-  address.ex      # validate, checksum (EIP-55), normalize
-  abi.ex          # encode_call/2, decode_response/2
-  decimal.ex      # to_decimal/2, to_basis_points/1, div_pow10/2
-  rpc.ex          # eth_call, eth_send_raw_transaction
-  signer.ex       # key management, transaction signing (Phase 3)
-  erc20.ex        # approve, transfer, balanceOf (Phase 3)
+  hex.ex            # hex<->binary, hex<->integer, 0x prefix
+  address.ex        # validate, checksum (EIP-55), normalize
+  abi.ex            # encode_call/2, decode_response/2
+  decimal.ex        # to_decimal/2, to_basis_points/1, div_pow10/2
+  rpc.ex            # eth_call, eth_getLogs, eth_getBalance, receipts, nonces
+  rpc/helpers.ex    # shared RPC helper functions
+  signer.ex         # key management, transaction signing
+  erc20.ex          # approve, transfer, balanceOf
+  block.ex          # block queries
+  log.ex            # event log queries
+  wallet.ex         # eth_getBalance, eth_getCode, get_transaction_by_hash
+  multicall.ex      # batched calls via Multicall3
+  contract/
+    generator.ex    # Solidity codegen from ABI
+  solidity.ex       # multi-file Solidity codegen
+  ens.ex            # ENS name resolution
+  transfer.ex       # ERC-20 Transfer event parsing
+  trace.ex          # debug/trace API for EVM execution
+  evm.ex            # local EVM simulation via revm NIF
   aave/
-    math.ex       # to_usd, to_ltv, to_health_factor, to_ray
-    contracts.ex  # address registry
-    pool.ex       # read + write calls
-    oracle.ex     # getAssetPrice + Chainlink
-    types/        # response structs
+    math.ex         # to_usd, to_ltv, to_health_factor, to_ray
+    contracts.ex    # address registry
+    pool.ex         # read + write calls
+    oracle.ex       # getAssetPrice + Chainlink
+    faucet.ex       # testnet faucet interactions
+    ui_pool_data_provider.ex  # bulk reserve/user data
+    types/          # response structs
 ```
 
 ## After Every Task
 
-Update ROADMAP.md (⬜→✅) and CHANGELOG.md (add entry) after completing any roadmap task. This is part of every task, not a separate step.
+Update **all affected `.md` files** after completing any roadmap task. This is part of every task, not a separate step.
 
-**Code reviewers**: Verify ROADMAP.md and CHANGELOG.md were updated. Reject reviews where task completion didn't include these updates.
+- **ROADMAP.md** — Mark status (⬜ → ✅), update Current Focus section
+- **CHANGELOG.md** — Add entry under latest section with what was done
+- **README.md** — Update if new modules, changed APIs, or user-facing functionality
+- **CLAUDE.md** — Update Module Layout if files were added/removed/renamed, update Architecture if conventions changed
+
+**Code reviewers**: Verify all four files were checked. Reject reviews where task completion didn't include doc updates.
 
 ## Testing
 

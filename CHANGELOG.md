@@ -1,6 +1,69 @@
 # Changelog
 
-Completed roadmap tasks. For upcoming work, see [ROADMAP.md](ROADMAP.md).
+Completed roadmap tasks.
+
+---
+
+## Code Review Fixes (ENS + Transfer)
+
+### Fix: Error semantics, address safety, validation, auto-topics
+**Completed** | Code review findings (8 issues fixed, rating 8/10 → improved)
+
+**What was done:**
+- **ENS:** Changed `reverse/2` error tag from `{:no_address, addr}` to `{:no_reverse, addr}` — distinguishes "no reverse record" from forward resolution's "no address set"
+- **ENS:** Replaced loose name validation regex with per-label `valid_label?/1` — rejects hyphens at label start/end (`-foo.eth`, `foo-.eth`) per DNS/ENS conventions
+- **ENS:** Removed unused `@abi_json/zlib/cbor/uri` module attributes and their suppression hack
+- **Transfer:** Refactored `build_transfer/3` to return `{:ok, t()} | {:error, term()}` using `Address.checksum/1` (non-bang) — malformed addresses now return error tuples instead of crashing
+- **Transfer:** `fetch/2` auto-injects all 3 transfer topic hashes when caller omits topics — covers ERC-20, ERC-721, and ERC-1155 in one call
+- **Transfer:** Consolidated two identical catch-all `parse_log/1` clauses into one
+- **Transfer integration test:** Changed `async: true` to `async: false` to avoid RPC rate-limiting
+- **Tests:** Added unit tests for hyphen validation and reverse name construction
+
+**Files:**
+- `lib/onchain/ens.ex` (modified — error tag, validation, removed unused constants)
+- `lib/onchain/transfer.ex` (modified — safe checksumming, auto-topics, consolidated clause)
+- `test/onchain/ens_test.exs` (modified — 5 new tests)
+- `test/onchain/transfer_integration_test.exs` (modified — async flag)
+
+---
+
+## Phase 8: Wallet & Token Tracking
+
+### Task 34: ENS Resolution
+**Completed** | [D:3/B:7/U:7 → Eff:2.33]
+
+**What was done:**
+- Full ENS resolver module with forward resolution (name → address), reverse resolution (address → name), text records, contenthash, ABI, and pubkey retrieval
+- Pure namehash computation (EIP-137) with ASCII normalization and trailing dot handling
+- Two-step resolution pattern: Registry lookup → Resolver query via `Contract.call/5`
+- Configurable registry address via `:registry` opt for L2 deployments
+- Descripex self-describing API declarations for all functions
+- Unit tests with EIP-137 reference vectors, integration tests against mainnet (vitalik.eth)
+
+**Files:**
+- `lib/onchain/ens.ex` (created — full resolver module with 16 public functions)
+- `test/onchain/ens_test.exs` (created — unit tests for namehash + input validation)
+- `test/onchain/ens_integration_test.exs` (created — mainnet integration tests)
+- `lib/onchain.ex` (modified — added `Onchain.ENS` to Discoverable)
+
+---
+
+### Task 32: Transfer Event Parser
+**Completed** | [D:3/B:9/U:9 → Eff:3.00]
+
+**What was done:**
+- Added `Onchain.Transfer` module that parses ERC-20, ERC-721, and ERC-1155 Transfer events from raw logs into normalized `%Transfer{}` structs
+- ERC-20/721 disambiguation via topic count (3 topics = ERC-20, 4 topics = ERC-721)
+- ERC-1155 TransferSingle and TransferBatch support, with batch expansion into individual structs
+- `fetch/2` convenience combining `eth_get_logs` + `parse_logs` in one call
+- `transfer_topics/0` exposes precomputed topic hashes for filter building
+- Added to `Onchain` Discoverable modules list
+
+**Files:**
+- `lib/onchain/transfer.ex` (created — struct, parser, fetch, Descripex API)
+- `test/onchain/transfer_test.exs` (created — unit tests with fixtures)
+- `test/onchain/transfer_integration_test.exs` (created — mainnet USDC integration tests)
+- `lib/onchain.ex` (modified — added `Onchain.Transfer` to Discoverable)
 
 ---
 
