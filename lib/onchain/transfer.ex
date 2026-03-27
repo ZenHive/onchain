@@ -364,6 +364,7 @@ defmodule Onchain.Transfer do
     Address.checksum!(addr)
   end
 
-  defp ensure_checksum(<<"0x", _::binary>> = addr), do: Address.checksum!(addr)
-  defp ensure_checksum(addr) when is_binary(addr), do: Address.checksum!("0x" <> addr)
+  defp ensure_checksum(<<"0x", _rest::binary-size(40)>> = addr), do: Address.checksum!(addr)
+
+  defp ensure_checksum(<<hex::binary-size(40)>>), do: Address.checksum!("0x" <> hex)
 end

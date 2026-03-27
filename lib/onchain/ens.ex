@@ -44,6 +44,11 @@ defmodule Onchain.ENS do
   | `abi!/3` | Same, raises on error |
   """
 
+  # TODO: CCIP-Read / EIP-3668 off-chain lookups — needed for names using off-chain resolvers
+  # TODO: Wildcard resolution (ENSIP-10) — needed for *.subdomain patterns
+  # TODO: Full UTS-46 / ENSIP-15 Unicode normalization — needed for internationalized names
+  # TODO: Multi-coin address resolution — currently only ETH via addr(bytes32)
+
   use Descripex, namespace: "/ens"
 
   alias Onchain.Address

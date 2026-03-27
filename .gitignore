@@ -37,8 +37,9 @@ mix.lock
 # Session plan/spec artifacts
 /docs/superpowers/
 
-# Roadmap (session artifact, not project documentation)
+# Session planning artifacts
 ROADMAP.md
+split_onchain.md
 
 # ExUnit failure tracking
 .mix_test_failures

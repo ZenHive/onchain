@@ -4,6 +4,26 @@ Completed roadmap tasks.
 
 ---
 
+## Code Review #2 (ENS + Transfer)
+
+### Fix: Edge cases, type safety, TODO tracking
+**Completed** | Code review findings (5 issues fixed)
+
+**What was done:**
+- **ENS:** `namehash(".")` now returns `{:error, {:invalid_name, "."}}` instead of silently producing the zero node hash — input that normalizes to empty from non-empty is rejected
+- **ENS:** Added 4 TODO markers for future enhancements (CCIP-Read, wildcard resolution, UTS-46 normalization, multi-coin) — now Credo-visible
+- **Transfer:** Tightened `ensure_checksum/1` catch-all clause — raw hex now only matches exactly 40-byte binaries, 0x-prefixed matches exactly `0x` + 40 chars
+- **Transfer:** Added comment explaining eth_getLogs OR semantics for nested topic array in `fetch/2`
+- **CHANGELOG:** Removed dangling ROADMAP.md link (file is now gitignored as session artifact)
+
+**Files:**
+- `lib/onchain/ens.ex` (modified — dot rejection, TODO markers)
+- `lib/onchain/transfer.ex` (modified — tighter ensure_checksum, comment)
+- `test/onchain/ens_test.exs` (modified — new "rejects bare dot" test)
+- `CHANGELOG.md` (modified — removed dangling link)
+
+---
+
 ## Code Review Fixes (ENS + Transfer)
 
 ### Fix: Error semantics, address safety, validation, auto-topics
