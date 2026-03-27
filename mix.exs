@@ -1,7 +1,7 @@
 defmodule Onchain.MixProject do
   use Mix.Project
 
-  @version "0.3.0"
+  @version "0.4.0"
   @source_url "https://github.com/ZenHive/onchain"
 
   def project do
@@ -32,8 +32,7 @@ defmodule Onchain.MixProject do
 
   def application do
     [
-      extra_applications: [:logger],
-      mod: {Onchain.Application, []}
+      extra_applications: [:logger]
     ]
   end
 
@@ -42,7 +41,6 @@ defmodule Onchain.MixProject do
       {:signet, "~> 1.6"},
       {:decimal, "~> 2.0"},
       {:descripex, "~> 0.4"},
-      {:rustler, "~> 0.37", runtime: false},
 
       # Dev/test tooling
       {:tidewave, "~> 0.5", only: :dev},

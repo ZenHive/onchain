@@ -27,29 +27,25 @@ Shared Ethereum/blockchain library for the portfolio. Provides read (`eth_call`)
 - Use plain structs with `defstruct` + `@enforce_keys`.
 - Consumers use path dependency: `{:onchain, path: "../onchain"}`.
 
-## Consumers
-
-- `blockwatch` (Aave monitoring, read-only)
-- `aave_sim` (Aave simulation, read-only)
-- `ccxt_ex` (exchange trading, DEX signing planned)
-
 ## Module Layout
 
 ```text
 lib/onchain/
-  hex.ex
-  address.ex
-  abi.ex
-  decimal.ex
-  rpc.ex
-  signer.ex
-  erc20.ex
-  aave/
-    math.ex
-    contracts.ex
-    pool.ex
-    oracle.ex
-    types/
+  hex.ex            # hex<->binary, hex<->integer, 0x prefix
+  address.ex        # validate, checksum (EIP-55), normalize
+  abi.ex            # encode_call/2, decode_response/2
+  decimal.ex        # to_decimal/2, to_basis_points/1, div_pow10/2
+  rpc.ex            # eth_call, eth_getLogs, eth_getBalance, receipts, nonces
+  rpc/helpers.ex    # shared RPC helper functions
+  signer.ex         # key management, transaction signing
+  erc20.ex          # approve, transfer, balanceOf
+  block.ex          # block queries
+  contract.ex       # generic call/4 (encode -> eth_call -> decode)
+  log.ex            # event log queries
+  wallet.ex         # eth_getBalance, eth_getCode, get_transaction_by_hash
+  multicall.ex      # batched calls via Multicall3
+  ens.ex            # ENS name resolution
+  transfer.ex       # ERC-20 Transfer event parsing
 ```
 
 ## Testing Expectations
@@ -66,7 +62,7 @@ mix test.json --quiet                          # AI-friendly test output (failur
 mix test.json --quiet --failed --first-failure # Iterate on failures
 mix dialyzer.json --quiet                      # AI-friendly dialyzer output
 mix credo --strict --format json               # Static analysis (JSON output)
-mix test.json --quiet --exclude integration    # Test all exchanges
+mix test.json --quiet --include integration    # Include integration tests
 ```
 
 ## Included Global Guidance

@@ -1,15 +1,27 @@
 # Onchain
 
-Shared Ethereum/blockchain library for Elixir. Provides read (`eth_call`) and write (transaction signing) capabilities using [`signet`](https://hex.pm/packages/signet) as the sole Ethereum dependency.
+Pure Elixir Ethereum library. Provides read (`eth_call`) and write (transaction signing) capabilities using [`signet`](https://hex.pm/packages/signet) as the sole Ethereum dependency. No native deps, no Rustler.
+
+## Package Family
+
+| Package | Purpose | Deps |
+|---------|---------|------|
+| **onchain** (this) | Core Ethereum primitives, RPC, ABI, signing | signet |
+| [onchain_aave](https://github.com/ZenHive/onchain_aave) | Aave V3 protocol wrappers | onchain |
+| [onchain_evm](https://github.com/ZenHive/onchain_evm) | Rust NIFs: revm simulation, Solidity parsing, codegen | onchain + rustler |
+
+Pick what you need — consumers who only need `eth_call` never compile Rust.
 
 ## Installation
-
-Add `onchain` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:onchain, "~> 0.3"}
+    {:onchain, "~> 0.4"},
+    # Add if you need Aave:
+    {:onchain_aave, "~> 0.1"},
+    # Add if you need EVM simulation / Solidity parsing:
+    {:onchain_evm, "~> 0.1"}
   ]
 end
 ```
@@ -49,31 +61,6 @@ Or pass the URL per-call to `Onchain.RPC` functions.
 | `Onchain.Wallet` | Classify address (EOA/contract), native ETH balance |
 | `Onchain.Transfer` | Parse ERC-20/721/1155 Transfer events into normalized structs |
 | `Onchain.ENS` | ENS name resolution (forward, reverse, text records, contenthash) |
-
-### Contract Codegen
-
-| Module | Purpose |
-|--------|---------|
-| `Onchain.Solidity` | Rustler NIF: Alloy-powered Solidity ABI parser |
-| `Onchain.Contract.Generator` | Macro: `.sol` file -> typed Elixir module at compile time |
-
-### Local EVM Simulation
-
-| Module | Purpose |
-|--------|---------|
-| `Onchain.EVM` | Rustler NIF: revm local EVM execution (fork mainnet, simulate transactions) |
-| `Onchain.Trace` | Debug/trace APIs (trace_transaction, trace_call, storage_at) |
-
-### Aave v3
-
-| Module | Purpose |
-|--------|---------|
-| `Onchain.Aave.Pool` | Pool read + write calls (getUserAccountData, supply, borrow, repay) |
-| `Onchain.Aave.Oracle` | Asset price oracle + Chainlink |
-| `Onchain.Aave.Math` | USD conversion, LTV, health factor, ray math |
-| `Onchain.Aave.Contracts` | Verified address registry (mainnet + multi-chain) |
-| `Onchain.Aave.UIPoolDataProvider` | Reserves and user reserves data |
-| `Onchain.Aave.Faucet` | Testnet faucet interactions (mint test tokens) |
 
 ## Discovery
 

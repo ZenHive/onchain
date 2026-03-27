@@ -38,8 +38,7 @@ mix.lock
 /docs/superpowers/
 
 # Session planning artifacts
-ROADMAP.md
-split_onchain.md
+# ROADMAP.md
 
 # ExUnit failure tracking
 .mix_test_failures

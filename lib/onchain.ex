@@ -10,38 +10,23 @@ defmodule Onchain do
   Use `Onchain.describe/0` for a module overview, `Onchain.describe/1` for
   function listings, and `Onchain.describe/2` for full function details.
 
-  ## Consumers
-
-  - **blockwatch** — Aave position monitoring
-  - **aave_sim** — Aave position simulation
-  - **ccxt_ex** — Exchange trading (DEX signing)
   """
 
   use Descripex.Discoverable,
     modules: [
       Onchain.Hex,
       Onchain.ABI,
+      Onchain.Address,
       Onchain.Decimal,
       Onchain.RPC,
-      Onchain.Address,
       Onchain.Block,
       Onchain.Contract,
       Onchain.ERC20,
+      Onchain.ENS,
       Onchain.Log,
       Onchain.Multicall,
-      Onchain.EVM,
-      Onchain.Trace,
       Onchain.Signer,
-      Onchain.Aave.Contracts,
-      Onchain.Aave.Math,
-      Onchain.Aave.Oracle,
-      Onchain.Aave.Pool,
-      Onchain.Aave.UiPoolDataProvider,
-      Onchain.Aave.Types.UserAccountData,
-      Onchain.Aave.Types.AggregatedReserveData,
-      Onchain.Aave.Types.BaseCurrencyInfo,
-      Onchain.Aave.Types.UserReserveData,
       Onchain.Transfer,
-      Onchain.ENS
+      Onchain.Wallet
     ]
 end

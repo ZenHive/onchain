@@ -25,7 +25,9 @@ Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) a
 
 This repo is part of a three-library portfolio. The boundary is **ephemeral vs durable**, not read vs write.
 
-- **onchain** (this repo) — chain interaction, returning ephemeral results (reads, writes, codegen, simulation)
+- **onchain** (this repo) — core Ethereum primitives, RPC, ABI, signing (pure Elixir, no native deps)
+- **onchain_aave** — Aave V3 protocol wrappers (depends on onchain)
+- **onchain_evm** — Rust NIFs: revm simulation, Solidity parsing, debug/trace, codegen (depends on onchain + Rustler)
 - **rexex** — chain indexing, storing durable facts (ExEx ingestion, Postgres, reorg-safe history, dashboards)
 - **hologram** — JS runtimes, npm access, headless/edge execution (Elixir interpreter in any JS runtime)
 
@@ -42,19 +44,13 @@ This repo is part of a three-library portfolio. The boundary is **ephemeral vs d
 
 ## Architecture
 
+- **Pure Elixir** — no native deps, no Rustler, no compilation of C/Rust
 - **signet** is the sole Ethereum dep — RPC, ABI encoding, signing, crypto all in one
 - Signet wraps **curvy** (pure Elixir secp256k1) internally for signing/key ops — never add curvy as a direct dep
 - Consumers configure RPC URL via `config :signet` or pass URL per-call
 - Standard error tuples: `{:ok, result} | {:error, {:tag, reason}}`
 - Plain structs with `defstruct` + `@enforce_keys`, no private macro deps
 - Path dependency in consumers: `{:onchain, path: "../onchain"}`
-
-## Consumers
-
-- **blockwatch** — Aave position monitoring (read-only)
-- **aave_sim** — Aave position simulation (read-only)
-- **ccxt_ex** — Exchange trading (DEX signing planned)
-- **defisaver** (planned) — Automated position management via DeFiSaver open-source contracts (Phase 5+)
 
 ## Module Layout
 
@@ -69,25 +65,16 @@ lib/onchain/
   signer.ex         # key management, transaction signing
   erc20.ex          # approve, transfer, balanceOf
   block.ex          # block queries
+  contract.ex       # generic call/4 (encode → eth_call → decode)
   log.ex            # event log queries
   wallet.ex         # eth_getBalance, eth_getCode, get_transaction_by_hash
   multicall.ex      # batched calls via Multicall3
-  contract/
-    generator.ex    # Solidity codegen from ABI
-  solidity.ex       # multi-file Solidity codegen
   ens.ex            # ENS name resolution
   transfer.ex       # ERC-20 Transfer event parsing
-  trace.ex          # debug/trace API for EVM execution
-  evm.ex            # local EVM simulation via revm NIF
-  aave/
-    math.ex         # to_usd, to_ltv, to_health_factor, to_ray
-    contracts.ex    # address registry
-    pool.ex         # read + write calls
-    oracle.ex       # getAssetPrice + Chainlink
-    faucet.ex       # testnet faucet interactions
-    ui_pool_data_provider.ex  # bulk reserve/user data
-    types/          # response structs
 ```
+
+**Moved to onchain_aave:** `aave/` (math, contracts, pool, oracle, faucet, ui_pool_data_provider, types/)
+**Moved to onchain_evm:** `evm.ex`, `solidity.ex`, `trace.ex`, `contract/generator.ex`, `native/`
 
 ## After Every Task
 
@@ -122,27 +109,7 @@ mix dialyzer.json --quiet                      # AI-friendly dialyzer output
 mix credo --strict --format json               # Static analysis (JSON output)
 ```
 
-## Contract Address Verification
+## Related Packages
 
-When adding or updating addresses in `lib/onchain/aave/contracts.ex`, verify against the **Aave Address Book CSV** — the canonical source maintained by BGD Labs (~5,000 entries covering every Aave contract, asset, and network).
-
-All 4 current project addresses were verified on 2026-03-03.
-
-```bash
-# Verify a single address
-curl -s "https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/safe.csv" | grep -i "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
-# → 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2,AaveV3Ethereum POOL,1
-
-# Verify all project addresses at once
-curl -s "https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/safe.csv" | grep -i -E "0x2f39d218|0x87870Bca|0x54586bE6|0x56b7A101"
-
-# Search by contract name
-curl -s "https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/safe.csv" | grep "AaveV3Ethereum POOL,"
-```
-
-CSV format: `address,name,chainId` (chainId 1 = Ethereum mainnet)
-
-**Other useful resources:**
-- **Web UI**: https://aave-dao.github.io/aave-address-book/ (JS-rendered — needs Chrome browser tools, not `web` command)
-- **GitHub repo**: https://github.com/bgd-labs/aave-address-book (Solidity interfaces, JSON exports)
-- **Etherscan**: https://etherscan.io (verified source code, ABIs, proxy implementations)
+- **onchain_aave** — Aave V3 wrappers: `{:onchain_aave, path: "../onchain_aave"}` (or `"~> 0.1"` from Hex)
+- **onchain_evm** — Rust NIFs + codegen: `{:onchain_evm, path: "../onchain_evm"}` (or `"~> 0.1"` from Hex)

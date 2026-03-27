@@ -1,7 +1,7 @@
 defmodule Onchain.RPC.Helpers do
   @moduledoc false
 
-  # Shared helpers for RPC-adjacent modules (Onchain.RPC, Onchain.Trace, etc.).
+  # Shared helpers for RPC-adjacent modules (Onchain.RPC, Onchain.Block, etc.).
   # Provides input validation, block normalization, option mapping, and RPC dispatch.
 
   @default_timeout_ms 30_000

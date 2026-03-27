@@ -4,6 +4,25 @@ Completed roadmap tasks.
 
 ---
 
+## v0.4.0 — Package Split
+
+Split onchain monolith into 3 focused Hex packages:
+
+- **onchain** (this repo) — Pure Elixir core: Ethereum primitives, RPC, ABI, signing, ERC-20, ENS, Transfer. No Rustler dependency.
+- **onchain_aave** — Aave V3 protocol wrappers (pool reads/writes, oracle, math, types). Depends on onchain.
+- **onchain_evm** — Rust NIFs: revm local EVM simulation, Solidity ABI parsing (Alloy), debug/trace APIs, contract codegen. Depends on onchain + Rustler.
+
+**Why:** Consumers who only need `eth_call` no longer compile Rustler + two NIF crates. Zero code changes for consumers — only `mix.exs` deps change.
+
+**Consumer migration:**
+| Consumer | v0.3.0 | v0.4.0 |
+|----------|--------|--------|
+| Aave read/write | `{:onchain, "~> 0.3"}` | `{:onchain, "~> 0.4"}, {:onchain_aave, "~> 0.1"}` |
+| Signing only | `{:onchain, "~> 0.3"}` | `{:onchain, "~> 0.4"}` |
+| EVM simulation | `{:onchain, "~> 0.3"}` | `{:onchain, "~> 0.4"}, {:onchain_evm, "~> 0.1"}` |
+
+---
+
 ## Code Review #2 (ENS + Transfer)
 
 ### Fix: Edge cases, type safety, TODO tracking
