@@ -55,8 +55,8 @@ defmodule Onchain.ENS do
   alias Onchain.Contract
   alias Onchain.Hex
 
+  # TODO: Remove when upstream specs are fixed (abi: ABI.decode/2 no_return, signet: Hex specs).
   # Upstream Signet.Hex spec cascade through Contract.call/5 → ABI.decode_response/2.
-  # Add function/arity pairs incrementally as Dialyzer warnings appear.
   @dialyzer {:no_match,
              [
                resolve: 2,
@@ -72,7 +72,9 @@ defmodule Onchain.ENS do
                pubkey: 2,
                pubkey!: 2,
                abi: 3,
-               abi!: 3
+               abi!: 3,
+               with_resolver: 6,
+               get_resolver: 2
              ]}
   @dialyzer {:no_return,
              [

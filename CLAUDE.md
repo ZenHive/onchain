@@ -11,6 +11,8 @@ Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) a
 @~/.claude/includes/code-style.md
 @~/.claude/includes/development-philosophy.md
 @~/.claude/includes/documentation-guidelines.md
+@~/.claude/includes/ai-coder-docs.md
+@~/.claude/includes/workflow-philosophy.md
 @~/.claude/includes/agent-economy.md
 @~/.claude/includes/elixir-patterns.md
 @~/.claude/includes/elixir-setup.md
@@ -23,20 +25,24 @@ Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) a
 
 ## Portfolio Context
 
-This repo is part of a three-library portfolio. The boundary is **ephemeral vs durable**, not read vs write.
+This repo is part of a multi-library portfolio. The boundary is **ephemeral vs durable**, not read vs write. Each native runtime gets its own package.
 
 - **onchain** (this repo) — core Ethereum primitives, RPC, ABI, signing (pure Elixir, no native deps)
-- **onchain_aave** — Aave V3 protocol wrappers (depends on onchain)
+- **onchain_aave** — Aave V3 protocol wrappers (depends on onchain, pure Elixir)
 - **onchain_evm** — Rust NIFs: revm simulation, Solidity parsing, debug/trace, codegen (depends on onchain + Rustler)
+- **onchain_js** — JS bridge: npm packages on the BEAM via QuickBEAM (depends on onchain + Zig NIFs)
+- **onchain_tempo** — Tempo blockchain primitives: 0x76 transactions, TIP-20 encoding, RPC, TransferWithMemo parsing (depends on onchain, pure Elixir)
 - **rexex** — chain indexing, storing durable facts (ExEx ingestion, Postgres, reorg-safe history, dashboards)
 - **hologram** — JS runtimes, npm access, headless/edge execution (Elixir interpreter in any JS runtime)
 
 **Where does this feature go?**
 
 1. Talks to Ethereum directly and returns an immediate result? → **onchain**
-2. Persists or queries chain facts over time? → **rexex**
-3. Runs Elixir in JS or reaches npm/edge runtimes? → **hologram**
-4. Composes those capabilities into a user-facing workflow? → **separate consumer repo**
+2. Talks to Tempo chain (0x76 txs, TIP-20 tokens)? → **onchain_tempo**
+3. Runs npm packages on the BEAM (solc-js, Uniswap SDK, etc.)? → **onchain_js**
+4. Persists or queries chain facts over time? → **rexex**
+5. Runs Elixir in JS or reaches npm/edge runtimes? → **hologram**
+6. Composes those capabilities into a user-facing workflow? → **separate consumer repo**
 
 **Watch boundary:** onchain Phase 8 (eth_subscribe, Transfer parser) overlaps rexex territory. The distinction: onchain returns results to the caller (ephemeral); rexex writes facts to Postgres (durable). If a consumer needs historical queries over indexed data, that's rexex.
 
@@ -111,5 +117,7 @@ mix credo --strict --format json               # Static analysis (JSON output)
 
 ## Related Packages
 
-- **onchain_aave** — Aave V3 wrappers: `{:onchain_aave, path: "../onchain_aave"}` (or `"~> 0.1"` from Hex)
-- **onchain_evm** — Rust NIFs + codegen: `{:onchain_evm, path: "../onchain_evm"}` (or `"~> 0.1"` from Hex)
+- **onchain_aave** — Aave V3 wrappers: `{:onchain_aave, path: "../onchain_aave"}`
+- **onchain_evm** — Rust NIFs + codegen: `{:onchain_evm, path: "../onchain_evm"}`
+- **onchain_js** — JS bridge (QuickBEAM): `{:onchain_js, path: "../onchain_js"}`
+- **onchain_tempo** — Tempo chain primitives: `{:onchain_tempo, path: "../onchain_tempo"}`

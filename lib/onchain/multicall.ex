@@ -29,8 +29,9 @@ defmodule Onchain.Multicall do
   alias Onchain.Contract
   alias Onchain.Hex
 
-  # Contract.call/5 inherits the upstream Signet.Hex spec mismatch.
-  @dialyzer {:no_match, [aggregate3: 2, aggregate3!: 2, call_many: 2, call_many!: 2]}
+  # TODO: Remove when upstream specs are fixed (abi: ABI.decode/2 no_return, signet: Hex specs).
+  @dialyzer {:no_match,
+             [aggregate3: 2, aggregate3!: 2, call_many: 2, call_many!: 2, decode_result: 2, decode_calldata: 1]}
   @dialyzer {:no_return, [aggregate3!: 1, aggregate3!: 2, call_many!: 1, call_many!: 2]}
   @dialyzer {:no_contracts, [aggregate3!: 1, aggregate3!: 2, call_many!: 1, call_many!: 2]}
 

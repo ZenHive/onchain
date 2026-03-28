@@ -7,12 +7,13 @@
 **Sibling roadmaps:**
 - [onchain_aave/ROADMAP.md](../onchain_aave/ROADMAP.md) — Aave V3 protocol wrappers
 - [onchain_evm/ROADMAP.md](../onchain_evm/ROADMAP.md) — Rust NIFs: revm, Solidity parsing, trace, codegen
+- [onchain_js/ROADMAP.md](../onchain_js/ROADMAP.md) — JS bridge: npm packages on the BEAM via QuickBEAM
 
 ---
 
 ## Current Focus
 
-**Phase 8: Chain Intelligence Primitives** — Wallet analytics and on-chain intelligence building blocks. Tasks 30, 32, 34 complete. Next: real-time subscriptions (31) or NFT reads (33).
+**Phase 8: Chain Intelligence Primitives** — Wallet analytics and on-chain intelligence building blocks. Tasks 30, 32, 34 complete. Next: NFT reads (33) or real-time subscriptions (31). Phase 9 (JS bridge) extracted to [onchain_js](../onchain_js/ROADMAP.md).
 
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
 
@@ -76,7 +77,7 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 
 **Task descriptions:**
 
-**28 — DEX routing.** Find optimal swap paths across DEX pools (Uniswap, Curve, Balancer). Three approaches to evaluate: (a) Rust routing libs via onchain_evm, (b) Elixir with revm for local simulation of candidate routes, (c) **QuickBEAM + Uniswap v3 SDK** (see Phase 9, Task 39). Primary consumer: ccxt_ex when it adds DEX trading.
+**28 — DEX routing.** Find optimal swap paths across DEX pools (Uniswap, Curve, Balancer). Three approaches to evaluate: (a) Rust routing libs via onchain_evm, (b) Elixir with revm for local simulation of candidate routes, (c) **QuickBEAM + Uniswap v3 SDK** (see [onchain_js](../onchain_js/ROADMAP.md) Task 3). Primary consumer: ccxt_ex when it adds DEX trading.
 
 **29 — MEV protection.** Private transaction submission via Flashbots-style APIs to prevent front-running on DEX trades. Lower priority until DEX trading is active.
 
@@ -102,40 +103,6 @@ Read-layer primitives for wallet analytics and on-chain intelligence. Building b
 
 ---
 
-## Phase 9: JS Bridge (QuickBEAM) — Exploration
-
-Run battle-tested npm packages on the BEAM via QuickBEAM — no Node.js required. **Not urgent — explore when a concrete need pulls it forward.**
-
-**Deps:** `{:quickbeam, "~> 0.8"}`, `{:npm, "~> 0.5"}`
-
-| # | Task | Status | D | B | U | Eff | Notes |
-|---|------|--------|---|---|---|-----|-------|
-| 37 | QuickBEAM foundation (runtime lifecycle, npm setup, browser stubs) | ⬜ | 3 | 7 | 8 | 2.50 🎯 | Prerequisite for all JS bridge tasks |
-| 38 | solc-js compilation (`.sol` → ABI + bytecode) | ⬜ | 4 | 9 | 8 | 2.13 🎯 | Closes codegen pipeline: generate → compile → deploy |
-| 39 | Uniswap v3 SDK routing (optimal swap paths, price impact) | ⬜ | 5 | 8 | 7 | 1.50 📋 | Alternative for Task 28 (DEX routing via JS SDK) |
-| 40 | Aave math-utils cross-validation | ⬜ | 3 | 5 | 4 | 1.50 📋 | Validate onchain_aave math against canonical JS |
-| 41 | DeFiSaver recipe builder via `@defisaver/sdk` | ⬜ | 5 | 8 | 7 | 1.50 📋 | Recipe calldata without reimplementing encoding |
-| 42 | Merkle proof construction (airdrops, whitelists, storage proofs) | ⬜ | 3 | 6 | 5 | 1.83 🚀 | `merkletreejs` via QuickBEAM |
-| 43 | 1inch Fusion SDK (DEX aggregation across protocols) | ⬜ | 5 | 7 | 6 | 1.30 📋 | Complement/alternative to Task 39 |
-
-**Task descriptions:**
-
-**37 — QuickBEAM foundation.** Add quickbeam + npm deps. Create `Onchain.JS` module with runtime lifecycle management: start with browser stubs, load bundles, supervised runtime in application tree. Include integration test that starts a runtime, evaluates JS, and stops cleanly.
-
-**38 — solc-js compilation.** Load solc-js via QuickBEAM, expose `Onchain.Solidity.compile/2` that takes `.sol` source and returns `{:ok, %{abi: [...], bytecode: "0x..."}}`. Closes onchain_evm's codegen pipeline — generate `.sol` → compile to bytecode → deploy via Signer.
-
-**39 — Uniswap v3 SDK routing.** Load `@uniswap/v3-sdk` + `@uniswap/smart-order-router` via QuickBEAM. Alternative approach to Task 28 — JS SDK handles tick math and multi-hop routing out of the box.
-
-**40 — Aave math-utils cross-validation.** Load `@aave/math-utils` via QuickBEAM and run the same calculations through both JS and onchain_aave's `Onchain.Aave.Math`. Property-based tests comparing outputs across implementations.
-
-**41 — DeFiSaver recipe builder.** Load `@defisaver/sdk` via QuickBEAM. Expose recipe construction: flash loan → action sequence → repay, returning encoded calldata.
-
-**42 — Merkle proof construction.** Load `merkletreejs` via QuickBEAM. Expose `Onchain.Merkle.build_tree/1` and `prove/2` for airdrop claims and storage proofs.
-
-**43 — 1inch Fusion SDK.** Load `@1inch/fusion-sdk` via QuickBEAM. DEX aggregation across multiple protocols. Complement to Task 39.
-
----
-
 ## Code Health ✅
 
 | # | Task | Status | D | B | U | Eff | Module |
@@ -151,7 +118,7 @@ These are example consumer directions built on top of the current and planned pr
 
 ### DeFiSaver-Style Consumer Stack
 
-**QuickBEAM shortcut:** Phase 9 Task 41 (`@defisaver/sdk` via QuickBEAM) can accelerate layers 2-3 below.
+**QuickBEAM shortcut:** [onchain_js](../onchain_js/ROADMAP.md) Task 4 (`@defisaver/sdk` via QuickBEAM) can accelerate layers 2-3 below.
 
 1. **Smart wallet / proxy layer.** Support DSProxy/Safe-style execution, wallet discovery, ownership checks, and proxy-aware transaction helpers.
 2. **Action layer.** Move from raw contract calls to semantic actions like supply, borrow, swap collateral, repay with collateral, close position, and refinance.
@@ -166,7 +133,7 @@ These are example consumer directions built on top of the current and planned pr
 | RPC calls, ABI, signing, token reads/writes | **onchain** (this repo) |
 | Aave protocol operations | **onchain_aave** |
 | Local EVM simulation, Solidity parsing, codegen | **onchain_evm** |
-| JS SDKs on the BEAM (solc, Uniswap, DeFiSaver) | **onchain** (QuickBEAM, Phase 9) |
+| JS SDKs on the BEAM (solc, Uniswap, DeFiSaver) | **[onchain_js](../onchain_js/ROADMAP.md)** (QuickBEAM) |
 
 ### Example Future Consumer Apps
 
@@ -187,7 +154,7 @@ These are example consumer directions built on top of the current and planned pr
 4. **Standard error tuples** — `{:ok, result} | {:error, {:tag, reason}}`
 5. **Plain structs** — `defstruct` + `@enforce_keys`, no private macro deps
 6. **Descripex from day one** — All public modules use `api()` macro for self-describing functions
-7. **Three-package family** — onchain (core), onchain_aave (Aave), onchain_evm (Rust NIFs)
+7. **Five-package family** — onchain (core), onchain_aave (Aave), onchain_evm (Rust NIFs), onchain_js (QuickBEAM), onchain_tempo (Tempo chain)
 8. **Always update docs after completing a task** — ROADMAP.md, CHANGELOG.md, README.md, CLAUDE.md
 9. **Integration tests use mainnet RPCs** — `ETHEREUM_API_URL` or `ETH_RPC_URL` env vars
 

@@ -11,6 +11,9 @@ defmodule Onchain.WalletIntegrationTest do
   # Vitalik's address — well-known EOA
   @eoa_address "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
 
+  # EOAs can gain code via EIP-7702 delegation; query at historical block
+  @historical_block 20_000_000
+
   defp rpc_opts, do: [rpc_url: Onchain.RPCCase.rpc_url!()]
 
   describe "classify/2" do
@@ -19,14 +22,16 @@ defmodule Onchain.WalletIntegrationTest do
     end
 
     test "returns :eoa for known EOA" do
-      assert {:ok, :eoa} = Wallet.classify(@eoa_address, rpc_opts())
+      opts = Keyword.put(rpc_opts(), :block, @historical_block)
+      assert {:ok, :eoa} = Wallet.classify(@eoa_address, opts)
     end
   end
 
   describe "classify!/2" do
     test "returns atom directly" do
       assert :contract == Wallet.classify!(@weth_address, rpc_opts())
-      assert :eoa == Wallet.classify!(@eoa_address, rpc_opts())
+      opts = Keyword.put(rpc_opts(), :block, @historical_block)
+      assert :eoa == Wallet.classify!(@eoa_address, opts)
     end
   end
 

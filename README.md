@@ -9,8 +9,9 @@ Pure Elixir Ethereum library. Provides read (`eth_call`) and write (transaction 
 | **onchain** (this) | Core Ethereum primitives, RPC, ABI, signing | signet |
 | [onchain_aave](https://github.com/ZenHive/onchain_aave) | Aave V3 protocol wrappers | onchain |
 | [onchain_evm](https://github.com/ZenHive/onchain_evm) | Rust NIFs: revm simulation, Solidity parsing, codegen | onchain + rustler |
+| [onchain_js](https://github.com/ZenHive/onchain_js) | JS bridge: npm packages on the BEAM via QuickBEAM | onchain + quickbeam |
 
-Pick what you need — consumers who only need `eth_call` never compile Rust.
+Pick what you need — consumers who only need `eth_call` never compile Rust or Zig.
 
 ## Installation
 
@@ -21,7 +22,9 @@ def deps do
     # Add if you need Aave:
     {:onchain_aave, "~> 0.1"},
     # Add if you need EVM simulation / Solidity parsing:
-    {:onchain_evm, "~> 0.1"}
+    {:onchain_evm, "~> 0.1"},
+    # Add if you need JS bridge (solc-js, Uniswap SDK, etc.):
+    {:onchain_js, "~> 0.1"}
   ]
 end
 ```

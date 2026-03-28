@@ -25,7 +25,9 @@ defmodule Onchain.RPC.CodeIntegrationTest do
     end
 
     test "returns 0x for known EOA" do
-      assert {:ok, "0x"} = RPC.eth_get_code(@eoa_address, rpc_opts())
+      # Query at historical block — EOAs can gain code via EIP-7702 delegation
+      opts = Keyword.put(rpc_opts(), :block, @test_block)
+      assert {:ok, "0x"} = RPC.eth_get_code(@eoa_address, opts)
     end
 
     test "accepts :block option" do
@@ -45,7 +47,9 @@ defmodule Onchain.RPC.CodeIntegrationTest do
     end
 
     test "returns 0x for EOA without raising" do
-      assert "0x" == RPC.eth_get_code!(@eoa_address, rpc_opts())
+      # Query at historical block — EOAs can gain code via EIP-7702 delegation
+      opts = Keyword.put(rpc_opts(), :block, @test_block)
+      assert "0x" == RPC.eth_get_code!(@eoa_address, opts)
     end
   end
 end

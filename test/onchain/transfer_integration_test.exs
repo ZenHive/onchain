@@ -18,15 +18,16 @@ defmodule Onchain.TransferIntegrationTest do
         address: @usdc_address,
         topics: [hd(Transfer.transfer_topics())],
         from_block: 18_000_000,
-        to_block: 18_000_010
+        to_block: 18_000_009
       }
 
       assert {:ok, transfers} = Transfer.fetch(filter, rpc_url: rpc_url)
       assert is_list(transfers)
 
-      # Block 18_000_000-18_000_010 has USDC transfers on any archive node.
+      # Block 18_000_000-18_000_009 has USDC transfers on any archive node.
       # If empty, the RPC may be pruning old logs.
-      assert transfers != [], "Expected USDC transfers in block range 18M-18M+10"
+      # Range is 10 blocks (Alchemy free tier limit).
+      assert transfers != [], "Expected USDC transfers in block range 18M-18M+9"
 
       transfer = hd(transfers)
       assert %Transfer{} = transfer
@@ -38,7 +39,7 @@ defmodule Onchain.TransferIntegrationTest do
       assert String.starts_with?(transfer.to, "0x")
       assert String.starts_with?(transfer.transaction_hash, "0x")
       assert transfer.block_number >= 18_000_000
-      assert transfer.block_number <= 18_000_010
+      assert transfer.block_number <= 18_000_009
       # Token address should be checksummed USDC
       assert transfer.token == Onchain.Address.checksum!(@usdc_address)
     end
@@ -52,7 +53,7 @@ defmodule Onchain.TransferIntegrationTest do
         address: @usdc_address,
         topics: [hd(Transfer.transfer_topics())],
         from_block: 18_000_000,
-        to_block: 18_000_010
+        to_block: 18_000_009
       }
 
       assert {:ok, logs} = Onchain.RPC.eth_get_logs(filter, rpc_url: rpc_url)

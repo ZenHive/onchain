@@ -30,10 +30,10 @@ defmodule Onchain.Log do
 
   use Descripex, namespace: "/log"
 
-  # ABI.decode/2 has upstream spec mismatch (success typing is no_return()).
-  @dialyzer {:no_match, [decode_event: 2, decode_event!: 2]}
-  @dialyzer {:no_return, [decode_event!: 1, decode_event!: 2]}
-  @dialyzer {:no_contracts, [decode_event!: 1, decode_event!: 2]}
+  # TODO: Remove when upstream abi spec is fixed (ABI.decode/2 no_return).
+  @dialyzer {:no_match, [decode_event: 2, decode_event!: 2, decode_non_indexed_params: 2]}
+  @dialyzer {:no_return, [decode_event!: 2]}
+  @dialyzer {:no_contracts, [decode_event!: 2]}
 
   # --- event_topic ---
 

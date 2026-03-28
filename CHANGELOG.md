@@ -4,6 +4,30 @@ Completed roadmap tasks.
 
 ---
 
+## v0.4.1 — Documentation & Test Fixes
+
+- Extract Phase 9 (JS bridge) to [onchain_js](https://github.com/ZenHive/onchain_js) — separate package for QuickBEAM/Zig NIFs
+- Add onchain_tempo to portfolio context (five-package family)
+- Fix EOA tests for EIP-7702 (pin historical blocks where EOAs have no delegated code)
+- Adjust integration test block ranges for Alchemy free tier (10-block limit)
+- Expand Dialyzer suppressions for ENS, Log, Multicall private functions
+- Add `Onchain.SignerCase` reusable test helpers for transaction signing
+
+---
+
+## Extract JS Bridge to onchain_js
+
+Phase 9 (JS bridge tasks: QuickBEAM foundation, solc-js, Uniswap SDK, DeFiSaver, merkletreejs, Aave math cross-validation, 1inch) extracted to [onchain_js](https://github.com/ZenHive/onchain_js).
+
+**Why:** QuickBEAM (Zig NIF) violates onchain's "pure Elixir, no native deps" principle. Following the portfolio pattern where each native runtime gets its own package.
+
+**What changed in onchain:**
+- ROADMAP.md: Phase 9 removed, pointer added to onchain_js/ROADMAP.md
+- CLAUDE.md: Portfolio context updated from 3 to 4 libraries
+- README.md: Package family table updated with onchain_js
+
+---
+
 ## v0.4.0 — Package Split
 
 Split onchain monolith into 3 focused Hex packages:
