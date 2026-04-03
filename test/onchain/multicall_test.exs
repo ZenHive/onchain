@@ -42,4 +42,11 @@ defmodule Onchain.MulticallTest do
       end
     end
   end
+
+  describe "aggregate3/2 — invalid calldata" do
+    test "returns error for non-hex calldata" do
+      assert {:error, {:invalid_hex, "not_hex"}} =
+               Multicall.aggregate3([{@valid_address, true, "not_hex"}])
+    end
+  end
 end

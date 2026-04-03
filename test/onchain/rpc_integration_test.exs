@@ -81,6 +81,71 @@ defmodule Onchain.RPC.IntegrationTest do
     end
   end
 
+  # --- Bang variant integration tests ---
+
+  describe "block_number!/1" do
+    test "returns block number directly" do
+      block = RPC.block_number!(rpc_opts())
+      assert is_integer(block)
+      assert block > 0
+    end
+  end
+
+  describe "chain_id!/1" do
+    test "returns chain ID directly" do
+      assert 1 == RPC.chain_id!(rpc_opts())
+    end
+  end
+
+  describe "get_balance!/2" do
+    test "returns balance directly" do
+      balance = RPC.get_balance!(@zero_address, rpc_opts())
+      assert is_integer(balance)
+      assert balance >= 0
+    end
+  end
+
+  describe "eth_call!/3" do
+    test "returns hex result directly" do
+      {:ok, calldata} = ABI.encode_call("totalSupply()", [])
+      hex = RPC.eth_call!(@weth_address, calldata, rpc_opts())
+      assert is_binary(hex)
+      assert String.starts_with?(hex, "0x")
+    end
+  end
+
+  describe "get_block_by_number!/2" do
+    test "returns block map directly" do
+      block = RPC.get_block_by_number!(20_000_000, rpc_opts())
+      assert is_map(block)
+      assert block["number"] == "0x1312d00"
+    end
+  end
+
+  describe "get_transaction_count!/2" do
+    test "returns nonce directly" do
+      nonce = RPC.get_transaction_count!(@eoa_address, rpc_opts())
+      assert is_integer(nonce)
+      assert nonce > 0
+    end
+  end
+
+  describe "eth_get_code!/2" do
+    test "returns code directly for contract" do
+      code = RPC.eth_get_code!(@weth_address, rpc_opts())
+      assert is_binary(code)
+      assert String.starts_with?(code, "0x")
+      assert byte_size(code) > 2
+    end
+  end
+
+  describe "eth_get_logs!/2" do
+    test "returns logs directly for valid filter" do
+      logs = RPC.eth_get_logs!(%{from_block: 20_000_000, to_block: 20_000_000}, rpc_opts())
+      assert is_list(logs)
+    end
+  end
+
   describe "pipeline: ABI.encode_call → RPC.eth_call → ABI.decode_response" do
     test "WETH totalSupply roundtrip returns decoded integer > 0" do
       {:ok, calldata} = ABI.encode_call("totalSupply()", [])

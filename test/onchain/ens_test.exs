@@ -106,4 +106,60 @@ defmodule Onchain.ENSTest do
       end
     end
   end
+
+  describe "resolver!/2" do
+    test "raises on invalid name" do
+      assert_raise RuntimeError, ~r/resolver lookup failed/, fn ->
+        ENS.resolver!("a..b")
+      end
+    end
+  end
+
+  describe "resolve!/2" do
+    test "raises on invalid name" do
+      assert_raise RuntimeError, ~r/resolve failed/, fn ->
+        ENS.resolve!("a..b")
+      end
+    end
+  end
+
+  describe "reverse!/2" do
+    test "raises on invalid address" do
+      assert_raise RuntimeError, ~r/reverse failed/, fn ->
+        ENS.reverse!("not_an_address")
+      end
+    end
+  end
+
+  describe "text!/3" do
+    test "raises on invalid name" do
+      assert_raise RuntimeError, ~r/text lookup failed/, fn ->
+        ENS.text!("a..b", "avatar")
+      end
+    end
+  end
+
+  describe "contenthash!/2" do
+    test "raises on invalid name" do
+      assert_raise RuntimeError, ~r/contenthash lookup failed/, fn ->
+        ENS.contenthash!("a..b")
+      end
+    end
+  end
+
+  describe "pubkey!/2" do
+    test "raises on invalid name" do
+      assert_raise RuntimeError, ~r/pubkey lookup failed/, fn ->
+        ENS.pubkey!("a..b")
+      end
+    end
+  end
+
+  describe "abi!/3" do
+    test "raises on invalid name" do
+      assert_raise RuntimeError, ~r/abi lookup failed/, fn ->
+        ENS.abi!("a..b", 1)
+      end
+    end
+  end
 end

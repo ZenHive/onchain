@@ -23,6 +23,15 @@ defmodule Onchain.ENSIntegrationTest do
     end
   end
 
+  describe "resolver!/2" do
+    test "returns resolver address directly" do
+      resolver = ENS.resolver!("vitalik.eth", rpc_opts())
+      assert is_binary(resolver)
+      assert String.starts_with?(resolver, "0x")
+      assert String.length(resolver) == 42
+    end
+  end
+
   describe "resolve/2" do
     test "resolves vitalik.eth to known address" do
       assert {:ok, @vitalik_address} = ENS.resolve("vitalik.eth", rpc_opts())
@@ -65,6 +74,21 @@ defmodule Onchain.ENSIntegrationTest do
     end
   end
 
+  describe "text!/3" do
+    test "retrieves text record directly or raises" do
+      case ENS.text("vitalik.eth", "avatar", rpc_opts()) do
+        {:ok, _} ->
+          avatar = ENS.text!("vitalik.eth", "avatar", rpc_opts())
+          assert is_binary(avatar)
+
+        {:error, {:empty_record, _}} ->
+          assert_raise RuntimeError, ~r/text lookup failed/, fn ->
+            ENS.text!("vitalik.eth", "nonexistent_key_xyz123", rpc_opts())
+          end
+      end
+    end
+  end
+
   describe "text/3" do
     test "retrieves avatar text record for vitalik.eth" do
       case ENS.text("vitalik.eth", "avatar", rpc_opts()) do
@@ -100,6 +124,21 @@ defmodule Onchain.ENSIntegrationTest do
     end
   end
 
+  describe "contenthash!/2" do
+    test "retrieves contenthash directly when set" do
+      case ENS.contenthash("vitalik.eth", rpc_opts()) do
+        {:ok, _} ->
+          hash = ENS.contenthash!("vitalik.eth", rpc_opts())
+          assert is_binary(hash)
+          assert byte_size(hash) > 0
+
+        {:error, {:empty_record, _}} ->
+          # Raise path covered by unit tests; integration test is opportunistic
+          :ok
+      end
+    end
+  end
+
   describe "contenthash/2" do
     test "retrieves contenthash for a name that has one set" do
       case ENS.contenthash("vitalik.eth", rpc_opts()) do
@@ -116,6 +155,21 @@ defmodule Onchain.ENSIntegrationTest do
     end
   end
 
+  describe "pubkey!/2" do
+    test "retrieves pubkey directly when set" do
+      case ENS.pubkey("vitalik.eth", rpc_opts()) do
+        {:ok, _} ->
+          {x, y} = ENS.pubkey!("vitalik.eth", rpc_opts())
+          assert byte_size(x) == 32
+          assert byte_size(y) == 32
+
+        {:error, {:empty_record, _}} ->
+          # Raise path covered by unit tests; integration test is opportunistic
+          :ok
+      end
+    end
+  end
+
   describe "pubkey/2" do
     test "retrieves pubkey or returns empty for vitalik.eth" do
       case ENS.pubkey("vitalik.eth", rpc_opts()) do
@@ -128,6 +182,21 @@ defmodule Onchain.ENSIntegrationTest do
 
         {:error, other} ->
           flunk("Unexpected error: #{inspect(other)}")
+      end
+    end
+  end
+
+  describe "abi!/3" do
+    test "queries ABI record directly when set" do
+      case ENS.abi("vitalik.eth", 1, rpc_opts()) do
+        {:ok, _} ->
+          {content_type, data} = ENS.abi!("vitalik.eth", 1, rpc_opts())
+          assert is_integer(content_type)
+          assert is_binary(data)
+
+        {:error, {:empty_record, _}} ->
+          # Raise path covered by unit tests; integration test is opportunistic
+          :ok
       end
     end
   end

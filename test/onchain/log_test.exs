@@ -7,6 +7,13 @@ defmodule Onchain.LogTest do
   @transfer_topic "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
   @approval_topic "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"
 
+  # Encodes values as ABI event data by stripping the 4-byte function selector
+  defp encode_event_data(types_sig, values) do
+    {:ok, encoded} = Onchain.ABI.encode_call(types_sig, values)
+    "0x" <> hex = encoded
+    "0x" <> String.slice(hex, 8, String.length(hex) - 8)
+  end
+
   describe "event_topic/1" do
     test "returns correct keccak256 hash for Transfer event" do
       assert {:ok, @transfer_topic} = Log.event_topic("Transfer(address,address,uint256)")
@@ -43,11 +50,7 @@ defmodule Onchain.LogTest do
       from_addr = "0x000000000000000000000000A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
       to_addr = "0x000000000000000000000000dAC17F958D2ee523a2206206994597C13D831ec7"
 
-      # Encode value = 1000000 as ABI uint256
-      {:ok, value_data} = Onchain.ABI.encode_call("transfer(uint256)", [1_000_000])
-      # Strip the 4-byte selector to get just the encoded uint256
-      "0x" <> hex = value_data
-      data = "0x" <> String.slice(hex, 8, String.length(hex) - 8)
+      data = encode_event_data("transfer(uint256)", [1_000_000])
 
       log = %{
         topics: [@transfer_topic, from_addr, to_addr],
@@ -108,10 +111,7 @@ defmodule Onchain.LogTest do
       # Indexed string is stored as keccak256(value) — raw 32-byte hash
       key_hash = "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
 
-      # Encode non-indexed string value "hello"
-      {:ok, encoded} = Onchain.ABI.encode_call("f(string)", ["hello"])
-      "0x" <> hex = encoded
-      data = "0x" <> String.slice(hex, 8, String.length(hex) - 8)
+      data = encode_event_data("f(string)", ["hello"])
 
       log = %{topics: [topic0, key_hash], data: data}
 
@@ -123,10 +123,94 @@ defmodule Onchain.LogTest do
   end
 
   describe "decode_event!/2" do
+    test "returns decoded map directly on success" do
+      {:ok, topic0} = Log.event_topic("Deposit(uint256)")
+      data = encode_event_data("f(uint256)", [99])
+
+      log = %{topics: [topic0], data: data}
+
+      assert %{uint256: 99} = Log.decode_event!(log, "Deposit(uint256)")
+    end
+
     test "raises on invalid log" do
       assert_raise RuntimeError, ~r/decode_event failed/, fn ->
         Log.decode_event!("bad", "Transfer(address,uint256)")
       end
+    end
+  end
+
+  describe "decode_event/2 — empty params event" do
+    test "decodes event with no parameters" do
+      {:ok, topic0} = Log.event_topic("EmptyEvent()")
+
+      log = %{topics: [topic0], data: "0x"}
+
+      assert {:ok, decoded} = Log.decode_event(log, "EmptyEvent()")
+      assert decoded == %{}
+    end
+  end
+
+  describe "decode_event/2 — nameless param (type-only)" do
+    test "decodes event with unnamed param using type as name" do
+      {:ok, topic0} = Log.event_topic("Deposit(uint256)")
+
+      data = encode_event_data("f(uint256)", [42])
+
+      log = %{topics: [topic0], data: data}
+
+      assert {:ok, decoded} = Log.decode_event(log, "Deposit(uint256)")
+      assert decoded.uint256 == 42
+    end
+  end
+
+  describe "decode_event/2 — nil and empty data with non-indexed params" do
+    test "returns missing_data_field error when data is nil" do
+      {:ok, topic0} = Log.event_topic("ValueSet(uint256)")
+
+      log = %{topics: [topic0], data: nil}
+
+      assert {:error, {:decode_error, :missing_data_field}} =
+               Log.decode_event(log, "ValueSet(uint256 value)")
+    end
+
+    test "returns empty_data_field error when data is 0x with non-indexed params" do
+      {:ok, topic0} = Log.event_topic("ValueSet(uint256)")
+
+      log = %{topics: [topic0], data: "0x"}
+
+      assert {:error, {:decode_error, :empty_data_field}} =
+               Log.decode_event(log, "ValueSet(uint256 value)")
+    end
+  end
+
+  describe "decode_event/2 — non-indexed address param" do
+    test "checksums non-indexed address values" do
+      # Event with a non-indexed address param (decoded from data, not topic)
+      {:ok, topic0} = Log.event_topic("Withdrawal(address)")
+
+      # ABI-encode an address as a non-indexed param (padded to 32 bytes)
+      addr_hex = "dAC17F958D2ee523a2206206994597C13D831ec7"
+      padded = String.duplicate("0", 24) <> String.downcase(addr_hex)
+      data = "0x" <> padded
+
+      log = %{topics: [topic0], data: data}
+
+      assert {:ok, decoded} = Log.decode_event(log, "Withdrawal(address recipient)")
+      # Non-indexed address should be checksummed
+      assert decoded.recipient == Onchain.Address.checksum!("0x" <> addr_hex)
+    end
+  end
+
+  describe "decode_event/2 — indexed array type" do
+    test "returns raw topic hash for indexed uint256[] param" do
+      {:ok, topic0} = Log.event_topic("BatchUpdate(uint256[])")
+      ids_hash = "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+
+      log = %{topics: [topic0, ids_hash], data: "0x"}
+
+      assert {:ok, decoded} = Log.decode_event(log, "BatchUpdate(uint256[] indexed ids)")
+      # Indexed dynamic types return the raw topic hash (keccak of ABI-encoded value)
+      assert decoded.ids == ids_hash
     end
   end
 end

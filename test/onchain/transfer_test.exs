@@ -282,4 +282,34 @@ defmodule Onchain.TransferTest do
       assert [%Transfer{}] = Transfer.parse_logs!([log])
     end
   end
+
+  describe "parse_logs/1 — decode error path" do
+    test "skips logs that fail to decode with warning" do
+      # Log with correct Transfer topic but truncated data (can't decode as uint256)
+      bad_log =
+        build_log(
+          topics: [@transfer_topic, @from_addr_padded, @to_addr_padded],
+          data: "0xdead"
+        )
+
+      good_log =
+        build_log(
+          topics: [@transfer_topic, @from_addr_padded, @to_addr_padded],
+          data: encode_uint256(500)
+        )
+
+      assert {:ok, transfers} = Transfer.parse_logs([bad_log, good_log])
+      # Bad log skipped, good log parsed
+      assert length(transfers) == 1
+      assert hd(transfers).amount == 500
+    end
+  end
+
+  describe "fetch!/2" do
+    test "raises on invalid filter" do
+      assert_raise RuntimeError, ~r/fetch failed/, fn ->
+        Transfer.fetch!(%{from_block: "bogus"})
+      end
+    end
+  end
 end

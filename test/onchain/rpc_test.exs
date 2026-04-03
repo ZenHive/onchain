@@ -411,4 +411,12 @@ defmodule Onchain.RPCTest do
       end
     end
   end
+
+  describe "eth_get_logs!/2" do
+    test "raises on invalid filter" do
+      assert_raise RuntimeError, ~r/eth_get_logs failed/, fn ->
+        RPC.eth_get_logs!(%{from_block: "bogus"})
+      end
+    end
+  end
 end

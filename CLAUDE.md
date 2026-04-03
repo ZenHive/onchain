@@ -22,6 +22,8 @@ Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) a
 @~/.claude/includes/library-design.md
 @~/.claude/includes/elixir-volt.md
 @~/.claude/includes/quickbeam.md
+@~/.claude/includes/ethereum-rpc.md
+
 
 ## Portfolio Context
 
