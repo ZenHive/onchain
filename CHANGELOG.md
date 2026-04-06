@@ -4,6 +4,28 @@ Completed roadmap tasks.
 
 ---
 
+## Task 33: ERC-721/ERC-1155 Read Operations
+
+**Completed** | [D:3/B:6/U:5 → Eff:1.83]
+
+**What was done:**
+- Added `Onchain.ERC721` module with 7 read operations: `balance_of`, `owner_of`, `token_uri`, `name`, `symbol`, `get_approved`, `approved_for_all?` (+ bang variants)
+- Added `Onchain.ERC1155` module with 4 read operations: `balance_of`, `balance_of_batch`, `uri`, `approved_for_all?` (+ bang variants)
+- ERC-1155 `balance_of_batch` validates owners/token_ids list length match before RPC call
+- Address-returning functions (`owner_of`, `get_approved`) return EIP-55 checksummed hex via `Address.checksum/1`
+- Predicate functions use Elixir `?` convention (`approved_for_all?`) despite Solidity's `isApprovedForAll` naming
+- Full Descripex `api()` annotations for self-describing APIs
+- Unit tests for input validation and bang variants
+- Integration tests against BAYC (ERC-721) and OpenSea Shared Storefront (ERC-1155) on mainnet
+- Registered both modules in `Onchain` Discoverable list
+
+**Key decisions:**
+- Read-only operations only — no write/transfer/approve functions (consumers use `Signer.send_transaction` directly for writes)
+- Return checksummed hex for address results rather than raw binary — more useful to consumers
+- Named `approved_for_all?` / `approved_for_all!` (not `is_approved_for_all`) to follow Elixir naming conventions
+
+---
+
 ## v0.4.1 — Documentation & Test Fixes
 
 - Extract Phase 9 (JS bridge) to [onchain_js](https://github.com/ZenHive/onchain_js) — separate package for QuickBEAM/Zig NIFs

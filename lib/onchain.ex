@@ -22,6 +22,8 @@ defmodule Onchain do
       Onchain.Block,
       Onchain.Contract,
       Onchain.ERC20,
+      Onchain.ERC721,
+      Onchain.ERC1155,
       Onchain.ENS,
       Onchain.Log,
       Onchain.Multicall,

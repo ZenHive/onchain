@@ -72,6 +72,8 @@ lib/onchain/
   rpc/helpers.ex    # shared RPC helper functions
   signer.ex         # key management, transaction signing
   erc20.ex          # approve, transfer, balanceOf
+  erc721.ex         # ERC-721 NFT reads: ownerOf, tokenURI, balanceOf
+  erc1155.ex        # ERC-1155 multi-token reads: balanceOf, balanceOfBatch, uri
   block.ex          # block queries
   contract.ex       # generic call/4 (encode → eth_call → decode)
   log.ex            # event log queries

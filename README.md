@@ -56,6 +56,8 @@ Or pass the URL per-call to `Onchain.RPC` functions.
 | `Onchain.Log` | Event log parsing against ABI signatures |
 | `Onchain.Signer` | Key management and transaction signing |
 | `Onchain.ERC20` | ERC-20 read (balanceOf, allowance) and write (transfer, approve) |
+| `Onchain.ERC721` | ERC-721 NFT reads (owner_of, token_uri, balance_of, name, symbol, get_approved, approved_for_all?) |
+| `Onchain.ERC1155` | ERC-1155 multi-token reads (balance_of, balance_of_batch, uri, approved_for_all?) |
 
 ### Chain Intelligence
 

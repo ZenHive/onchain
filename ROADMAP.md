@@ -13,7 +13,7 @@
 
 ## Current Focus
 
-**Phase 8: Chain Intelligence Primitives** — Wallet analytics and on-chain intelligence building blocks. Tasks 30, 32, 34 complete. Next: NFT reads (33) or real-time subscriptions (31). Phase 9 (JS bridge) extracted to [onchain_js](../onchain_js/ROADMAP.md).
+**Phase 8: Chain Intelligence Primitives** — Wallet analytics and on-chain intelligence building blocks. Tasks 30, 32, 33, 34 complete. Next: real-time subscriptions (31). Phase 9 (JS bridge) extracted to [onchain_js](../onchain_js/ROADMAP.md).
 
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
 
@@ -24,13 +24,13 @@
 | 30 | Wallet primitives (eth_getBalance, eth_getCode, get_transaction_by_hash) | + Wallet convenience module |
 | 32 | Transfer event parser (ERC-20/721/1155 → normalized structs) | Auto-topic injection |
 | 34 | ENS resolution (forward + reverse + text records) | Mainnet integration tested |
+| 33 | ERC-721/ERC-1155 read operations | 7 ERC-721 + 4 ERC-1155 reads, checksummed address returns |
 | 36 | Extract shared RPC helpers | DRY: 7 functions deduplicated |
 
 ### 📋 Next Up
 | Task | Status | D | B | U | Eff | Notes |
 |------|--------|---|---|---|-----|-------|
 | 31 | ⬜ | 5 | 9 | 8 | 1.70 🚀 | Real-time subscriptions (eth_subscribe) |
-| 33 | ⬜ | 3 | 6 | 5 | 1.83 🚀 | ERC-721/ERC-1155 read operations |
 
 ---
 
@@ -92,7 +92,7 @@ Read-layer primitives for wallet analytics and on-chain intelligence. Building b
 | 30 | Wallet primitives (eth_getBalance, eth_getCode, eth_getTransactionByHash) | ✅ | 3 | 8 | 9 | 2.83 🎯 | `Onchain.RPC` + `Onchain.Wallet` |
 | 31 | Real-time subscriptions (eth_subscribe: newHeads, pendingTx, logs) | ⬜ | 5 | 9 | 8 | 1.70 🚀 | `Onchain.Subscription` |
 | 32 | Transfer event parser (ERC-20/721/1155 → normalized structs) | ✅ | 3 | 9 | 9 | 3.00 🎯 | `Onchain.Transfer` |
-| 33 | ERC-721/ERC-1155 read operations (NFT tracking) | ⬜ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.ERC721` + `Onchain.ERC1155` |
+| 33 | ERC-721/ERC-1155 read operations (NFT tracking) | ✅ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.ERC721` + `Onchain.ERC1155` |
 | 34 | ENS resolution (forward + reverse) | ✅ | 3 | 7 | 7 | 2.33 🎯 | `Onchain.ENS` |
 
 **Task descriptions:**
@@ -162,7 +162,7 @@ These are example consumer directions built on top of the current and planned pr
 
 ```
 lib/
-  onchain.ex                        # Discoverable root (14 core modules)
+  onchain.ex                        # Discoverable root (16 core modules)
   onchain/
     hex.ex                          # hex↔binary, hex↔integer, 0x prefix
     address.ex                      # validate, checksum (EIP-55), normalize
@@ -177,6 +177,8 @@ lib/
     multicall.ex                    # Multicall3 batched reads
     signer.ex                       # key management, transaction signing
     erc20.ex                        # reads + writes: balanceOf, approve, transfer
+    erc721.ex                       # ERC-721 NFT reads: ownerOf, tokenURI, balanceOf
+    erc1155.ex                      # ERC-1155 multi-token reads: balanceOf, balanceOfBatch, uri
     wallet.ex                       # classify (EOA/contract), native ETH balance
     transfer.ex                     # Transfer event parser (ERC-20/721/1155 → structs)
     ens.ex                          # forward + reverse ENS resolution
