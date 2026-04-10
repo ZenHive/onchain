@@ -10,6 +10,7 @@ Pure Elixir Ethereum library. Provides read (`eth_call`) and write (transaction 
 | [onchain_aave](https://github.com/ZenHive/onchain_aave) | Aave V3 protocol wrappers | onchain |
 | [onchain_evm](https://github.com/ZenHive/onchain_evm) | Rust NIFs: revm simulation, Solidity parsing, codegen | onchain + rustler |
 | [onchain_js](https://github.com/ZenHive/onchain_js) | JS bridge: npm packages on the BEAM via QuickBEAM | onchain + quickbeam |
+| [onchain_tempo](https://github.com/ZenHive/onchain_tempo) | Tempo chain primitives: 0x76 transactions, TIP-20 encoding | onchain |
 
 Pick what you need — consumers who only need `eth_call` never compile Rust or Zig.
 
@@ -24,7 +25,9 @@ def deps do
     # Add if you need EVM simulation / Solidity parsing:
     {:onchain_evm, "~> 0.1"},
     # Add if you need JS bridge (solc-js, Uniswap SDK, etc.):
-    {:onchain_js, "~> 0.1"}
+    {:onchain_js, "~> 0.1"},
+    # Add if you need Tempo chain (0x76 transactions, TIP-20 tokens):
+    {:onchain_tempo, "~> 0.1"}
   ]
 end
 ```
@@ -37,6 +40,23 @@ config :signet, :rpc_url, "https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY"
 ```
 
 Or pass the URL per-call to `Onchain.RPC` functions.
+
+## Quick Start
+
+```elixir
+# Read an ERC-20 token balance (USDC on mainnet)
+usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+{:ok, balance} = Onchain.ERC20.balance_of(usdc, "0xYourAddress")
+
+# Resolve an ENS name
+{:ok, address} = Onchain.ENS.resolve("vitalik.eth")
+
+# Generic contract call (encode -> eth_call -> decode)
+{:ok, [name]} = Onchain.Contract.call(usdc, "name()", [], "(string)")
+
+# All functions have bang variants that raise on error
+balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
+```
 
 ## Modules
 
@@ -67,6 +87,8 @@ Or pass the URL per-call to `Onchain.RPC` functions.
 | `Onchain.Transfer` | Parse ERC-20/721/1155 Transfer events into normalized structs |
 | `Onchain.ENS` | ENS name resolution (forward, reverse, text records, contenthash) |
 
+All public functions have `function!/1` bang variants that raise on error instead of returning `{:error, reason}` tuples.
+
 ## Discovery
 
 All modules use [descripex](https://hex.pm/packages/descripex) for self-describing APIs:
@@ -90,7 +112,7 @@ Integration tests require an Ethereum RPC endpoint:
 export ETHEREUM_API_URL="https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY"
 ```
 
-Sepolia write tests additionally require `SIGNER_PRIVATE_KEY`.
+Sepolia write tests additionally require `ETH_SEPOLIA_RPC_URL` and `SIGNER_PRIVATE_KEY`.
 
 ## License
 

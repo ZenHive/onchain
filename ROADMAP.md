@@ -16,6 +16,8 @@
 **Phase 8: Chain Intelligence Primitives** — Wallet analytics and on-chain intelligence building blocks. Tasks 30, 32, 33, 34 complete. Next: real-time subscriptions (31). Phase 9 (JS bridge) extracted to [onchain_js](../onchain_js/ROADMAP.md).
 
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
+>
+> **Doc checklist (every task):** ROADMAP.md ✅ → CHANGELOG.md ✅ → README.md ✅ → CLAUDE.md ✅
 
 ### ✅ Recently Completed
 | Task | Description | Notes |
