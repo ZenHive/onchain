@@ -1,7 +1,7 @@
 defmodule Onchain.MixProject do
   use Mix.Project
 
-  @version "0.4.1"
+  @version "0.5.0"
   @source_url "https://github.com/ZenHive/onchain"
 
   def project do
@@ -40,7 +40,9 @@ defmodule Onchain.MixProject do
     [
       {:signet, "~> 1.6"},
       {:decimal, "~> 2.0"},
-      {:descripex, "~> 0.4"},
+      {:descripex, "~> 0.6"},
+      {:jason, "~> 1.4"},
+      {:zen_websocket, "~> 0.3"},
 
       # Dev/test tooling
       {:tidewave, "~> 0.5", only: :dev},
@@ -55,7 +57,7 @@ defmodule Onchain.MixProject do
       {:doctor, "~> 0.22", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.39", only: :dev, runtime: false},
-      {:ex_dna, "~> 1.1", only: [:dev, :test], runtime: false},
+      {:ex_dna, "~> 1.3", only: [:dev, :test], runtime: false},
       {:ex_ast, "~> 0.2", only: [:dev, :test], runtime: false}
     ]
   end
@@ -67,7 +69,8 @@ defmodule Onchain.MixProject do
   defp package do
     [
       licenses: ["MIT"],
-      links: %{"GitHub" => @source_url}
+      links: %{"GitHub" => @source_url},
+      files: ~w(lib .formatter.exs mix.exs README.md LICENSE CHANGELOG.md)
     ]
   end
 

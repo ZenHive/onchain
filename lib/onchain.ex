@@ -28,6 +28,7 @@ defmodule Onchain do
       Onchain.Log,
       Onchain.Multicall,
       Onchain.Signer,
+      Onchain.Subscription,
       Onchain.Transfer,
       Onchain.Wallet
     ]

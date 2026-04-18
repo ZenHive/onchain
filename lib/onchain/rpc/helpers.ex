@@ -4,6 +4,8 @@ defmodule Onchain.RPC.Helpers do
   # Shared helpers for RPC-adjacent modules (Onchain.RPC, Onchain.Block, etc.).
   # Provides input validation, block normalization, option mapping, and RPC dispatch.
 
+  require Logger
+
   @default_timeout_ms 30_000
   @block_tags ~w(latest finalized pending earliest safe)
   @tx_hash_hex_length 66
@@ -88,6 +90,54 @@ defmodule Onchain.RPC.Helpers do
     case Keyword.pop(opts, old_key) do
       {nil, opts} -> opts
       {value, opts} -> Keyword.put(opts, new_key, value)
+    end
+  end
+
+  # --- RPC response parsing helpers ---
+  # Used by Onchain.RPC and Onchain.Subscription.Parser to convert
+  # raw JSON-RPC response fields into normalized Elixir values.
+
+  @doc false
+  # Parses hex fields in a raw log map from the RPC response.
+  @spec parse_log(map()) :: map()
+  def parse_log(log) when is_map(log) do
+    %{
+      address: parse_address(log["address"]),
+      topics: log["topics"] || [],
+      data: log["data"],
+      block_number: parse_hex_integer(log["blockNumber"]),
+      transaction_hash: log["transactionHash"],
+      log_index: parse_hex_integer(log["logIndex"]),
+      transaction_index: parse_hex_integer(log["transactionIndex"]),
+      removed: log["removed"] || false
+    }
+  end
+
+  @doc false
+  # Parses a hex address string to checksummed format.
+  @spec parse_address(String.t() | nil) :: String.t() | nil
+  def parse_address(nil), do: nil
+
+  def parse_address(hex) do
+    case Onchain.Address.checksum(hex) do
+      {:ok, checksummed} -> checksummed
+      {:error, _} -> hex
+    end
+  end
+
+  @doc false
+  # Parses a hex integer string, returning nil for nil input.
+  @spec parse_hex_integer(String.t() | nil) :: non_neg_integer() | nil
+  def parse_hex_integer(nil), do: nil
+
+  def parse_hex_integer(hex) do
+    case Onchain.Hex.to_integer(hex) do
+      {:ok, n} ->
+        n
+
+      {:error, _} ->
+        Logger.debug("Failed to parse hex integer from RPC response: #{inspect(hex)}")
+        nil
     end
   end
 end

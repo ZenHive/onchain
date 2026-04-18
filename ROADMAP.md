@@ -13,7 +13,7 @@
 
 ## Current Focus
 
-**Phase 8: Chain Intelligence Primitives** — Wallet analytics and on-chain intelligence building blocks. Tasks 30, 32, 33, 34 complete. Next: real-time subscriptions (31). Phase 9 (JS bridge) extracted to [onchain_js](../onchain_js/ROADMAP.md).
+**Phase 8: Chain Intelligence Primitives ✅** — All tasks complete. Wallet analytics, transfer parsing, ENS resolution, NFT reads, and real-time subscriptions. Phase 9 (JS bridge) extracted to [onchain_js](../onchain_js/ROADMAP.md).
 
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
 >
@@ -28,11 +28,7 @@
 | 34 | ENS resolution (forward + reverse + text records) | Mainnet integration tested |
 | 33 | ERC-721/ERC-1155 read operations | 7 ERC-721 + 4 ERC-1155 reads, checksummed address returns |
 | 36 | Extract shared RPC helpers | DRY: 7 functions deduplicated |
-
-### 📋 Next Up
-| Task | Status | D | B | U | Eff | Notes |
-|------|--------|---|---|---|-----|-------|
-| 31 | ⬜ | 5 | 9 | 8 | 1.70 🚀 | Real-time subscriptions (eth_subscribe) |
+| 31 | Real-time subscriptions (eth_subscribe) | zen_websocket, newHeads/pendingTx/logs |
 
 ---
 
@@ -85,14 +81,14 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 
 ---
 
-## Phase 8: Chain Intelligence Primitives
+## Phase 8: Chain Intelligence Primitives ✅
 
-Read-layer primitives for wallet analytics and on-chain intelligence. Building blocks for "who sent what to whom, when, and how much?"
+> 6 tasks complete. Read-layer primitives for wallet analytics and on-chain intelligence.
 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
 | 30 | Wallet primitives (eth_getBalance, eth_getCode, eth_getTransactionByHash) | ✅ | 3 | 8 | 9 | 2.83 🎯 | `Onchain.RPC` + `Onchain.Wallet` |
-| 31 | Real-time subscriptions (eth_subscribe: newHeads, pendingTx, logs) | ⬜ | 5 | 9 | 8 | 1.70 🚀 | `Onchain.Subscription` |
+| 31 | Real-time subscriptions (eth_subscribe: newHeads, pendingTx, logs) | ✅ | 5 | 9 | 8 | 1.70 🚀 | `Onchain.Subscription` |
 | 32 | Transfer event parser (ERC-20/721/1155 → normalized structs) | ✅ | 3 | 9 | 9 | 3.00 🎯 | `Onchain.Transfer` |
 | 33 | ERC-721/ERC-1155 read operations (NFT tracking) | ✅ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.ERC721` + `Onchain.ERC1155` |
 | 34 | ENS resolution (forward + reverse) | ✅ | 3 | 7 | 7 | 2.33 🎯 | `Onchain.ENS` |
@@ -105,12 +101,15 @@ Read-layer primitives for wallet analytics and on-chain intelligence. Building b
 
 ---
 
-## Code Health ✅
+## Code Health
 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
 | 36 | Extract shared RPC helpers (DRY: 7 duplicated functions between RPC + Trace) | ✅ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.RPC.Helpers` |
 | — | Code review fixes: batch state commit, defensive parsing, array handling, NatSpec | ✅ | — | — | — | — | Multiple |
+| 37 | zen_websocket: `send_message/2` should return `{:error, :disconnected}` instead of `:noproc` exit when server is dead | ⬜ | 2 | 7 | 6 | 3.25 🎯 | `ZenWebsocket.Client` |
+| 38 | Subscription: buffer unknown sub_ids to close subscribe→Agent.update race window (drops notifications silently if WS endpoint doesn't order subscribe response before notifications) | ⬜ | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
+| 39 | Subscription: add `:pending_transactions` integration test (needs provider that broadcasts mempool — Alchemy custom method or local full node) | ⬜ | 2 | 3 | 3 | 1.50 📋 | `test/onchain/subscription_integration_test.exs` |
 
 ---
 
@@ -184,4 +183,7 @@ lib/
     wallet.ex                       # classify (EOA/contract), native ETH balance
     transfer.ex                     # Transfer event parser (ERC-20/721/1155 → structs)
     ens.ex                          # forward + reverse ENS resolution
+    subscription.ex                 # real-time eth_subscribe (newHeads, pendingTx, logs)
+    subscription/
+      parser.ex                     # pure parsing for subscription notification payloads
 ```

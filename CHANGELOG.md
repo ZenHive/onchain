@@ -4,7 +4,42 @@ Completed roadmap tasks.
 
 ---
 
-## Task 33: ERC-721/ERC-1155 Read Operations
+## v0.5.0 — Chain Intelligence (Subscriptions, NFT reads)
+
+**Highlights:**
+- New `Onchain.Subscription` module for real-time `eth_subscribe` streams (newHeads, pendingTx, logs) via zen_websocket
+- `Onchain.ERC721` + `Onchain.ERC1155` read operations for NFT tracking
+- Bang variants + edge-case coverage across ENS, RPC, Log, Transfer, Multicall
+- New runtime dep: `zen_websocket ~> 0.3` (WebSocket transport)
+- Pin tightenings: `descripex ~> 0.6`, `ex_dna ~> 1.3`
+- Explicit `files:` list on hex package — tarball now contains only `lib`, `.formatter.exs`, `mix.exs`, `README.md`, `LICENSE`, `CHANGELOG.md`
+
+---
+
+### Task 31: Real-time Subscriptions (eth_subscribe)
+
+**Completed** | [D:5/B:9/U:8 → Eff:1.70]
+
+**What was done:**
+- Added `Onchain.Subscription` module wrapping zen_websocket for Ethereum-specific WebSocket subscriptions
+- Added `Onchain.Subscription.Parser` for pure parsing of subscription notification payloads
+- Supports three subscription types: `:new_heads` (block headers), `:pending_transactions` (mempool tx hashes), `{:logs, filter}` (filtered event logs)
+- Handler function pattern for event delivery — consumer passes `:handler` to `connect/2`, or uses default process messages `{:subscription, event}`
+- Agent-based subscription tracking maps subscription IDs to types for async notification dispatch
+- Extracted `parse_log/1`, `parse_hex_integer/1`, `parse_address/1` from `Onchain.RPC` to `Onchain.RPC.Helpers` for reuse
+- Added zen_websocket (~> 0.3) and jason (~> 1.4) as dependencies
+- Full Descripex `api()` annotations and bang variants for all public functions
+- Registered in `Onchain` Discoverable modules list
+
+**Key decisions:**
+- Pure parsing separated from connection management — `Parser` has zero WebSocket dependencies, fully testable in isolation
+- Agent (not GenServer) for subscription state — minimal process, private to each connection, no supervision tree forced on consumers
+- No automatic HTTP→WS URL conversion — consumer provides WebSocket URL directly (library design principle)
+- Dialyzer suppressions for upstream zen_websocket `build_request/2` spec mismatch (expects `map()`, Ethereum uses `list()` params)
+
+---
+
+### Task 33: ERC-721/ERC-1155 Read Operations
 
 **Completed** | [D:3/B:6/U:5 → Eff:1.83]
 

@@ -19,7 +19,7 @@ Pick what you need — consumers who only need `eth_call` never compile Rust or 
 ```elixir
 def deps do
   [
-    {:onchain, "~> 0.4"},
+    {:onchain, "~> 0.5"},
     # Add if you need Aave:
     {:onchain_aave, "~> 0.1"},
     # Add if you need EVM simulation / Solidity parsing:
@@ -86,8 +86,44 @@ balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
 | `Onchain.Wallet` | Classify address (EOA/contract), native ETH balance |
 | `Onchain.Transfer` | Parse ERC-20/721/1155 Transfer events into normalized structs |
 | `Onchain.ENS` | ENS name resolution (forward, reverse, text records, contenthash) |
+| `Onchain.Subscription` | Real-time streaming via eth_subscribe (newHeads, pendingTx, logs) |
 
 All public functions have `function!/1` bang variants that raise on error instead of returning `{:error, reason}` tuples.
+
+## Real-time Subscriptions
+
+Stream new blocks, pending transactions, and event logs via WebSocket:
+
+```elixir
+# Connect to a WebSocket endpoint
+{:ok, sub} = Onchain.Subscription.connect("wss://eth-mainnet.g.alchemy.com/v2/KEY")
+
+# Subscribe to new block headers
+{:ok, sub_id} = Onchain.Subscription.subscribe(sub, :new_heads)
+
+# Events arrive as messages to the calling process
+receive do
+  {:subscription, {:new_heads, ^sub_id, head}} ->
+    IO.inspect(head.number, label: "new block")
+end
+
+# Or provide a custom handler
+{:ok, sub} = Onchain.Subscription.connect("wss://...",
+  handler: fn {:new_heads, _id, head} -> Logger.info("Block #{head.number}") end
+)
+
+# Subscribe to filtered event logs
+{:ok, _} = Onchain.Subscription.subscribe(sub, {:logs, %{
+  address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+  topics: [Onchain.Transfer.transfer_topics()]
+}})
+
+# Clean up
+Onchain.Subscription.unsubscribe(sub, sub_id)
+Onchain.Subscription.close(sub)
+```
+
+Requires a WebSocket-capable endpoint (`wss://` or `ws://`), separate from the HTTP RPC URL.
 
 ## Discovery
 
@@ -110,6 +146,12 @@ Integration tests require an Ethereum RPC endpoint:
 
 ```bash
 export ETHEREUM_API_URL="https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY"
+```
+
+WebSocket subscription tests require a WebSocket endpoint:
+
+```bash
+export ETHEREUM_WS_URL="wss://eth-mainnet.g.alchemy.com/v2/YOUR_KEY"
 ```
 
 Sepolia write tests additionally require `ETH_SEPOLIA_RPC_URL` and `SIGNER_PRIVATE_KEY`.

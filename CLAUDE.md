@@ -4,24 +4,17 @@ Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) a
 
 @~/.claude/includes/across-instances.md
 @~/.claude/includes/critical-rules.md
-@~/.claude/includes/skills-awareness.md
 @~/.claude/includes/task-prioritization.md
 @~/.claude/includes/task-writing.md
+@~/.claude/includes/workflow-philosophy.md
 @~/.claude/includes/web-command.md
 @~/.claude/includes/code-style.md
 @~/.claude/includes/development-philosophy.md
-@~/.claude/includes/documentation-guidelines.md
-@~/.claude/includes/ai-coder-docs.md
-@~/.claude/includes/workflow-philosophy.md
-@~/.claude/includes/agent-economy.md
-@~/.claude/includes/elixir-patterns.md
-@~/.claude/includes/elixir-setup.md
 @~/.claude/includes/development-commands.md
+@~/.claude/includes/elixir-setup.md
 @~/.claude/includes/ex-unit-json.md
 @~/.claude/includes/dialyzer-json.md
-@~/.claude/includes/library-design.md
-@~/.claude/includes/elixir-volt.md
-@~/.claude/includes/quickbeam.md
+@~/.claude/includes/agent-economy.md
 @~/.claude/includes/ethereum-rpc.md
 
 
@@ -53,7 +46,8 @@ This repo is part of a multi-library portfolio. The boundary is **ephemeral vs d
 ## Architecture
 
 - **Pure Elixir** — no native deps, no Rustler, no compilation of C/Rust
-- **signet** is the sole Ethereum dep — RPC, ABI encoding, signing, crypto all in one
+- **signet** is the primary Ethereum dep — RPC, ABI encoding, signing, crypto all in one
+- **zen_websocket** for WebSocket transport (eth_subscribe real-time subscriptions)
 - Signet wraps **curvy** (pure Elixir secp256k1) internally for signing/key ops — never add curvy as a direct dep
 - Consumers configure RPC URL via `config :signet` or pass URL per-call
 - Standard error tuples: `{:ok, result} | {:error, {:tag, reason}}`
@@ -81,6 +75,9 @@ lib/onchain/
   multicall.ex      # batched calls via Multicall3
   ens.ex            # ENS name resolution
   transfer.ex       # ERC-20 Transfer event parsing
+  subscription.ex   # real-time eth_subscribe (newHeads, pendingTx, logs)
+  subscription/
+    parser.ex       # pure parsing for subscription notification payloads
 ```
 
 **Moved to onchain_aave:** `aave/` (math, contracts, pool, oracle, faucet, ui_pool_data_provider, types/)

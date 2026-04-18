@@ -1,0 +1,417 @@
+defmodule Onchain.Subscription do
+  @moduledoc """
+  Real-time Ethereum subscriptions via `eth_subscribe` over WebSocket.
+
+  Wraps [zen_websocket](https://hex.pm/packages/zen_websocket) with Ethereum-specific
+  subscription management. Supports three subscription types: new block headers,
+  pending transactions, and filtered event logs.
+
+  ## Does
+
+  - Connect to a WebSocket-capable Ethereum endpoint (`connect/2`)
+  - Subscribe to `newHeads`, `newPendingTransactions`, and `logs` (`subscribe/3`)
+  - Parse subscription notifications into normalized Elixir maps
+  - Deliver parsed events via handler function or process messages
+  - Unsubscribe and clean up resources (`unsubscribe/2`, `close/1`)
+
+  ## Does Not
+
+  - Persist or index events (see rexex for durable indexing)
+  - Convert HTTP RPC URLs to WebSocket URLs (consumer provides `wss://` directly)
+  - Manage reconnection subscriptions (delegates reconnection to zen_websocket)
+
+  ## Event Delivery
+
+  Events are delivered via a handler function passed to `connect/2`. The default
+  handler sends `{:subscription, event}` messages to the calling process.
+
+  Event shapes:
+  - `{:new_heads, subscription_id, head_map}`
+  - `{:pending_transactions, subscription_id, tx_hash}`
+  - `{:logs, subscription_id, log_map}`
+
+  ## Error Format
+
+  - Connection failures: `{:error, {:connection_error, reason}}`
+  - RPC errors: `{:error, {:rpc_error, %{code: integer, message: string}}}`
+  - Invalid subscription type: `{:error, {:invalid_subscription_type, type}}`
+
+  ## Functions
+
+  | Function | Purpose |
+  |----------|---------|
+  | `connect/2` | Open WebSocket connection to Ethereum node |
+  | `connect!/2` | Same, raises on error |
+  | `subscribe/3` | Subscribe to a notification type |
+  | `subscribe!/3` | Same, raises on error |
+  | `unsubscribe/2` | Cancel a subscription by ID |
+  | `unsubscribe!/2` | Same, raises on error |
+  | `close/1` | Close connection and free resources |
+  """
+
+  use Descripex, namespace: "/subscription"
+
+  alias Onchain.Subscription.Parser
+  alias ZenWebsocket.Client
+  alias ZenWebsocket.JsonRpc
+
+  require Logger
+
+  # TODO(upstream): zen_websocket JsonRpc.build_request/2 spec is (String.t(), map() | nil)
+  # but Ethereum JSON-RPC uses list params. Fix spec upstream to (String.t(), term()).
+  # Cascade: build_request spec mismatch → do_subscribe "won't succeed" →
+  # subscribe/unsubscribe "no return" → bang variants "invalid contract".
+  @dialyzer [
+    {:no_match, [do_subscribe: 4, unsubscribe: 2]},
+    {:no_return, [subscribe!: 2, subscribe!: 3, unsubscribe: 2, unsubscribe!: 2, do_subscribe: 4]},
+    {:no_fail_call, [do_subscribe: 4, unsubscribe: 2, subscribe: 3]},
+    {:no_contracts, [subscribe!: 2, subscribe!: 3, unsubscribe: 2, unsubscribe!: 2, do_subscribe: 4]},
+    {:no_match, [subscribe!: 3]}
+  ]
+
+  @enforce_keys [:client, :agent]
+  defstruct [:client, :agent, :handler]
+
+  @type subscription_type :: :new_heads | :pending_transactions | {:logs, map()}
+
+  @type head :: %{
+          number: non_neg_integer(),
+          hash: String.t(),
+          parent_hash: String.t(),
+          timestamp: non_neg_integer(),
+          miner: String.t(),
+          gas_limit: non_neg_integer(),
+          gas_used: non_neg_integer(),
+          base_fee_per_gas: non_neg_integer() | nil,
+          logs_bloom: String.t(),
+          transactions_root: String.t(),
+          state_root: String.t(),
+          receipts_root: String.t()
+        }
+
+  @type log :: %{
+          address: String.t(),
+          topics: [String.t()],
+          data: String.t(),
+          block_number: non_neg_integer(),
+          transaction_hash: String.t(),
+          log_index: non_neg_integer(),
+          transaction_index: non_neg_integer(),
+          removed: boolean()
+        }
+
+  @type event ::
+          {:new_heads, String.t(), head()}
+          | {:pending_transactions, String.t(), String.t()}
+          | {:logs, String.t(), log()}
+
+  @type handler :: (event() -> any())
+
+  @type t :: %__MODULE__{
+          client: Client.t(),
+          agent: pid(),
+          handler: handler()
+        }
+
+  # --- connect ---
+
+  api(:connect, "Open a WebSocket connection to an Ethereum node.",
+    params: [
+      ws_url: [kind: :value, description: "WebSocket URL (wss:// or ws://)"],
+      opts: [
+        kind: :value,
+        default: [],
+        description:
+          "Options: :handler (event callback fn), plus zen_websocket options (:retry_count, :retry_delay, :max_backoff)"
+      ]
+    ],
+    returns: %{
+      type: "{:ok, %Onchain.Subscription{}} | {:error, term()}",
+      description: "Subscription handle for subscribe/unsubscribe/close calls"
+    }
+  )
+
+  @spec connect(String.t(), keyword()) :: {:ok, t()} | {:error, term()}
+  def connect(ws_url, opts \\ []) do
+    {user_handler, ws_opts} = Keyword.pop(opts, :handler)
+    caller = self()
+
+    {:ok, agent} = Agent.start_link(fn -> %{} end)
+
+    handler = user_handler || default_handler(caller)
+
+    internal_handler = build_internal_handler(agent, handler)
+
+    ws_opts =
+      ws_opts
+      |> Keyword.put(:handler, internal_handler)
+      |> Keyword.put_new(:on_disconnect, fn _pid -> stop_agent(agent) end)
+
+    case Client.connect(ws_url, ws_opts) do
+      {:ok, client} ->
+        {:ok, %__MODULE__{client: client, agent: agent, handler: handler}}
+
+      {:error, reason} ->
+        stop_agent(agent)
+        {:error, {:connection_error, reason}}
+    end
+  end
+
+  api(:connect!, "Open a WebSocket connection. Raises on error.",
+    params: [
+      ws_url: [kind: :value, description: "WebSocket URL (wss:// or ws://)"],
+      opts: [kind: :value, default: [], description: "Same options as connect/2"]
+    ],
+    returns: %{type: "%Onchain.Subscription{}", description: "Subscription handle"}
+  )
+
+  @spec connect!(String.t(), keyword()) :: t()
+  def connect!(ws_url, opts \\ []) do
+    case connect(ws_url, opts) do
+      {:ok, sub} -> sub
+      {:error, reason} -> raise "Subscription connect failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- subscribe ---
+
+  api(:subscribe, "Subscribe to an Ethereum notification type.",
+    params: [
+      sub: [kind: :value, description: "Subscription handle from connect/2"],
+      type: [
+        kind: :value,
+        description: "Subscription type: :new_heads, :pending_transactions, or {:logs, filter_map}"
+      ],
+      opts: [kind: :value, default: [], description: "Reserved for future options"]
+    ],
+    returns: %{
+      type: "{:ok, subscription_id} | {:error, term()}",
+      description: "Subscription ID for unsubscribe"
+    }
+  )
+
+  @spec subscribe(t(), subscription_type(), keyword()) :: {:ok, String.t()} | {:error, term()}
+  def subscribe(sub, type, opts \\ [])
+
+  def subscribe(%__MODULE__{client: client, agent: agent}, :new_heads, _opts) do
+    do_subscribe(client, agent, :new_heads, ["newHeads"])
+  end
+
+  def subscribe(%__MODULE__{client: client, agent: agent}, :pending_transactions, _opts) do
+    do_subscribe(client, agent, :pending_transactions, ["newPendingTransactions"])
+  end
+
+  def subscribe(%__MODULE__{client: client, agent: agent}, {:logs, filter}, _opts) when is_map(filter) do
+    eth_filter = build_log_filter(filter)
+    do_subscribe(client, agent, {:logs, filter}, ["logs", eth_filter])
+  end
+
+  def subscribe(%__MODULE__{}, type, _opts) do
+    {:error, {:invalid_subscription_type, type}}
+  end
+
+  api(:subscribe!, "Subscribe to an Ethereum notification type. Raises on error.",
+    params: [
+      sub: [kind: :value, description: "Subscription handle from connect/2"],
+      type: [kind: :value, description: "Same types as subscribe/3"],
+      opts: [kind: :value, default: [], description: "Reserved for future options"]
+    ],
+    returns: %{type: "String.t()", description: "Subscription ID"}
+  )
+
+  @spec subscribe!(t(), subscription_type(), keyword()) :: String.t()
+  def subscribe!(%__MODULE__{} = sub, type, opts \\ []) do
+    case subscribe(sub, type, opts) do
+      {:ok, sub_id} -> sub_id
+      {:error, reason} -> raise "Subscription failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- unsubscribe ---
+
+  api(:unsubscribe, "Cancel a subscription by ID.",
+    params: [
+      sub: [kind: :value, description: "Subscription handle"],
+      subscription_id: [kind: :value, description: "Subscription ID from subscribe/3"]
+    ],
+    returns: %{
+      type: "{:ok, boolean()} | {:error, term()}",
+      description: "true if unsubscribed successfully"
+    }
+  )
+
+  @spec unsubscribe(t(), String.t()) :: {:ok, boolean()} | {:error, term()}
+  def unsubscribe(%__MODULE__{client: client, agent: agent}, subscription_id) do
+    {:ok, request} = JsonRpc.build_request("eth_unsubscribe", [subscription_id])
+
+    case Client.send_message(client, Jason.encode!(request)) do
+      {:ok, %{"result" => result}} ->
+        Agent.update(agent, &Map.delete(&1, subscription_id))
+        {:ok, result}
+
+      {:ok, %{"error" => %{"code" => code, "message" => message}}} ->
+        {:error, {:rpc_error, %{code: code, message: message}}}
+
+      {:error, reason} ->
+        {:error, {:connection_error, reason}}
+
+      :ok ->
+        Agent.update(agent, &Map.delete(&1, subscription_id))
+        {:ok, true}
+    end
+  end
+
+  api(:unsubscribe!, "Cancel a subscription by ID. Raises on error.",
+    params: [
+      sub: [kind: :value, description: "Subscription handle"],
+      subscription_id: [kind: :value, description: "Subscription ID"]
+    ],
+    returns: %{type: "boolean()", description: "true if unsubscribed"}
+  )
+
+  @spec unsubscribe!(t(), String.t()) :: boolean()
+  def unsubscribe!(%__MODULE__{} = sub, subscription_id) do
+    case unsubscribe(sub, subscription_id) do
+      {:ok, result} -> result
+      {:error, reason} -> raise "Unsubscribe failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- close ---
+
+  api(:close, "Close the WebSocket connection and free resources.",
+    params: [
+      sub: [kind: :value, description: "Subscription handle"]
+    ],
+    returns: %{type: ":ok", description: "Always returns :ok"}
+  )
+
+  @spec close(t()) :: :ok
+  def close(%__MODULE__{client: client, agent: agent}) do
+    Client.close(client)
+    stop_agent(agent)
+    :ok
+  end
+
+  # Stops the Agent if it's still alive. Used by close/1 and on_disconnect callback.
+  @spec stop_agent(pid()) :: :ok
+  defp stop_agent(agent) do
+    if Process.alive?(agent), do: Agent.stop(agent)
+    :ok
+  end
+
+  # --- Internal helpers ---
+
+  # TODO(upstream): Client.send_message/2 uses GenServer.call — exits with :noproc
+  # if the WebSocket server has died. Callers of subscribe/unsubscribe get a crash instead
+  # of {:error, ...}. Fix in zen_websocket: send_message should return {:error, :disconnected}.
+  #
+  # Sends eth_subscribe and stores the sub_id → type mapping in the Agent.
+  @spec do_subscribe(Client.t(), pid(), subscription_type(), list()) ::
+          {:ok, String.t()} | {:error, term()}
+  defp do_subscribe(client, agent, type, params) do
+    {:ok, request} = JsonRpc.build_request("eth_subscribe", params)
+
+    case Client.send_message(client, Jason.encode!(request)) do
+      {:ok, %{"result" => subscription_id}} when is_binary(subscription_id) ->
+        # NOTE: Theoretical race — a notification arriving between send_message
+        # returning the sub_id and Agent.update completing would hit dispatch_event(nil, ...)
+        # and be silently dropped. Benign for standard Ethereum JSON-RPC (nodes order the
+        # subscribe response before notifications on the same connection), but not guaranteed
+        # for every WebSocket endpoint. See ROADMAP Task 38.
+        Agent.update(agent, &Map.put(&1, subscription_id, type))
+        {:ok, subscription_id}
+
+      {:ok, %{"error" => %{"code" => code, "message" => message}}} ->
+        {:error, {:rpc_error, %{code: code, message: message}}}
+
+      {:error, reason} ->
+        {:error, {:connection_error, reason}}
+
+      other ->
+        {:error, {:unexpected_response, other}}
+    end
+  end
+
+  # Default handler sends events as messages to the calling process.
+  @spec default_handler(pid()) :: handler()
+  defp default_handler(caller) do
+    fn event -> send(caller, {:subscription, event}) end
+  end
+
+  # Builds the internal zen_websocket handler that bridges raw WebSocket
+  # messages to parsed, typed events delivered via the consumer's handler.
+  @spec build_internal_handler(pid(), handler()) :: (term() -> any())
+  defp build_internal_handler(agent, handler) do
+    fn
+      {:message, {:text, data}} ->
+        dispatch_message(data, agent, handler)
+
+      {:message, data} when is_binary(data) ->
+        dispatch_message(data, agent, handler)
+
+      _other ->
+        :ok
+    end
+  end
+
+  # Decodes a raw WebSocket text frame and dispatches subscription notifications.
+  @spec dispatch_message(binary(), pid(), handler()) :: any()
+  defp dispatch_message(data, agent, handler) do
+    case Jason.decode(data) do
+      {:ok, decoded} ->
+        dispatch_decoded(decoded, agent, handler)
+
+      {:error, _} ->
+        :ok
+    end
+  end
+
+  # Dispatches a decoded JSON-RPC message. Only handles subscription notifications;
+  # request-response messages (eth_subscribe confirmations) are handled by send_message.
+  @spec dispatch_decoded(map(), pid(), handler()) :: any()
+  defp dispatch_decoded(decoded, agent, handler) do
+    case JsonRpc.match_response(decoded) do
+      {:notification, "eth_subscription", %{"subscription" => sub_id, "result" => result}} ->
+        type = Agent.get(agent, &Map.get(&1, sub_id))
+        dispatch_event(type, sub_id, result, handler)
+
+      _other ->
+        :ok
+    end
+  end
+
+  # Parses and delivers a subscription event based on its type.
+  @spec dispatch_event(subscription_type() | nil, String.t(), term(), handler()) :: any()
+  defp dispatch_event(nil, _sub_id, _result, _handler), do: :ok
+
+  # TODO: Deliver parse errors to the handler as {:parse_error, sub_id, reason} events
+  # so consumers can decide how to handle malformed notifications. Currently logged and
+  # skipped because this runs inside zen_websocket's callback — crashing here would kill
+  # the WebSocket connection for all subscriptions.
+  defp dispatch_event({:logs, _filter}, sub_id, result, handler) do
+    case Parser.parse_event(:logs, result) do
+      {:ok, parsed} -> handler.({:logs, sub_id, parsed})
+      {:error, reason} -> Logger.debug("Subscription #{sub_id} log parse error: #{inspect(reason)}")
+    end
+  end
+
+  defp dispatch_event(type, sub_id, result, handler) when is_atom(type) do
+    case Parser.parse_event(type, result) do
+      {:ok, parsed} -> handler.({type, sub_id, parsed})
+      {:error, reason} -> Logger.debug("Subscription #{sub_id} #{type} parse error: #{inspect(reason)}")
+    end
+  end
+
+  # Converts a user-friendly filter map to the Ethereum JSON-RPC format.
+  # Keys: :address (string or list), :topics (list of topic filters)
+  @spec build_log_filter(map()) :: map()
+  defp build_log_filter(filter) do
+    Enum.reduce(filter, %{}, fn
+      {:address, addr}, acc -> Map.put(acc, "address", addr)
+      {:topics, topics}, acc -> Map.put(acc, "topics", topics)
+      {key, val}, acc when is_atom(key) -> Map.put(acc, Atom.to_string(key), val)
+      {key, val}, acc -> Map.put(acc, key, val)
+    end)
+  end
+end

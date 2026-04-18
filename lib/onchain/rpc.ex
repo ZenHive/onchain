@@ -50,8 +50,6 @@ defmodule Onchain.RPC do
 
   import Onchain.RPC.Helpers
 
-  require Logger
-
   # --- eth_call ---
 
   api(:eth_call, "Execute a read-only contract call (eth_call).",
@@ -575,22 +573,6 @@ defmodule Onchain.RPC do
   defp put_block_param(_result, _key, error_label, other), do: {:error, {:invalid_filter, {error_label, other}}}
 
   @doc false
-  # Parses hex fields in a raw log map from the RPC response.
-  @spec parse_log(map()) :: map()
-  defp parse_log(log) when is_map(log) do
-    %{
-      address: parse_address(log["address"]),
-      topics: log["topics"] || [],
-      data: log["data"],
-      block_number: parse_hex_integer(log["blockNumber"]),
-      transaction_hash: log["transactionHash"],
-      log_index: parse_hex_integer(log["logIndex"]),
-      transaction_index: parse_hex_integer(log["transactionIndex"]),
-      removed: log["removed"] || false
-    }
-  end
-
-  @doc false
   # Parses a raw transaction receipt map from the RPC response into atom-keyed map.
   @spec parse_receipt(map()) :: map()
   defp parse_receipt(receipt) when is_map(receipt) do
@@ -632,33 +614,5 @@ defmodule Onchain.RPC do
       type: parse_hex_integer(tx["type"]),
       chain_id: parse_hex_integer(tx["chainId"])
     }
-  end
-
-  @doc false
-  # Parses a hex address string to checksummed format.
-  @spec parse_address(String.t() | nil) :: String.t() | nil
-  defp parse_address(nil), do: nil
-
-  defp parse_address(hex) do
-    case Onchain.Address.checksum(hex) do
-      {:ok, checksummed} -> checksummed
-      {:error, _} -> hex
-    end
-  end
-
-  @doc false
-  # Parses a hex integer string, returning nil for nil input.
-  @spec parse_hex_integer(String.t() | nil) :: non_neg_integer() | nil
-  defp parse_hex_integer(nil), do: nil
-
-  defp parse_hex_integer(hex) do
-    case Onchain.Hex.to_integer(hex) do
-      {:ok, n} ->
-        n
-
-      {:error, _} ->
-        Logger.debug("Failed to parse hex integer from RPC response: #{inspect(hex)}")
-        nil
-    end
   end
 end
