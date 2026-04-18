@@ -11,6 +11,7 @@ defmodule Onchain.RPC.Helpers do
   @tx_hash_hex_length 66
 
   @doc false
+  @spec block_tags() :: [String.t()]
   def block_tags, do: @block_tags
 
   @doc false
