@@ -13,6 +13,7 @@ Completed roadmap tasks.
 - New runtime dep: `zen_websocket ~> 0.3` (WebSocket transport)
 - Pin tightenings: `descripex ~> 0.6`, `ex_dna ~> 1.3`
 - Explicit `files:` list on hex package — tarball now contains only `lib`, `.formatter.exs`, `mix.exs`, `README.md`, `LICENSE`, `CHANGELOG.md`
+- Credo switched back from `release/1.7` git branch to Hex release `{:credo, "~> 1.7"}` (upstream Elixir 1.20+ sigil fix now published in 1.7.18) — Task 40
 
 ---
 

@@ -110,6 +110,13 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 | 37 | zen_websocket: `send_message/2` should return `{:error, :disconnected}` instead of `:noproc` exit when server is dead | ⬜ | 2 | 7 | 6 | 3.25 🎯 | `ZenWebsocket.Client` |
 | 38 | Subscription: buffer unknown sub_ids to close subscribe→Agent.update race window (drops notifications silently if WS endpoint doesn't order subscribe response before notifications) | ⬜ | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
 | 39 | Subscription: add `:pending_transactions` integration test (needs provider that broadcasts mempool — Alchemy custom method or local full node) | ⬜ | 2 | 3 | 3 | 1.50 📋 | `test/onchain/subscription_integration_test.exs` |
+| 40 | Switch Credo back to Hex release (moved from `release/1.7` git branch to `{:credo, "~> 1.7"}` — resolved at 1.7.18) | ✅ | 1 | 4 | 3 | 3.50 🎯 | `mix.exs` |
+| 41 | ENS enhancements: CCIP-Read / EIP-3668 off-chain lookups, ENSIP-10 wildcard resolution, full UTS-46 / ENSIP-15 Unicode normalization, multi-coin address resolution (currently ETH-only via `addr(bytes32)`) | ⬜ | 6 | 6 | 5 | 0.92 ⚠️ | `Onchain.ENS` |
+| 42 | Subscription: deliver parse errors to the handler as `{:parse_error, sub_id, reason}` events instead of silently dropping malformed notifications | ⬜ | 2 | 4 | 3 | 1.75 🚀 | `Onchain.Subscription` |
+| 43 | Upstream spec fix tracking: remove `@dialyzer {:no_match, ...}` suppressions in ENS/Log/Multicall once upstream `abi` (`ABI.decode/2` no_return) and `signet` (`Hex` specs) publish fixes | ⬜ | 1 | 3 | 3 | 3.00 🎯 | Multiple |
+| 44 | Fix CLAUDE.md Module Layout drift: claims `wallet.ex` holds `eth_getBalance, eth_getCode, get_transaction_by_hash` but actual surface is `balance/classify`; those RPC methods live on `Onchain.RPC`. Audit every bullet in Module Layout against real exports to prevent future instances from calling non-existent functions. | ⬜ | 1 | 3 | 4 | 3.50 🎯 | `CLAUDE.md` |
+| 45 | Add `Onchain.ERC20.total_supply/2` (+ bang variant) to complete the standard ERC-20 read surface. Every other standard read exists (balanceOf, allowance, decimals, symbol). Include unit test + mainnet integration test against WETH. | ⬜ | 2 | 5 | 6 | 2.75 🎯 | `Onchain.ERC20` |
+| 46 | Make `Onchain.Hex.from_integer/1` emit lowercase hex to match `Onchain.Hex.encode/1`. Currently returns `"0xFF"` (uppercase) while `encode/1` returns lowercase. Cosmetic inconsistency — no contract broken. Update tests and docstring example if needed. | ⬜ | 1 | 2 | 2 | 2.00 🚀 | `Onchain.Hex` |
 
 ---
 
