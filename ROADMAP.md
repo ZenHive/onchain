@@ -121,6 +121,21 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 | 45 | Add `Onchain.ERC20.total_supply/2` (+ bang variant) to complete the standard ERC-20 read surface | ✅ | 2 | 5 | 6 | 2.75 🎯 | `Onchain.ERC20` |
 | 46 | Make `Onchain.Hex.from_integer/1` emit lowercase hex to match `Onchain.Hex.encode/1` | ✅ | 1 | 2 | 2 | 2.00 🚀 | `Onchain.Hex` |
 | 47 | Hotfix: zen_websocket 0.4.x handler contract — decoded maps replace raw binaries in `{:message, _}`; subscription notifications were silently dropped under the old pattern match | ✅ | 2 | 7 | 8 | 3.75 🎯 | `Onchain.Subscription` |
+| 48 | Extract `Onchain.Subscription` into `onchain_ws` package so HTTP-only consumers don't pull `zen_websocket` and its transitive WebSocket deps | ⬜ | 4 | 6 | 5 | 1.38 📋 | `onchain_ws` (new package) |
+
+**Task 48 — Extract subscription into `onchain_ws`.**
+
+Create a sibling package (`../onchain_ws`) that depends on `onchain` (path dep) and `zen_websocket`, and move `Onchain.Subscription` + `Onchain.Subscription.Parser` into it. Base `onchain` should no longer depend on `zen_websocket` after the move.
+
+Motivation: HTTP-only consumers (RPC reads, signing, ERC-20 transfers) currently pull `zen_websocket` and its WebSocket transitive deps transitively even when they never subscribe. Making subscriptions an opt-in capability package matches the portfolio pattern (onchain_aave, onchain_evm, onchain_js, onchain_tempo).
+
+Acceptance criteria:
+- `onchain` `mix.exs` no longer lists `zen_websocket` as a dep
+- `Onchain.Subscription.*` tests run in the new package and pass
+- New repo mirrors sibling packages (CHANGELOG, README, ROADMAP, CLAUDE.md, standard dev tooling per `elixir-setup`)
+- CLAUDE.md Module Layout in `onchain` updated to remove `subscription.ex` + `subscription/parser.ex`
+- CLAUDE.md Portfolio Context section adds `onchain_ws` with "Where does this feature go?" entry
+- Decide on namespace: keep `Onchain.Subscription` (transparent to consumers) or move to `OnchainWS.Subscription` (explicit package boundary). Leaning toward keeping `Onchain.Subscription` since consumers don't need to care about the split.
 
 ---
 
