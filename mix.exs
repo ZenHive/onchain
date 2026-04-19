@@ -1,7 +1,7 @@
 defmodule Onchain.MixProject do
   use Mix.Project
 
-  @version "0.5.0"
+  @version "0.5.1"
   @source_url "https://github.com/ZenHive/onchain"
 
   def project do
@@ -42,7 +42,7 @@ defmodule Onchain.MixProject do
       {:decimal, "~> 2.0"},
       {:descripex, "~> 0.6"},
       {:jason, "~> 1.4"},
-      {:zen_websocket, "~> 0.3"},
+      {:zen_websocket, "~> 0.4"},
 
       # Dev/test tooling
       {:tidewave, "~> 0.5", only: :dev},

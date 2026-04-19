@@ -30,6 +30,8 @@
 | 44 | Fix CLAUDE.md Module Layout drift | `wallet.ex` + `erc20.ex` bullets now accurate |
 | 45 | `ERC20.total_supply/2` + bang variant | Completes standard ERC-20 read surface |
 | 46 | `Hex.from_integer/1` emits lowercase | Matches `Hex.encode/1` case convention |
+| 37 | zen_websocket `send_message` `:disconnected` return | Resolved upstream in zen_websocket 0.4.1 (R042) |
+| 47 | Hotfix: zen_websocket 0.4.x handler contract | Decoded maps replace raw binaries; dispatch path now unit-tested |
 
 ---
 
@@ -108,7 +110,7 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 |---|------|--------|---|---|---|-----|--------|
 | 36 | Extract shared RPC helpers (DRY: 7 duplicated functions between RPC + Trace) | ✅ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.RPC.Helpers` |
 | — | Code review fixes: batch state commit, defensive parsing, array handling, NatSpec | ✅ | — | — | — | — | Multiple |
-| 37 | zen_websocket: `send_message/2` should return `{:error, :disconnected}` instead of `:noproc` exit when server is dead | ⬜ | 2 | 7 | 6 | 3.25 🎯 | `ZenWebsocket.Client` |
+| 37 | zen_websocket: `send_message/2` should return `{:error, :disconnected}` instead of `:noproc` exit when server is dead | ✅ | 2 | 7 | 6 | 3.25 🎯 | `ZenWebsocket.Client` (resolved upstream in 0.4.1, R042) |
 | 38 | Subscription: buffer unknown sub_ids to close subscribe→Agent.update race window (drops notifications silently if WS endpoint doesn't order subscribe response before notifications) | ⬜ | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
 | 39 | Subscription: add `:pending_transactions` integration test (needs provider that broadcasts mempool — Alchemy custom method or local full node) | ⬜ | 2 | 3 | 3 | 1.50 📋 | `test/onchain/subscription_integration_test.exs` |
 | 40 | Switch Credo back to Hex release (moved from `release/1.7` git branch to `{:credo, "~> 1.7"}` — resolved at 1.7.18) | ✅ | 1 | 4 | 3 | 3.50 🎯 | `mix.exs` |
@@ -118,6 +120,7 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 | 44 | Fix CLAUDE.md Module Layout drift: `wallet.ex` and `erc20.ex` bullets now match actual exports | ✅ | 1 | 3 | 4 | 3.50 🎯 | `CLAUDE.md` |
 | 45 | Add `Onchain.ERC20.total_supply/2` (+ bang variant) to complete the standard ERC-20 read surface | ✅ | 2 | 5 | 6 | 2.75 🎯 | `Onchain.ERC20` |
 | 46 | Make `Onchain.Hex.from_integer/1` emit lowercase hex to match `Onchain.Hex.encode/1` | ✅ | 1 | 2 | 2 | 2.00 🚀 | `Onchain.Hex` |
+| 47 | Hotfix: zen_websocket 0.4.x handler contract — decoded maps replace raw binaries in `{:message, _}`; subscription notifications were silently dropped under the old pattern match | ✅ | 2 | 7 | 8 | 3.75 🎯 | `Onchain.Subscription` |
 
 ---
 

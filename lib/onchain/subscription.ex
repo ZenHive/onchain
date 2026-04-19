@@ -302,10 +302,6 @@ defmodule Onchain.Subscription do
 
   # --- Internal helpers ---
 
-  # TODO(upstream): Client.send_message/2 uses GenServer.call — exits with :noproc
-  # if the WebSocket server has died. Callers of subscribe/unsubscribe get a crash instead
-  # of {:error, ...}. Fix in zen_websocket: send_message should return {:error, :disconnected}.
-  #
   # Sends eth_subscribe and stores the sub_id → type mapping in the Agent.
   @spec do_subscribe(Client.t(), pid(), subscription_type(), list()) ::
           {:ok, String.t()} | {:error, term()}
@@ -339,30 +335,34 @@ defmodule Onchain.Subscription do
     fn event -> send(caller, {:subscription, event}) end
   end
 
-  # Builds the internal zen_websocket handler that bridges raw WebSocket
+  # Builds the internal zen_websocket handler that bridges decoded WebSocket
   # messages to parsed, typed events delivered via the consumer's handler.
+  #
+  # Made `def` (with `@doc false`) so the dispatch path can be unit-tested
+  # without spinning up a real WebSocket connection.
+  @doc false
   @spec build_internal_handler(pid(), handler()) :: (term() -> any())
-  defp build_internal_handler(agent, handler) do
+  def build_internal_handler(agent, handler) do
     fn
-      {:message, {:text, data}} ->
-        dispatch_message(data, agent, handler)
-
-      {:message, data} when is_binary(data) ->
-        dispatch_message(data, agent, handler)
-
-      _other ->
-        :ok
-    end
-  end
-
-  # Decodes a raw WebSocket text frame and dispatches subscription notifications.
-  @spec dispatch_message(binary(), pid(), handler()) :: any()
-  defp dispatch_message(data, agent, handler) do
-    case Jason.decode(data) do
-      {:ok, decoded} ->
+      {:message, %{} = decoded} ->
         dispatch_decoded(decoded, agent, handler)
 
-      {:error, _} ->
+      {:message, text} when is_binary(text) ->
+        Logger.debug("Subscription: ignoring non-JSON text frame: #{inspect(text)}")
+        :ok
+
+      {:binary, _bin} ->
+        :ok
+
+      {:unmatched_response, response} ->
+        Logger.debug("Subscription: unmatched JSON-RPC response: #{inspect(response)}")
+        :ok
+
+      {:protocol_error, reason} ->
+        Logger.warning("Subscription: zen_websocket protocol error: #{inspect(reason)}")
+        :ok
+
+      _other ->
         :ok
     end
   end

@@ -6,6 +6,24 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+---
+
+## v0.5.1 — zen_websocket 0.4.x compatibility (2026-04-19)
+
+### Changed
+- **zen_websocket bumped 0.3.1 → 0.4.2** (`mix.exs` constraint widened `~> 0.3` → `~> 0.4`). Picks up upstream fixes for blocked-caller draining (R042), duplicate JSON-RPC ID handling (R043), subscription forwarding to user handler (R038), and `:protocol_error` user-handler delivery (R039). 0.4.0 changes the handler contract: JSON text frames now arrive as decoded maps `{:message, %{}}` instead of raw binaries.
+
+### Fixed
+- **`Onchain.Subscription` handler regression under zen_websocket 0.4.x** — `build_internal_handler/2` was matching the pre-0.4.0 zen_websocket tuples (`{:message, {:text, _}}` / `{:message, binary}`), so subscription notifications under 0.4.x silently fell through and never reached the consumer's handler. Rewritten for the new contract; the dispatch path now also handles `{:binary, _}`, `{:unmatched_response, _}`, and `{:protocol_error, _}`. Visibility changed from `defp` to `def` (with `@doc false`) so the dispatch path is unit-testable without a live WebSocket.
+- **Task 37 (zen_websocket `:disconnected` return) closed as resolved upstream** — zen_websocket 0.4.1 R042 added `RequestCorrelator.fail_all/2` so blocked `send_message` callers now receive `{:error, :disconnected}` automatically on disconnect; the local mitigation Task 37 was scoped for is no longer needed. Stale `TODO(upstream)` comment removed from `Onchain.Subscription`.
+
+### Added
+- **Unit coverage for the subscription dispatch path** — `test/onchain/subscription_test.exs` gains nine cases that inject synthetic decoded-map tuples through `build_internal_handler/2` and assert the full dispatch → parse → handler chain for `:new_heads`, `:logs`, `:pending_transactions`, plus the ignore-paths for non-JSON text, binary frames, unmatched responses, protocol errors, unknown subscription IDs, and unknown handler tuples. End-to-end verified against the local Ethereum archive node (`ws://localhost:8546`) via Tidewave: live `:new_heads` notification parsed and delivered correctly under 0.4.2.
+
+---
+
+## [Pre-0.5.1]
+
 ### Task 44: CLAUDE.md Module Layout drift fix
 
 **Completed** | [D:1/B:3/U:4 → Eff:3.50]
