@@ -35,6 +35,39 @@
 
 ---
 
+## Release Plan
+
+Last shipped: **v0.5.1** (2026-04-19) — zen_websocket 0.4.x compatibility. `[Unreleased]` currently empty.
+
+### 🎯 v0.5.2 — Subscription hardening (next, patch, non-breaking)
+
+Finishes what v0.5.0/0.5.1 started on the subscription path and drops stale dialyzer scaffolding.
+
+| Task | Eff | What | Why in this release |
+|------|-----|------|---------------------|
+| 43 | 3.00 | Remove `@dialyzer {:no_match, ...}` suppressions | Probe first — cheap if upstream fixed (signet 1.6.1, ex_abi 0.8.3), re-close if not |
+| 42 | 1.75 | Deliver subscription parse errors to handler | Silent drops → `{:parse_error, sub_id, reason}` events |
+| 39 | 1.50 | `:pending_transactions` integration test | Blocker (needed mempool-broadcasting provider) resolved by blockwatch-one |
+| 38 | 1.17 | Buffer unknown sub_ids during subscribe race | Close subscribe→Agent.update race window |
+
+**Acceptance:** all four tasks closed or returned with written rationale; no breaking API changes; CHANGELOG `[Unreleased]` → `v0.5.2` on tag.
+
+### 🚀 v0.6.0 — Package split: `onchain_ws` (minor, breaking)
+
+| Task | Eff | What |
+|------|-----|------|
+| 48 | 1.38 | Extract `Onchain.Subscription` (+ `.Parser`) into sibling `onchain_ws`, drop `zen_websocket` dep from `onchain` |
+
+**Breaking:** consumers using subscriptions must add `{:onchain_ws, path: "../onchain_ws"}`. Justifies minor bump. Ship standalone — do not bundle with v0.5.2 patches.
+
+**Acceptance:** per Task 48 criteria already in Code Health section.
+
+### Future (v0.7.0+, unscheduled)
+
+Phase 7 (Tasks 28–29: DEX routing, MEV protection) and Task 41 (ENS enhancements) remain unscored for release grouping — they need consumer-project pressure and their own design phases before inclusion.
+
+---
+
 ## Phase 1: Ethereum Primitives ✅
 
 > 5 tasks complete. See [CHANGELOG.md](CHANGELOG.md#phase-1-ethereum-primitives) for details.
