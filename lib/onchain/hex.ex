@@ -115,12 +115,12 @@ defmodule Onchain.Hex do
     params: [
       n: [kind: :value, description: "Non-negative integer to encode"]
     ],
-    returns: %{type: :string, description: "Compact hex string (no leading zeros)", example: "0xFF"}
+    returns: %{type: :string, description: "Compact lowercase hex string (no leading zeros)", example: "0xff"}
   )
 
   @spec from_integer(non_neg_integer()) :: String.t()
   def from_integer(n) when is_integer(n) and n >= 0 do
-    Signet.Hex.encode_short_hex(n)
+    n |> Signet.Hex.encode_short_hex() |> String.downcase()
   end
 
   # --- valid? ---

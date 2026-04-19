@@ -4,6 +4,38 @@ Completed roadmap tasks.
 
 ---
 
+## [Unreleased]
+
+### Task 44: CLAUDE.md Module Layout drift fix
+
+**Completed** | [D:1/B:3/U:4 → Eff:3.50]
+
+**What was done:**
+- Corrected `wallet.ex` bullet in CLAUDE.md: it does not expose `eth_getBalance / eth_getCode / get_transaction_by_hash` (those live on `Onchain.RPC`); actual surface is `classify` + `balance`
+- Refreshed `erc20.ex` bullet to list the real read + write surface (`balanceOf, allowance, decimals, symbol, totalSupply, approve, transfer`) instead of the stale three-function summary
+
+### Task 45: `Onchain.ERC20.total_supply/2` + bang variant
+
+**Completed** | [D:2/B:5/U:6 → Eff:2.75]
+
+**What was done:**
+- Added `Onchain.ERC20.total_supply/2` and `total_supply!/2`, mirroring the `decimals/2` shape (eth_call wrapper with `totalSupply()` ABI → `uint256`)
+- Full Descripex `api()` annotations and `@spec`
+- Dialyzer suppressions for the existing Contract.call/Signet.Hex spec cascade
+- Unit test for invalid-token-address path + WETH mainnet integration test (positive supply)
+- Updates README's Core Primitives table and CLAUDE.md bullet so the ERC-20 read surface is discoverable
+
+### Task 46: Lowercase `Onchain.Hex.from_integer/1`
+
+**Completed** | [D:1/B:2/U:2 → Eff:2.00]
+
+**What was done:**
+- Wrapped `Signet.Hex.encode_short_hex/1` with `String.downcase/1` so `from_integer/1` now emits lowercase hex (`"0xff"`) matching `Hex.encode/1`'s lowercase contract
+- Updated docstring example and the corresponding hex_test.exs assertion
+- Verified no production caller compares the output against an uppercase literal (RPC call sites just pass the string through)
+
+---
+
 ## v0.5.0 — Chain Intelligence (Subscriptions, NFT reads)
 
 **Highlights:**

@@ -88,6 +88,21 @@ defmodule Onchain.ERC20Test do
     end
   end
 
+  describe "total_supply/2" do
+    test "returns error for invalid token address" do
+      assert {:error, {:invalid_address, "not_a_token"}} =
+               ERC20.total_supply("not_a_token")
+    end
+  end
+
+  describe "total_supply!/2" do
+    test "raises on invalid token address" do
+      assert_raise RuntimeError, ~r/total_supply failed/, fn ->
+        ERC20.total_supply!("not_a_token")
+      end
+    end
+  end
+
   describe "approve/4" do
     test "returns error for invalid spender address" do
       assert {:error, {:invalid_address, "bad_spender"}} =

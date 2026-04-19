@@ -105,7 +105,7 @@ defmodule Onchain.HexTest do
     end
 
     test "encodes 255 as compact hex" do
-      assert "0xFF" = Hex.from_integer(255)
+      assert "0xff" = Hex.from_integer(255)
     end
 
     test "encodes large number correctly" do

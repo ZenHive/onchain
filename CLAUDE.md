@@ -65,13 +65,13 @@ lib/onchain/
   rpc.ex            # eth_call, eth_getLogs, eth_getBalance, receipts, nonces
   rpc/helpers.ex    # shared RPC helper functions
   signer.ex         # key management, transaction signing
-  erc20.ex          # approve, transfer, balanceOf
+  erc20.ex          # reads + writes: balanceOf, allowance, decimals, symbol, totalSupply, approve, transfer
   erc721.ex         # ERC-721 NFT reads: ownerOf, tokenURI, balanceOf
   erc1155.ex        # ERC-1155 multi-token reads: balanceOf, balanceOfBatch, uri
   block.ex          # block queries
   contract.ex       # generic call/4 (encode → eth_call → decode)
   log.ex            # event log queries
-  wallet.ex         # eth_getBalance, eth_getCode, get_transaction_by_hash
+  wallet.ex         # classify (EOA/contract), native ETH balance
   multicall.ex      # batched calls via Multicall3
   ens.ex            # ENS name resolution
   transfer.ex       # ERC-20 Transfer event parsing

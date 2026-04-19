@@ -23,12 +23,13 @@
 | Task | Description | Notes |
 |------|-------------|-------|
 | — | **v0.4.0 Package Split** | Split into onchain (pure Elixir), onchain_aave, onchain_evm |
-| 30 | Wallet primitives (eth_getBalance, eth_getCode, get_transaction_by_hash) | + Wallet convenience module |
-| 32 | Transfer event parser (ERC-20/721/1155 → normalized structs) | Auto-topic injection |
-| 34 | ENS resolution (forward + reverse + text records) | Mainnet integration tested |
-| 33 | ERC-721/ERC-1155 read operations | 7 ERC-721 + 4 ERC-1155 reads, checksummed address returns |
-| 36 | Extract shared RPC helpers | DRY: 7 functions deduplicated |
 | 31 | Real-time subscriptions (eth_subscribe) | zen_websocket, newHeads/pendingTx/logs |
+| 33 | ERC-721/ERC-1155 read operations | 7 ERC-721 + 4 ERC-1155 reads, checksummed address returns |
+| 34 | ENS resolution (forward + reverse + text records) | Mainnet integration tested |
+| 36 | Extract shared RPC helpers | DRY: 7 functions deduplicated |
+| 44 | Fix CLAUDE.md Module Layout drift | `wallet.ex` + `erc20.ex` bullets now accurate |
+| 45 | `ERC20.total_supply/2` + bang variant | Completes standard ERC-20 read surface |
+| 46 | `Hex.from_integer/1` emits lowercase | Matches `Hex.encode/1` case convention |
 
 ---
 
@@ -114,9 +115,9 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 | 41 | ENS enhancements: CCIP-Read / EIP-3668 off-chain lookups, ENSIP-10 wildcard resolution, full UTS-46 / ENSIP-15 Unicode normalization, multi-coin address resolution (currently ETH-only via `addr(bytes32)`) | ⬜ | 6 | 6 | 5 | 0.92 ⚠️ | `Onchain.ENS` |
 | 42 | Subscription: deliver parse errors to the handler as `{:parse_error, sub_id, reason}` events instead of silently dropping malformed notifications | ⬜ | 2 | 4 | 3 | 1.75 🚀 | `Onchain.Subscription` |
 | 43 | Upstream spec fix tracking: remove `@dialyzer {:no_match, ...}` suppressions in ENS/Log/Multicall once upstream `abi` (`ABI.decode/2` no_return) and `signet` (`Hex` specs) publish fixes | ⬜ | 1 | 3 | 3 | 3.00 🎯 | Multiple |
-| 44 | Fix CLAUDE.md Module Layout drift: claims `wallet.ex` holds `eth_getBalance, eth_getCode, get_transaction_by_hash` but actual surface is `balance/classify`; those RPC methods live on `Onchain.RPC`. Audit every bullet in Module Layout against real exports to prevent future instances from calling non-existent functions. | ⬜ | 1 | 3 | 4 | 3.50 🎯 | `CLAUDE.md` |
-| 45 | Add `Onchain.ERC20.total_supply/2` (+ bang variant) to complete the standard ERC-20 read surface. Every other standard read exists (balanceOf, allowance, decimals, symbol). Include unit test + mainnet integration test against WETH. | ⬜ | 2 | 5 | 6 | 2.75 🎯 | `Onchain.ERC20` |
-| 46 | Make `Onchain.Hex.from_integer/1` emit lowercase hex to match `Onchain.Hex.encode/1`. Currently returns `"0xFF"` (uppercase) while `encode/1` returns lowercase. Cosmetic inconsistency — no contract broken. Update tests and docstring example if needed. | ⬜ | 1 | 2 | 2 | 2.00 🚀 | `Onchain.Hex` |
+| 44 | Fix CLAUDE.md Module Layout drift: `wallet.ex` and `erc20.ex` bullets now match actual exports | ✅ | 1 | 3 | 4 | 3.50 🎯 | `CLAUDE.md` |
+| 45 | Add `Onchain.ERC20.total_supply/2` (+ bang variant) to complete the standard ERC-20 read surface | ✅ | 2 | 5 | 6 | 2.75 🎯 | `Onchain.ERC20` |
+| 46 | Make `Onchain.Hex.from_integer/1` emit lowercase hex to match `Onchain.Hex.encode/1` | ✅ | 1 | 2 | 2 | 2.00 🚀 | `Onchain.Hex` |
 
 ---
 
@@ -184,7 +185,7 @@ lib/
     log.ex                          # event log parsing against ABI signatures
     multicall.ex                    # Multicall3 batched reads
     signer.ex                       # key management, transaction signing
-    erc20.ex                        # reads + writes: balanceOf, approve, transfer
+    erc20.ex                        # reads + writes: balanceOf, allowance, decimals, symbol, totalSupply, approve, transfer
     erc721.ex                       # ERC-721 NFT reads: ownerOf, tokenURI, balanceOf
     erc1155.ex                      # ERC-1155 multi-token reads: balanceOf, balanceOfBatch, uri
     wallet.ex                       # classify (EOA/contract), native ETH balance

@@ -49,16 +49,19 @@ defmodule Onchain.ERC20 do
   # here unwraps Contract.call results, so the same cascade applies.
   @dialyzer {:no_match, [balance_of: 3, balance_of!: 3, allowance: 4, allowance!: 4]}
   @dialyzer {:no_match, [decimals: 2, decimals!: 2, symbol: 2, symbol!: 2]}
+  @dialyzer {:no_match, [total_supply: 2, total_supply!: 2]}
   @dialyzer {:no_match, [approve: 4, approve!: 4, transfer: 4, transfer!: 4]}
   @dialyzer {:no_return, [balance_of!: 2, balance_of!: 3]}
   @dialyzer {:no_return, [allowance!: 3, allowance!: 4]}
   @dialyzer {:no_return, [decimals!: 1, decimals!: 2]}
   @dialyzer {:no_return, [symbol!: 1, symbol!: 2]}
+  @dialyzer {:no_return, [total_supply!: 1, total_supply!: 2]}
   @dialyzer {:no_return, [approve!: 4, transfer!: 4]}
   @dialyzer {:no_contracts, [balance_of!: 2, balance_of!: 3]}
   @dialyzer {:no_contracts, [allowance!: 3, allowance!: 4]}
   @dialyzer {:no_contracts, [decimals!: 1, decimals!: 2]}
   @dialyzer {:no_contracts, [symbol!: 1, symbol!: 2]}
+  @dialyzer {:no_contracts, [total_supply!: 1, total_supply!: 2]}
   @dialyzer {:no_contracts, [approve!: 4, transfer!: 4]}
 
   # --- balance_of ---
@@ -235,6 +238,46 @@ defmodule Onchain.ERC20 do
     case symbol(token, opts) do
       {:ok, value} -> value
       {:error, reason} -> raise "symbol failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- total_supply ---
+
+  api(:total_supply, "Get the total supply of a token.",
+    params: [
+      token: [kind: :value, description: "ERC-20 token contract address"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout, :block"]
+    ],
+    returns: %{
+      type: "{:ok, non_neg_integer()} | {:error, term()}",
+      description: "Raw total supply (use decimals/2 + Onchain.Decimal.to_decimal/2 to normalize)",
+      example: "1000000000000"
+    }
+  )
+
+  @spec total_supply(String.t() | binary(), keyword()) ::
+          {:ok, non_neg_integer()} | {:error, term()}
+  def total_supply(token, opts \\ []) do
+    with {:ok, [value]} <- Contract.call(token, "totalSupply()", [], "(uint256)", opts) do
+      {:ok, value}
+    end
+  end
+
+  # --- total_supply! ---
+
+  api(:total_supply!, "Get the total supply of a token. Raises on error.",
+    params: [
+      token: [kind: :value, description: "ERC-20 token contract address"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout, :block"]
+    ],
+    returns: %{type: :non_neg_integer, description: "Raw total supply"}
+  )
+
+  @spec total_supply!(String.t() | binary(), keyword()) :: non_neg_integer()
+  def total_supply!(token, opts \\ []) do
+    case total_supply(token, opts) do
+      {:ok, value} -> value
+      {:error, reason} -> raise "total_supply failed: #{inspect(reason)}"
     end
   end
 
