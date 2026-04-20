@@ -29,6 +29,9 @@ defmodule Onchain.Subscription do
   - `{:new_heads, subscription_id, head_map}`
   - `{:pending_transactions, subscription_id, tx_hash}`
   - `{:logs, subscription_id, log_map}`
+  - `{:parse_error, subscription_id, reason}` — malformed notification; `reason` is a
+    tagged tuple from `Onchain.Subscription.Parser.parse_event/2`
+    (`{:invalid_head, _}` | `{:invalid_tx_hash, _}` | `{:invalid_log, _}`)
 
   ## Error Format
 
@@ -104,6 +107,7 @@ defmodule Onchain.Subscription do
           {:new_heads, String.t(), head()}
           | {:pending_transactions, String.t(), String.t()}
           | {:logs, String.t(), log()}
+          | {:parse_error, String.t(), term()}
 
   @type handler :: (event() -> any())
 
@@ -385,21 +389,17 @@ defmodule Onchain.Subscription do
   @spec dispatch_event(subscription_type() | nil, String.t(), term(), handler()) :: any()
   defp dispatch_event(nil, _sub_id, _result, _handler), do: :ok
 
-  # TODO: Deliver parse errors to the handler as {:parse_error, sub_id, reason} events
-  # so consumers can decide how to handle malformed notifications. Currently logged and
-  # skipped because this runs inside zen_websocket's callback — crashing here would kill
-  # the WebSocket connection for all subscriptions.
   defp dispatch_event({:logs, _filter}, sub_id, result, handler) do
     case Parser.parse_event(:logs, result) do
       {:ok, parsed} -> handler.({:logs, sub_id, parsed})
-      {:error, reason} -> Logger.debug("Subscription #{sub_id} log parse error: #{inspect(reason)}")
+      {:error, reason} -> handler.({:parse_error, sub_id, reason})
     end
   end
 
   defp dispatch_event(type, sub_id, result, handler) when is_atom(type) do
     case Parser.parse_event(type, result) do
       {:ok, parsed} -> handler.({type, sub_id, parsed})
-      {:error, reason} -> Logger.debug("Subscription #{sub_id} #{type} parse error: #{inspect(reason)}")
+      {:error, reason} -> handler.({:parse_error, sub_id, reason})
     end
   end
 

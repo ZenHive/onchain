@@ -31,6 +31,8 @@ defmodule Onchain.Log do
   use Descripex, namespace: "/log"
 
   # TODO: Remove when upstream abi spec is fixed (ABI.decode/2 no_return).
+  # Last probed 2026-04-19 against abi 1.3.0 — still broken.
+  # Re-probe: run `mix deps.update abi`, confirm version advanced, then strip and re-run dialyzer.
   @dialyzer {:no_match, [decode_event: 2, decode_event!: 2, decode_non_indexed_params: 2]}
   @dialyzer {:no_return, [decode_event!: 2]}
   @dialyzer {:no_contracts, [decode_event!: 2]}

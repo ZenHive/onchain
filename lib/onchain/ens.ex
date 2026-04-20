@@ -57,6 +57,8 @@ defmodule Onchain.ENS do
 
   # TODO: Remove when upstream specs are fixed (abi: ABI.decode/2 no_return, signet: Hex specs).
   # Upstream Signet.Hex spec cascade through Contract.call/5 → ABI.decode_response/2.
+  # Last probed 2026-04-19 against signet 1.6.1 / abi 1.3.0 — still broken.
+  # Re-probe: run `mix deps.update signet abi`, confirm versions advanced, then strip and re-run dialyzer.
   @dialyzer {:no_match,
              [
                resolve: 2,

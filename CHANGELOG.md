@@ -6,6 +6,12 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Changed
+- **Task 42 — Subscription parse errors delivered to handler.** `Onchain.Subscription` previously logged parse failures at `Logger.debug` and dropped the notification. Dispatch now emits `{:parse_error, sub_id, reason}` to the handler, where `reason` is the tagged tuple from `Onchain.Subscription.Parser.parse_event/2` (`{:invalid_head, _}` | `{:invalid_tx_hash, _}` | `{:invalid_log, _}`). Consumers can now see, count, or react to malformed notifications without destabilizing the WebSocket transport (dispatch still runs inside zen_websocket's callback, so handler errors remain the consumer's concern). The Logger.debug lines are removed — double-emission would just be noise. The `nil`-sub_id branch (subscribe→Agent.update race, Task 38) is unchanged.
+
+### Maintenance
+- **Task 43 probe: upstream dialyzer suppressions still required** (2026-04-19). Stripped the `@dialyzer {:no_match, :no_return, :no_contracts}` blocks from `Onchain.ENS`, `Onchain.Log`, and `Onchain.Multicall` and re-ran `mix dialyzer.json`: 48 warnings returned, all matching the documented cascade (invalid_contract specs + no_return + `{:error, _}` pattern_match on bang functions). Root causes still live in `abi 1.3.0` (`ABI.decode/2` specced as `no_return`) and `signet 1.6.1` (`Signet.Hex` specs). Suppressions restored with probe date annotated in each TODO comment; next probe waits on upstream releases.
+
 ---
 
 ## v0.5.1 — zen_websocket 0.4.x compatibility (2026-04-19)

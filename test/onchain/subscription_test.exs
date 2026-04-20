@@ -144,6 +144,34 @@ defmodule Onchain.SubscriptionTest do
       refute log.removed
     end
 
+    test "dispatches {:parse_error, sub_id, {:invalid_head, _}} on malformed :new_heads result", ctx do
+      Agent.update(ctx.agent, &Map.put(&1, "0xsub_heads", :new_heads))
+
+      ctx.internal.(
+        {:message,
+         %{
+           "method" => "eth_subscription",
+           "params" => %{"subscription" => "0xsub_heads", "result" => "not a map"}
+         }}
+      )
+
+      assert_receive {:event, {:parse_error, "0xsub_heads", {:invalid_head, "not a map"}}}, 100
+    end
+
+    test "dispatches {:parse_error, sub_id, {:invalid_log, _}} on malformed :logs result", ctx do
+      Agent.update(ctx.agent, &Map.put(&1, "0xsub_logs", {:logs, %{}}))
+
+      ctx.internal.(
+        {:message,
+         %{
+           "method" => "eth_subscription",
+           "params" => %{"subscription" => "0xsub_logs", "result" => "not a map"}
+         }}
+      )
+
+      assert_receive {:event, {:parse_error, "0xsub_logs", {:invalid_log, "not a map"}}}, 100
+    end
+
     test "silently drops notification for unknown subscription_id", ctx do
       ctx.internal.(
         {:message,
