@@ -29,21 +29,38 @@ defmodule Onchain.RPC.Helpers do
   end
 
   @doc false
-  # Validates and normalizes an address to a 0x-prefixed lowercase hex string.
-  # Delegates to Address.validate/1, then encodes the validated binary.
+  # Validates an address at the RPC-helper boundary and normalizes to lowercase hex.
+  # Accepts either:
+  #   * "0x" + exactly 40 hex chars (canonical hex form)
+  #   * 20-byte raw binary (internal flow from Onchain.Address.validate/1)
+  # Rejects malformed hex strings (wrong length, bad chars, missing 0x) — including
+  # the Task 55 ambiguity: a 20-byte binary whose leading two bytes are the ASCII
+  # "0x" literal. Those are almost always a hex string of wrong length rather than
+  # an intentional raw binary address, and silently re-encoding them produced a
+  # wildly different on-chain address.
   @spec ensure_hex_address(term()) :: {:ok, String.t()} | {:error, term()}
-  def ensure_hex_address(input) do
-    case Onchain.Address.validate(input) do
-      {:ok, binary} -> {:ok, Onchain.Hex.encode(binary)}
-      {:error, _} -> {:error, {:invalid_address, input}}
-    end
+  def ensure_hex_address("0x" <> rest = input) when byte_size(rest) == 40 do
+    if Onchain.Hex.valid?(input),
+      do: {:ok, "0x" <> String.downcase(rest)},
+      else: {:error, {:invalid_address, input}}
   end
 
+  def ensure_hex_address(<<"0x", _::binary>> = input), do: {:error, {:invalid_address, input}}
+
+  def ensure_hex_address(bin) when is_binary(bin) and byte_size(bin) == 20, do: {:ok, Onchain.Hex.encode(bin)}
+
+  def ensure_hex_address(input), do: {:error, {:invalid_address, input}}
+
   @doc false
-  # Validates that data is a 0x-prefixed hex string.
+  # Validates that data is a 0x-prefixed even-length hex string.
+  # "0x" alone (empty calldata) is accepted.
   @spec ensure_hex_data(term()) :: {:ok, String.t()} | {:error, term()}
-  def ensure_hex_data("0x" <> _ = data) do
-    if Onchain.Hex.valid?(data), do: {:ok, data}, else: {:error, {:invalid_data, data}}
+  def ensure_hex_data("0x" <> rest = data) do
+    cond do
+      not Onchain.Hex.valid?(data) -> {:error, {:invalid_data, data}}
+      rem(byte_size(rest), 2) != 0 -> {:error, {:invalid_data, data}}
+      true -> {:ok, data}
+    end
   end
 
   def ensure_hex_data(input), do: {:error, {:invalid_data, input}}

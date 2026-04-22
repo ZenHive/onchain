@@ -27,6 +27,7 @@ This repo is part of a multi-library portfolio. The boundary is **ephemeral vs d
 - **onchain_evm** — Rust NIFs: revm simulation, Solidity parsing, debug/trace, codegen (depends on onchain + Rustler)
 - **onchain_js** — JS bridge: npm packages on the BEAM via QuickBEAM (depends on onchain + Zig NIFs)
 - **onchain_tempo** — Tempo blockchain primitives: 0x76 transactions, TIP-20 encoding, RPC, TransferWithMemo parsing (depends on onchain, pure Elixir)
+- **onchain_agents** *(planned)* — EIP-8004 Trustless Agents: Identity / Reputation / Validation registries, plus Descripex manifest bridge for trustless verification (depends on onchain, pure Elixir). Triggered when a consumer needs agent-economy registration; see `ROADMAP.md` "EIP Tracking"
 - **rexex** — chain indexing, storing durable facts (ExEx ingestion, Postgres, reorg-safe history, dashboards)
 - **hologram** — JS runtimes, npm access, headless/edge execution (Elixir interpreter in any JS runtime)
 
@@ -37,11 +38,14 @@ This repo is part of a multi-library portfolio. The boundary is **ephemeral vs d
 3. Runs npm packages on the BEAM (solc-js, Uniswap SDK, etc.)? → **onchain_js**
 4. Persists or queries chain facts over time? → **rexex**
 5. Runs Elixir in JS or reaches npm/edge runtimes? → **hologram**
-6. Composes those capabilities into a user-facing workflow? → **separate consumer repo**
+6. Registers / queries / validates agents via EIP-8004 registries? → **onchain_agents** (when built)
+7. Composes those capabilities into a user-facing workflow? → **separate consumer repo**
+
+**Scope split with signet (substrate layer).** signet = Ethereum primitives (key management, signing, transaction encoding, raw RPC, hex/ABI/typed-data). onchain (and its siblings) = everything buildable on top of `Signet.*` from outside signet. **Rule:** if the feature requires signet internals (new tx type, signer extension, primitive encoding), it's a signet-PR candidate. Otherwise — including RPC method wrappers, ERC standards, protocol parsers, telemetry facades, retry/backoff, fee helpers, EIP-8004 registries — it lives in this portfolio. See `../signet/ROADMAP.md` "Scope principle" for the full classification and EIP triage rubric.
 
 **Watch boundary:** onchain Phase 8 (eth_subscribe, Transfer parser) overlaps rexex territory. The distinction: onchain returns results to the caller (ephemeral); rexex writes facts to Postgres (durable). If a consumer needs historical queries over indexed data, that's rexex.
 
-**Agent consumers:** AI agents are first-class consumers of this library. See [AGENT_WISHLIST.md](AGENT_WISHLIST.md) for use cases and scenarios.
+**Agent consumers:** AI agents are first-class consumers of this library. See [AGENT_WISHLIST.md](AGENT_WISHLIST.md) for use cases and scenarios. EIP-8004 registration / reputation / validation lives in `onchain_agents` — see `ROADMAP.md` "EIP Tracking".
 
 ## Architecture
 

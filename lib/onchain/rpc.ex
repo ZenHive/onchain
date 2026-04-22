@@ -228,6 +228,11 @@ defmodule Onchain.RPC do
 
   @block_tags Onchain.RPC.Helpers.block_tags()
 
+  # Canonical log-filter keys accepted by eth_get_logs/2.
+  # Unknown keys (including JSON-RPC-style string keys like "fromBlock") are
+  # rejected loudly rather than silently dropped — see Task 56.
+  @allowed_log_filter_keys [:address, :topics, :from_block, :to_block]
+
   @spec get_block_by_number(integer() | String.t(), keyword()) ::
           {:ok, map()} | {:error, term()}
   def get_block_by_number(block_id, opts \\ [])
@@ -481,25 +486,34 @@ defmodule Onchain.RPC do
       filter: [
         kind: :value,
         description:
-          "Filter map with keys: :address (hex string or binary), :topics (list), :from_block (integer or tag), :to_block (integer or tag)"
+          "Filter map. Only these atom keys are accepted: :address (hex string), :topics (list), :from_block (integer or tag), :to_block (integer or tag). Unknown keys (including JSON-RPC-style string keys like \"fromBlock\") return {:error, {:invalid_filter_key, key}}."
       ],
       opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
     ],
     returns: %{
       type: "{:ok, [log_map]} | {:error, term}",
       description:
-        "List of log maps with keys: address, topics, data, block_number, transaction_hash, log_index, transaction_index, removed"
+        "List of log maps with keys: address, topics, data, block_number, transaction_hash, log_index, transaction_index, removed. Errors: {:invalid_filter_key, key} for unknown filter keys; {:invalid_filter, {field, value}} for bad values."
     }
   )
 
   @spec eth_get_logs(map(), keyword()) :: {:ok, [map()]} | {:error, term()}
   def eth_get_logs(filter, opts \\ []) when is_map(filter) do
-    with {:ok, rpc_filter} <- build_log_filter(filter) do
+    with :ok <- validate_log_filter_keys(filter),
+         {:ok, rpc_filter} <- build_log_filter(filter) do
       case do_rpc("eth_getLogs", [rpc_filter], to_signet_opts(opts)) do
         {:ok, logs} when is_list(logs) -> {:ok, Enum.map(logs, &parse_log/1)}
         {:ok, other} -> {:error, {:rpc_error, %{message: "unexpected response: #{inspect(other)}"}}}
         error -> error
       end
+    end
+  end
+
+  @spec validate_log_filter_keys(map()) :: :ok | {:error, {:invalid_filter_key, term()}}
+  defp validate_log_filter_keys(filter) do
+    case Map.keys(filter) -- @allowed_log_filter_keys do
+      [] -> :ok
+      [unknown | _] -> {:error, {:invalid_filter_key, unknown}}
     end
   end
 

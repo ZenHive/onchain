@@ -30,7 +30,7 @@ defmodule Onchain.Subscription do
   - `{:pending_transactions, subscription_id, tx_hash}`
   - `{:logs, subscription_id, log_map}`
   - `{:parse_error, subscription_id, reason}` — malformed notification; `reason` is a
-    tagged tuple from `Onchain.Subscription.Parser.parse_event/2`
+    tagged tuple from the internal parser
     (`{:invalid_head, _}` | `{:invalid_tx_hash, _}` | `{:invalid_log, _}`)
 
   ## Error Format

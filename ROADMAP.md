@@ -33,6 +33,8 @@
 | 37 | zen_websocket `send_message` `:disconnected` return | Resolved upstream in zen_websocket 0.4.1 (R042) |
 | 47 | Hotfix: zen_websocket 0.4.x handler contract | Decoded maps replace raw binaries; dispatch path now unit-tested |
 | 42 | Deliver subscription parse errors to handler | `{:parse_error, sub_id, reason}` events replace silent Logger.debug drop |
+| 55 | Harden RPC address/data input validation | Tightened `ensure_hex_address/1` (rejects ASCII-"0x" 20-byte collision + odd-length bodies) and `ensure_hex_data/1` (rejects odd-length hex) |
+| 56 | `eth_get_logs/2` filter-key whitelist | Unknown keys (including JSON-RPC-style `"fromBlock"`) now return `{:invalid_filter_key, key}` instead of silent `{:ok, []}` |
 
 ---
 
@@ -156,6 +158,49 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 | 46 | Make `Onchain.Hex.from_integer/1` emit lowercase hex to match `Onchain.Hex.encode/1` | ✅ | 1 | 2 | 2 | 2.00 🚀 | `Onchain.Hex` |
 | 47 | Hotfix: zen_websocket 0.4.x handler contract — decoded maps replace raw binaries in `{:message, _}`; subscription notifications were silently dropped under the old pattern match | ✅ | 2 | 7 | 8 | 3.75 🎯 | `Onchain.Subscription` |
 | 48 | Extract `Onchain.Subscription` into `onchain_ws` package so HTTP-only consumers don't pull `zen_websocket` and its transitive WebSocket deps | ⬜ | 4 | 6 | 5 | 1.38 📋 | `onchain_ws` (new package) |
+| 55 | Harden `Onchain.RPC.Helpers` address/data validation — four silent-corruption / contract-violation paths | ✅ | 2 | 9 | 8 | 4.25 🎯 | `Onchain.RPC.Helpers` |
+| 56 | 🐛 `Onchain.RPC.eth_get_logs/2` silently ignores wrong filter-key names (`fromBlock`/`toBlock` vs `:from_block`/`:to_block`) — returns `{:ok, []}` instead of erroring | ✅ | 2 | 6 | 7 | 3.25 🎯 | `Onchain.RPC` |
+| 60 | Log filter ergonomics: accept camelCase `"fromBlock"` / `"toBlock"` aliases (post-Task 56 follow-up — strict whitelist is easy to loosen via a normalization layer) | ⬜ | 2 | 4 | 4 | 2.00 🚀 | `Onchain.RPC` |
+| 61 | `eth_get_logs/2` filter should support `:block_hash` (EIP-1474 — `blockHash` excludes `fromBlock`/`toBlock` when set) — currently rejected by Task 56 whitelist | ⬜ | 2 | 3 | 4 | 1.75 🚀 | `Onchain.RPC` |
+| 57 | Unify RPC return shapes: `get_transaction_by_hash/2` returns decoded atom-keyed struct, `get_block_by_number/2` returns raw string-keyed hex map — pick one | ⬜ | 4 | 6 | 6 | 1.50 🚀 | `Onchain.RPC` |
+| 58 | Alias `Onchain.ABI.decode_types/2` → `decode_response/2` + document tuple-signature requirement | ⬜ | 1 | 3 | 4 | 3.50 🎯 | `Onchain.ABI` |
+
+**Task 55 — Harden `Onchain.RPC.Helpers` address/data validation.**
+
+Discovered 2026-04-22 during `onchain_aave` Task 41 (first real consumer integration through `onchain_evm`). Four bugs in one file — all silent-corruption or contract-violating. Two are critical:
+
+- **`ensure_hex_address/1` silently corrupts 20-byte strings that look like short `0x` inputs.** `"0x" <> String.duplicate("a", 18)` is 20 chars / 20 bytes (ASCII); it matches the 20-byte-binary branch and returns `{:ok, "0x3078616161..."}` — the ASCII codes of `"0x"` and `"a"` hex-encoded into a completely different address. A user typo routes an RPC call to a wrong address with no way to detect. Fix: dispatch on `"0x" <> _` prefix before the 20-byte-binary branch.
+- **`ensure_hex_address/1` silently zero-pads 39-char `0x` strings.** `"0x" <> "a" * 39` → `{:ok, "0x0aaa...aaa"}` (odd-length hex body silently zero-padded to 40 = 20 bytes). Fix: reject all non-42-char `0x`-prefixed inputs.
+- **`ensure_hex_address/1` accepts 40-char hex without `0x` prefix.** Inherited from `Address.validate/1`'s permissive input handling (by design — "with or without 0x"), but the RPC-helper layer should require `0x`-prefix so ambiguity doesn't reach `Signet.RPC`. Also the stepping stone to the critical 20-byte collision above.
+- **`ensure_hex_data/1` accepts odd-length `0x` strings.** `"0xabc"` passes Elixir; Rust in `onchain_evm` surfaces it as `{:evm_error, "invalid hex: Odd number of digits"}` — wrong error class for what's clearly invalid input data. Catch at Elixir as `{:invalid_data, _}`.
+
+**Acceptance:** per-failure-mode unit tests; all four paths return `{:error, {:invalid_address, _}}` or `{:error, {:invalid_data, _}}`; zero silent coercion; `onchain_aave` and `onchain_evm` test suites stay green.
+
+---
+
+**Task 56 — `eth_get_logs/2` silent key-drop.**
+
+Discovered 2026-04-22 during onchain_aave on-chain investigation: passing JSON-RPC-style keys (`fromBlock`, `toBlock`) to the filter map returns `{:ok, []}` instead of erroring — the caller sees "no logs in range" when the real cause is "filter had zero matching keys". Lost ~15 minutes to this; silent empties are the worst failure mode for discovery code.
+
+Fix: validate filter keys at entry. Either reject unknown keys (`{:error, {:invalid_filter_key, key}}`), or accept both snake_case and camelCase. Either beats silent drop. Unit test the rejection / normalization path.
+
+---
+
+**Task 57 — Unify `get_block_*` / `get_transaction_*` return shapes.**
+
+`get_transaction_by_hash/2` returns an atom-keyed struct with integers decoded (`%{value: 0, block_number: 24933341, …}`). `get_block_by_number/2` returns a raw string-keyed map with hex-string values (`%{"baseFeePerGas" => "0x7e479377", …}`). Callers have to remember which returns which, and the second shape forces manual `String.to_integer/2`.
+
+Pick one: either both decode to atom-keyed structs (`Onchain.Block.t()`, `Onchain.Transaction.t()`), or both surface raw string-keyed maps (caller-decodes). Leaning toward decoded structs — matches the Phase 8 transfer-parser direction and the `Onchain.Transfer` pattern.
+
+Breaking change for consumers of `get_block_by_number/2`; justify with a minor-version bump and a brief migration note in CHANGELOG.
+
+---
+
+**Task 58 — `ABI.decode_types` alias + tuple-sig docs.**
+
+`decode_response(sig, hex)` is the right function for decoding calldata return data by type signature, but `decode_types` is a more natural name when the input isn't an RPC response (e.g. decoding arbitrary ABI-encoded bytes). Aliasing is 5 lines. Also document in the docstring that the sig string *must* be wrapped in parentheses (`"(address,uint256)"` not `"address,uint256"`) — bare comma-separated types error with an unhelpful message. Minor polish, but both footguns are real (I hit the first, expected the second by name).
+
+---
 
 **Task 48 — Extract subscription into `onchain_ws`.**
 
@@ -170,6 +215,69 @@ Acceptance criteria:
 - CLAUDE.md Module Layout in `onchain` updated to remove `subscription.ex` + `subscription/parser.ex`
 - CLAUDE.md Portfolio Context section adds `onchain_ws` with "Where does this feature go?" entry
 - Decide on namespace: keep `Onchain.Subscription` (transparent to consumers) or move to `OnchainWS.Subscription` (explicit package boundary). Leaning toward keeping `Onchain.Subscription` since consumers don't need to care about the split.
+
+---
+
+## Phase 10: RPC Composition Layer
+
+**Motivation:** Per the scope split with signet (see `../signet/ROADMAP.md` "Scope principle"), onchain is home for everything buildable on top of `Signet.*` public surface. This phase collects RPC method wrappers, observability facades, and helpers over signet structs that would otherwise have been upstream-PR candidates but correctly belong here. Each task is small; not urgent individually. Batch as needed — no consumer blocking.
+
+| # | Task | Status | D | B | U | Eff | Module |
+|---|------|--------|---|---|---|-----|--------|
+| 49 | `Onchain.RPC.get_proof/3` — wrap `eth_getProof` (account + storage-slot Merkle proofs) | ⬜ | 2 | 4 | 4 | 2.00 🚀 | `Onchain.RPC` |
+| 50 | `Onchain.RPC.syncing/1` — wrap `eth_syncing` | ⬜ | 1 | 2 | 3 | 2.50 🎯 | `Onchain.RPC` |
+| 51 | `Onchain.RPC.batch/2` — JSON-RPC 2.0 array-batched requests (single round-trip over N method calls) | ⬜ | 4 | 6 | 5 | 1.38 📋 | `Onchain.RPC` |
+| 52 | Telemetry events around `Onchain.RPC` request path (`[:onchain, :rpc, :request]`) | ⬜ | 3 | 5 | 5 | 1.67 🚀 | `Onchain.RPC` |
+| 53 | `Onchain.Fees.suggest_fees/2` — take `Signet.FeeHistory.t()` + percentile, return `{base_fee, max_priority, max_fee}` recommendation | ⬜ | 2 | 5 | 6 | 2.75 🎯 | `Onchain.Fees` (new) |
+| 54 | Opt-in retry/backoff wrapper over `Signet.RPC.send_rpc/3` with configurable policy (default: no retry — preserves current behavior) | ⬜ | 4 | 5 | 4 | 1.13 📋 | `Onchain.RPC` |
+| 59 | `Onchain.RPC.call/4` — generic JSON-RPC passthrough for methods not covered by named wrappers (`eth_getStorageAt`, `debug_traceTransaction`, `trace_call`, `eth_feeHistory`, …) | ⬜ | 2 | 7 | 8 | 3.75 🎯 | `Onchain.RPC` |
+
+**Task descriptions:**
+
+**49 — eth_getProof.** Merkle proof retrieval for account + storage slots. Light clients, cross-chain proofs. `Signet.RPC.send_rpc/3` call with parsed hex response.
+
+**51 — Batch RPC.** JSON-RPC 2.0 allows array-batched requests. Currently each `Signet.RPC.send_rpc/3` is a separate HTTP round-trip. For indexers doing N `eth_call`s this is a real latency win. Implemented here because batching is composition over signet's primitive transport.
+
+**52 — Telemetry.** Zero runtime cost when no handler is attached. Standard Elixir lib pattern. Consumers measure RPC latency / error rates without patching signet.
+
+**53 — Fee suggestion.** `Signet.FeeHistory` is a deserializer-only module. Every app reimplements base-fee + priority-fee percentile math. Pure function over the struct.
+
+**54 — Retry/backoff.** Opt-in via keyword policy. Changing `send_rpc` default behavior upstream would be risky (silently changes every consumer); a downstream wrapper is the correct posture per the scope principle.
+
+**59 — Generic RPC passthrough.** Named wrappers cover the common Ethereum JSON-RPC surface, but debug / trace / storage-inspection work regularly needs methods not in the curated list (`eth_getStorageAt` for EIP-1967 slot inspection, `debug_traceTransaction` / `trace_call` for execution tracing, `eth_feeHistory` if Task 53's wrapper hasn't landed, `eth_getProof` if Task 49 hasn't). Discovered 2026-04-22 while verifying an upgradeable-proxy implementation address — had to drop to raw `Req.post!` for `eth_getStorageAt`. Shape: `Onchain.RPC.call(method, params, opts \\ [])` returning `{:ok, result} | {:error, term}`; thin wrapper over `Signet.RPC.send_rpc/3` (or equivalent), no decoding (the caller knows what they asked for). Complements but doesn't replace named wrappers — each named wrapper adds value (typespec, docstring, return-type decoding, descripex hints) over the bare passthrough.
+
+---
+
+## EIP Tracking
+
+Triage rubric: see `../signet/ROADMAP.md` "EIP triage rubric". Summary — Core tx-type EIPs go to signet; Interface (JSON-RPC) EIPs and ERC standards go to onchain or siblings.
+
+**Policy:** EIP enters the roadmap only when a consumer project needs it. Don't build speculatively.
+
+### Active
+
+| EIP | Name | Home | Status | Notes |
+|---|---|---|---|---|
+| 8004 | Trustless Agents — Identity / Reputation / Validation registries | **`onchain_agents`** (new sibling, planned) | ⬜ Planned | Pushed by Tito for agent-economy work. Descripex manifest bridge per `~/.claude/includes/agent-economy.md` Tier 3. See `onchain_agents` scope below — kick off when the repo is created |
+| 4844 | Blob transactions | signet Phase 10 Task 30 | ⬜ Gated on Phase 0 | L2 rollup consumer support |
+| 7702 | Set EOA code (auth-list txs) | signet Phase 10 Task 31 | ⬜ Gated on Phase 0 | Account-abstraction flows |
+
+### Watch (no consumer pressure yet)
+
+Add rows as EIPs surface in consumer conversations. Mark with ⬜ watching; promote to the Active table with a trigger condition when a consumer needs it.
+
+### `onchain_agents` — sibling package scope (planned)
+
+New sibling repo following the portfolio pattern (onchain_aave, onchain_evm, onchain_js, onchain_tempo). Matches the `agent-economy.md` guidance that EIP-8004 registration belongs in an agent-wrapper project, not the base Ethereum library. Initial scope:
+
+- `OnchainAgents.Identity` — read: lookup agent by address; write: register / update agent identity
+- `OnchainAgents.Reputation` — read: scores + attestations; write: submit reputation
+- `OnchainAgents.Validation` — read: validation records; write: submit validation result
+- `OnchainAgents.Manifest` — bridge between `Descripex.Manifest.build/1` output and EIP-8004 registration (matches `agent-economy.md` Tier 3 — "the manifest bridges code to all three registries")
+
+**Create the repo when:** first consumer app needs to register an agent, submit reputation, or validate. Stub `ROADMAP.md` + `CLAUDE.md` at creation using `onchain_aave` as template. Keep base `onchain` dep-minimal for non-agent consumers.
+
+**Acceptance for first milestone:** register an agent, retrieve its identity record, emit a Descripex-based manifest URL, verify a single reputation attestation — smallest end-to-end slice proving the four modules compose correctly.
 
 ---
 

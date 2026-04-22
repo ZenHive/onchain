@@ -6,26 +6,72 @@ defmodule Onchain.RPC.HelpersTest do
   # --- ensure_hex_address/1 ---
 
   describe "ensure_hex_address/1" do
-    test "accepts valid 0x-prefixed hex address" do
-      addr = "0x" <> String.duplicate("aa", 20)
-      assert {:ok, "0x" <> _} = Helpers.ensure_hex_address(addr)
+    test "accepts valid 0x-prefixed hex address and returns lowercase" do
+      addr = "0x" <> String.duplicate("AA", 20)
+      assert {:ok, lower} = Helpers.ensure_hex_address(addr)
+      assert lower == "0x" <> String.duplicate("aa", 20)
     end
 
-    test "accepts 20-byte binary address" do
-      assert {:ok, "0x" <> _} = Helpers.ensure_hex_address(<<1::160>>)
+    test "accepts 20-byte raw binary address and encodes as lowercase hex" do
+      bin = <<1::160>>
+      assert {:ok, "0x0000000000000000000000000000000000000001"} = Helpers.ensure_hex_address(bin)
     end
 
-    test "accepts bare hex address without 0x prefix" do
+    test "rejects bare hex address without 0x prefix" do
       bare_addr = String.duplicate("aa", 20)
-      assert {:ok, "0x" <> _} = Helpers.ensure_hex_address(bare_addr)
+      assert {:error, {:invalid_address, ^bare_addr}} = Helpers.ensure_hex_address(bare_addr)
     end
 
-    test "rejects address with wrong byte size" do
+    test "rejects 20-byte ASCII that starts with '0x' (Task 55 silent-ASCII-encode bug)" do
+      # "0x" + 18 'a' chars = 20 bytes total. Previously matched the 20-byte-binary
+      # branch in Address.validate/1 and got hex-encoded as ASCII — routing calls
+      # to a wildly wrong address. Now rejected for length.
+      input = "0x" <> String.duplicate("a", 18)
+      assert {:error, {:invalid_address, ^input}} = Helpers.ensure_hex_address(input)
+    end
+
+    test "loudly rejects rare 20-byte raw binary whose first two bytes are ASCII '0x'" do
+      # Deliberate Task 55 tradeoff: keep the prefix-first rejection that prevents
+      # typo-strings from being silently re-encoded into a different address, even
+      # though it also catches this rare non-printable raw-binary shape.
+      input = <<0x30, 0x78, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17>>
+
+      case Helpers.ensure_hex_address(input) do
+        {:error, {:invalid_address, ^input}} ->
+          :ok
+
+        {:ok, address} ->
+          flunk("""
+          Expected loud rejection for the rare 20-byte raw binary starting with ASCII "0x",
+          but got a successful normalization to #{inspect(address)}.
+          """)
+
+        other ->
+          flunk("""
+          Expected {:error, {:invalid_address, input}} for the rare 20-byte raw binary
+          starting with ASCII "0x", got: #{inspect(other)}
+          """)
+      end
+    end
+
+    test "rejects 0x-prefixed string with 39-char body (Task 55 silent zero-pad bug)" do
+      # Previously accepted and zero-padded to 40 chars by upstream decoding,
+      # producing a 0x0aaa... address that doesn't match the user's intent.
+      input = "0x" <> String.duplicate("a", 39)
+      assert {:error, {:invalid_address, ^input}} = Helpers.ensure_hex_address(input)
+    end
+
+    test "rejects 0x-prefixed string with 41-char body" do
+      input = "0x" <> String.duplicate("a", 41)
+      assert {:error, {:invalid_address, ^input}} = Helpers.ensure_hex_address(input)
+    end
+
+    test "rejects short 0x-prefixed string" do
       short = "0x" <> String.duplicate("aa", 10)
       assert {:error, {:invalid_address, ^short}} = Helpers.ensure_hex_address(short)
     end
 
-    test "rejects invalid hex characters" do
+    test "rejects invalid hex characters in otherwise-correct shape" do
       bad = "0xZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ"
       assert {:error, {:invalid_address, ^bad}} = Helpers.ensure_hex_address(bad)
     end
@@ -44,6 +90,14 @@ defmodule Onchain.RPC.HelpersTest do
 
     test "accepts 0x alone (empty calldata)" do
       assert {:ok, "0x"} = Helpers.ensure_hex_data("0x")
+    end
+
+    test "rejects odd-length body '0x1' (Task 55 — was silently accepted)" do
+      assert {:error, {:invalid_data, "0x1"}} = Helpers.ensure_hex_data("0x1")
+    end
+
+    test "rejects odd-length body '0xabc' (Task 55)" do
+      assert {:error, {:invalid_data, "0xabc"}} = Helpers.ensure_hex_data("0xabc")
     end
 
     test "rejects data without 0x prefix" do

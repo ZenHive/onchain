@@ -6,6 +6,14 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Changed — RPC input hardening (Tasks 55, 56)
+
+- **`Onchain.RPC.Helpers.ensure_hex_address/1` now rejects four previously silent-coercion / contract-violation paths.** The validator accepts canonical hex (`"0x"` + exactly 40 hex chars, returned lowercased) and the normal 20-byte raw-binary path internal callers pass after `Onchain.Address.validate/1`. All other malformed shapes — 20-byte ASCII strings that start with `"0x"` (the Task 55 collision: previously routed RPC calls to a completely different address), `"0x"` + odd-length bodies (previously silently zero-padded), bare hex without `"0x"`, and wrong-length inputs — now return `{:error, {:invalid_address, input}}`. As a deliberate Task 55 tradeoff, the prefix-first dispatch also loudly rejects the rare 20-byte raw binary whose first two bytes are the ASCII `"0x"` literal; that edge case is valid raw binary data, but rejecting it is safer than silently corrupting typo-strings into different on-chain addresses.
+- **`Onchain.RPC.Helpers.ensure_hex_data/1` rejects odd-length hex bodies.** `"0x1"` / `"0xabc"` were previously accepted and surfaced downstream as `{:evm_error, "Odd number of digits"}` in `onchain_evm` — the wrong error class for invalid input shape. Now caught at the Elixir boundary as `{:invalid_data, _}`. Empty calldata `"0x"` remains valid.
+- **`Onchain.RPC.eth_get_logs/2` validates filter-map keys against a whitelist** (`:address`, `:topics`, `:from_block`, `:to_block`). Unknown keys — including JSON-RPC-style string keys like `"fromBlock"` / `"toBlock"` — now return `{:error, {:invalid_filter_key, key}}` instead of being silently dropped and returning `{:ok, []}`. Descripex `api()` hints for `eth_get_logs/2` updated to document the canonical filter shape and the new error tag.
+
+Non-breaking for canonical hex callers and the malformed shapes above; the one compatibility tradeoff is the rare 20-byte raw binary whose leading bytes are ASCII `"0x"`, which now fails loudly instead of being silently re-encoded. Two follow-ups captured as Tasks 60 (accept camelCase `"fromBlock"` / `"toBlock"` aliases) and 61 (`:block_hash` filter key per EIP-1474).
+
 ### Changed
 - **Task 42 — Subscription parse errors delivered to handler.** `Onchain.Subscription` previously logged parse failures at `Logger.debug` and dropped the notification. Dispatch now emits `{:parse_error, sub_id, reason}` to the handler, where `reason` is the tagged tuple from `Onchain.Subscription.Parser.parse_event/2` (`{:invalid_head, _}` | `{:invalid_tx_hash, _}` | `{:invalid_log, _}`). Consumers can now see, count, or react to malformed notifications without destabilizing the WebSocket transport (dispatch still runs inside zen_websocket's callback, so handler errors remain the consumer's concern). The Logger.debug lines are removed — double-emission would just be noise. The `nil`-sub_id branch (subscribe→Agent.update race, Task 38) is unchanged.
 

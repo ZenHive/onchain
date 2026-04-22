@@ -30,20 +30,15 @@ defmodule Onchain.RPCTest do
       assert {:error, {:invalid_address, 12_345}} = RPC.eth_call(12_345, "0x18160ddd")
     end
 
-    test "accepts 20-byte binary address" do
-      # Will fail at RPC level (no server), but should pass input validation
+    test "accepts 20-byte raw binary address (internal callers pass binaries)" do
       addr = <<1::160>>
       result = RPC.eth_call(addr, "0x18160ddd")
-      # Should NOT be an invalid_address error
       refute match?({:error, {:invalid_address, _}}, result)
     end
 
-    test "accepts bare hex address without 0x prefix" do
-      # 40 hex chars = 20 bytes, valid address without 0x prefix
+    test "rejects bare hex address without 0x prefix" do
       bare_addr = String.duplicate("aa", 20)
-      result = RPC.eth_call(bare_addr, "0x18160ddd")
-      # Should NOT be an invalid_address error — Address.validate handles bare hex
-      refute match?({:error, {:invalid_address, _}}, result)
+      assert {:error, {:invalid_address, ^bare_addr}} = RPC.eth_call(bare_addr, "0x18160ddd")
     end
   end
 
@@ -234,6 +229,36 @@ defmodule Onchain.RPCTest do
     end
   end
 
+  describe "eth_get_logs/2 filter key validation" do
+    test "rejects JSON-RPC-style string keys (Task 56 silent-drop bug)" do
+      filter = %{"fromBlock" => 100, "toBlock" => 200}
+      assert {:error, {:invalid_filter_key, unknown}} = RPC.eth_get_logs(filter)
+      assert unknown in ["fromBlock", "toBlock"]
+    end
+
+    test "rejects unsupported atom keys like :blockHash" do
+      filter = %{from_block: 100, to_block: 200, blockHash: "0x" <> String.duplicate("ab", 32)}
+      assert {:error, {:invalid_filter_key, :blockHash}} = RPC.eth_get_logs(filter)
+    end
+
+    test "rejects arbitrary unknown keys" do
+      filter = %{from_block: 100, to_block: 200, foo: :bar}
+      assert {:error, {:invalid_filter_key, :foo}} = RPC.eth_get_logs(filter)
+    end
+
+    test "empty filter still succeeds through key validation" do
+      result = RPC.eth_get_logs(%{})
+      refute match?({:error, {:invalid_filter_key, _}}, result)
+    end
+
+    test "canonical atom keys pass key validation (regression guard)" do
+      filter = %{from_block: 100, to_block: 200}
+      result = RPC.eth_get_logs(filter)
+      refute match?({:error, {:invalid_filter_key, _}}, result)
+      refute match?({:error, {:invalid_filter, _}}, result)
+    end
+  end
+
   describe "get_transaction_receipt/2 input validation" do
     test "rejects tx_hash without 0x prefix" do
       assert {:error, {:invalid_tx_hash, "abcd1234"}} = RPC.get_transaction_receipt("abcd1234")
@@ -287,7 +312,7 @@ defmodule Onchain.RPCTest do
       assert {:error, {:invalid_address, 12_345}} = RPC.get_transaction_count(12_345)
     end
 
-    test "accepts 20-byte binary address" do
+    test "accepts 20-byte raw binary address (internal callers pass binaries)" do
       addr = <<1::160>>
       result = RPC.get_transaction_count(addr)
       refute match?({:error, {:invalid_address, _}}, result)
@@ -338,7 +363,7 @@ defmodule Onchain.RPCTest do
       assert {:error, {:invalid_address, 12_345}} = RPC.eth_get_code(12_345)
     end
 
-    test "accepts 20-byte binary address" do
+    test "accepts 20-byte raw binary address (internal callers pass binaries)" do
       addr = <<1::160>>
       result = RPC.eth_get_code(addr)
       refute match?({:error, {:invalid_address, _}}, result)
