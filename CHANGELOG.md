@@ -6,6 +6,10 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Added — Sleuth deploy-as-call primitive (Task 62)
+
+- **`Onchain.Sleuth.query/5` + `query!/5`** — Compound-style "ship bytecode in `eth_call`" primitive for arbitrary read-only logic against live chain state. Caller supplies creation bytecode + constructor tuple-type signature + tuple of constructor values + return tuple-type signature; Sleuth concatenates ABI-encoded constructor args onto the bytecode, sends an `eth_call` with no `to` field via `Onchain.RPC.call/3` (Task 59 passthrough), decodes the constructor's returned bytes via `Onchain.ABI.decode_response/2`. API shape matches `Contract.call/5` (type signature string + values, not paired list) for codebase consistency. Complements `Onchain.Multicall` (batches existing view functions) and `onchain_evm`/revm (local simulation). Integration test validates live USDC balance read against mainnet via `ETHEREUM_API_URL`, comparing Sleuth output against a direct `Contract.call`. Solidity-source → bytecode compilation is out of scope — see [onchain_js](../onchain_js/ROADMAP.md) Task 2 (`OnchainJs.Solc.compile/2`) or external build steps (foundry, hardhat).
+
 ### Added — Generic JSON-RPC passthrough (Task 59)
 
 - **`Onchain.RPC.call/3` + `call!/3`** — escape-hatch for any JSON-RPC method not covered by a named wrapper (`eth_getStorageAt`, `debug_traceTransaction`, `trace_call`, `eth_feeHistory`, `eth_getProof`, …). Same opts surface as the named wrappers (`:rpc_url`, `:timeout`), same error shape (`{:error, {:rpc_error, _}}`), no result decoding — caller owns interpretation. Discovered 2026-04-22 while inspecting an EIP-1967 proxy implementation slot, where no wrapper existed and the only escape was raw `Req.post!`. Named wrappers still earn their keep (typespec, decoded return, descripex hints); `call/3` is the bare alternative when none exists. Guards on `is_binary(method)` / `is_list(params)` catch type mistakes with `FunctionClauseError`. Follow-up Task 63 captured for a possible `defrpc` macro that would codegen the named wrappers from declarative specs.

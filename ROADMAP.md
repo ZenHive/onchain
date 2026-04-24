@@ -41,7 +41,7 @@
 
 ## Release Plan
 
-Last shipped: **v0.5.1** (2026-04-19) — zen_websocket 0.4.x compatibility. `[Unreleased]` has Task 43 probe notes only.
+Last shipped: **v0.5.1** (2026-04-19) — zen_websocket 0.4.x compatibility. `[Unreleased]` now carries Tasks 42 (subscription parse-error delivery), 55 + 56 (RPC input hardening), 59 (generic JSON-RPC passthrough), 62 (Sleuth deploy-as-call), and the 2026-04-19 Task 43 upstream-dialyzer re-probe notes.
 
 ### 🎯 v0.5.2 — Subscription hardening (next, patch, non-breaking)
 
@@ -308,7 +308,7 @@ Acceptance criteria:
 | 53 | `Onchain.Fees.suggest_fees/2` — take `Signet.FeeHistory.t()` + percentile, return `{base_fee, max_priority, max_fee}` recommendation | ⬜ | 2 | 5 | 6 | 2.75 🎯 | `Onchain.Fees` (new) |
 | 54 | Opt-in retry/backoff wrapper over `Signet.RPC.send_rpc/3` with configurable policy (default: no retry — preserves current behavior) | ⬜ | 4 | 5 | 4 | 1.13 📋 | `Onchain.RPC` |
 | 59 | `Onchain.RPC.call/3` — generic JSON-RPC passthrough for methods not covered by named wrappers (`eth_getStorageAt`, `debug_traceTransaction`, `trace_call`, `eth_feeHistory`, …) | ✅ | 2 | 7 | 8 | 3.75 🎯 | `Onchain.RPC` |
-| 62 | `Onchain.Sleuth` — Compound-style "ship bytecode in `eth_call`" primitive for arbitrary read-only logic against live chain state | ⬜ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.Sleuth` (new) |
+| 62 | `Onchain.Sleuth` — Compound-style "ship bytecode in `eth_call`" primitive for arbitrary read-only logic against live chain state | ✅ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.Sleuth` |
 
 **Task descriptions:**
 
@@ -326,7 +326,7 @@ Acceptance criteria:
 
 ---
 
-**Task 62 — `Onchain.Sleuth` (deploy-as-call primitive).**
+**Task 62 — `Onchain.Sleuth` (deploy-as-call primitive). ✅ Completed** — see [CHANGELOG.md](CHANGELOG.md#added--sleuth-deploy-as-call-primitive-task-62).
 
 Compound Finance pattern: `eth_call` with `to: nil` and `data: creation_bytecode ++ abi_encoded_constructor_args` — the node executes the constructor in-memory against live chain state and the `eth_call` response is the bytes the constructor would have deployed. The caller ABI-decodes those bytes as the "return value." Lets a single RPC round-trip run arbitrary read-only logic (conditionals, loops, storage reads, derived computation) that Multicall3 can't express because Multicall3 only batches existing view functions.
 

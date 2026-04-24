@@ -66,7 +66,7 @@ lib/onchain/
   address.ex        # validate, checksum (EIP-55), normalize
   abi.ex            # encode_call/2, decode_response/2
   decimal.ex        # to_decimal/2, to_basis_points/1, div_pow10/2
-  rpc.ex            # eth_call, eth_getLogs, eth_getBalance, receipts, nonces
+  rpc.ex            # eth_call, eth_getLogs, eth_getBalance, receipts, nonces, generic call/3 passthrough
   rpc/helpers.ex    # shared RPC helper functions
   signer.ex         # key management, transaction signing
   erc20.ex          # reads + writes: balanceOf, allowance, decimals, symbol, totalSupply, approve, transfer
@@ -77,6 +77,7 @@ lib/onchain/
   log.ex            # event log queries
   wallet.ex         # classify (EOA/contract), native ETH balance
   multicall.ex      # batched calls via Multicall3
+  sleuth.ex         # Compound-style deploy-as-call: ship bytecode in eth_call, decode returned bytes
   ens.ex            # ENS name resolution
   transfer.ex       # ERC-20 Transfer event parsing
   subscription.ex   # real-time eth_subscribe (newHeads, pendingTx, logs)
