@@ -44,6 +44,8 @@ defmodule Onchain.RPC do
   | `eth_get_code!/2` | Same, raises on error |
   | `get_transaction_by_hash/2` | Full transaction details by hash |
   | `get_transaction_by_hash!/2` | Same, raises on error |
+  | `call/3` | Generic JSON-RPC passthrough — any method, raw result |
+  | `call!/3` | Same, raises on error |
   """
 
   use Descripex, namespace: "/rpc"
@@ -532,6 +534,52 @@ defmodule Onchain.RPC do
     case eth_get_logs(filter, opts) do
       {:ok, logs} -> logs
       {:error, reason} -> raise "eth_get_logs failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- call (generic JSON-RPC passthrough) ---
+
+  api(:call, "Generic JSON-RPC passthrough — invoke any method not covered by a named wrapper.",
+    params: [
+      method: [
+        kind: :value,
+        description:
+          ~s|JSON-RPC method name, e.g. "eth_getStorageAt", "debug_traceTransaction", "trace_call", "eth_feeHistory"|
+      ],
+      params: [
+        kind: :value,
+        description: "List of params for the method, in the order the JSON-RPC spec requires"
+      ],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{
+      type: "{:ok, term} | {:error, term}",
+      description:
+        "Raw decoded JSON result (no further decoding — caller knows what they asked for) or wrapped error tuple"
+    }
+  )
+
+  @spec call(String.t(), [term()], keyword()) :: {:ok, term()} | {:error, term()}
+  def call(method, params, opts \\ []) when is_binary(method) and is_list(params) do
+    do_rpc(method, params, to_signet_opts(opts))
+  end
+
+  # --- call! ---
+
+  api(:call!, "Generic JSON-RPC passthrough. Raises on error.",
+    params: [
+      method: [kind: :value, description: "JSON-RPC method name"],
+      params: [kind: :value, description: "List of params for the method"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{type: :term, description: "Raw decoded JSON result"}
+  )
+
+  @spec call!(String.t(), [term()], keyword()) :: term()
+  def call!(method, params, opts \\ []) do
+    case call(method, params, opts) do
+      {:ok, result} -> result
+      {:error, reason} -> raise "RPC #{method} failed: #{inspect(reason)}"
     end
   end
 

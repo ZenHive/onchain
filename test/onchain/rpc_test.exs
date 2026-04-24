@@ -444,4 +444,53 @@ defmodule Onchain.RPCTest do
       end
     end
   end
+
+  # --- call (generic JSON-RPC passthrough) ---
+
+  describe "call/3" do
+    test "returns wrapped rpc_error tuple when transport fails" do
+      assert {:error, {:rpc_error, %{message: _}}} =
+               RPC.call("eth_blockNumber", [], rpc_url: "http://localhost:1")
+    end
+
+    test "two-arity form (default opts) dispatches identically" do
+      # No opts → no :rpc_url override → signet falls back to app config which
+      # is unconfigured in test env, surfacing as a transport-level rpc_error.
+      assert {:error, {:rpc_error, _}} = RPC.call("eth_blockNumber", [])
+    end
+
+    test "raises FunctionClauseError when method is not a binary" do
+      # apply/3 defeats compile-time type checking so we can exercise the runtime guard
+      assert_raise FunctionClauseError, fn ->
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
+        apply(RPC, :call, [:eth_blockNumber, [], [rpc_url: "http://localhost:1"]])
+      end
+    end
+
+    test "raises FunctionClauseError when params is not a list" do
+      assert_raise FunctionClauseError, fn ->
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
+        apply(RPC, :call, ["eth_blockNumber", nil, [rpc_url: "http://localhost:1"]])
+      end
+
+      assert_raise FunctionClauseError, fn ->
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
+        apply(RPC, :call, ["eth_blockNumber", %{}, [rpc_url: "http://localhost:1"]])
+      end
+    end
+  end
+
+  describe "call!/3" do
+    test "raises with method-prefixed message when RPC unavailable" do
+      assert_raise RuntimeError, ~r/RPC eth_blockNumber failed/, fn ->
+        RPC.call!("eth_blockNumber", [], rpc_url: "http://localhost:1")
+      end
+    end
+
+    test "method name is interpolated into the raise message" do
+      assert_raise RuntimeError, ~r/RPC debug_traceTransaction failed/, fn ->
+        RPC.call!("debug_traceTransaction", ["0x" <> String.duplicate("ab", 32)], rpc_url: "http://localhost:1")
+      end
+    end
+  end
 end

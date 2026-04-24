@@ -35,6 +35,7 @@
 | 42 | Deliver subscription parse errors to handler | `{:parse_error, sub_id, reason}` events replace silent Logger.debug drop |
 | 55 | Harden RPC address/data input validation | Tightened `ensure_hex_address/1` (rejects ASCII-"0x" 20-byte collision + odd-length bodies) and `ensure_hex_data/1` (rejects odd-length hex) |
 | 56 | `eth_get_logs/2` filter-key whitelist | Unknown keys (including JSON-RPC-style `"fromBlock"`) now return `{:invalid_filter_key, key}` instead of silent `{:ok, []}` |
+| 59 | `Onchain.RPC.call/3` + `call!/3` generic passthrough | Escape-hatch for any JSON-RPC method (`eth_getStorageAt`, `debug_traceTransaction`, `trace_call`, …); no decoding, same opts/error shape as named wrappers |
 
 ---
 
@@ -164,6 +165,10 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 | 61 | `eth_get_logs/2` filter should support `:block_hash` (EIP-1474 — `blockHash` excludes `fromBlock`/`toBlock` when set) — currently rejected by Task 56 whitelist | ⬜ | 2 | 3 | 4 | 1.75 🚀 | `Onchain.RPC` |
 | 57 | Unify RPC return shapes: `get_transaction_by_hash/2` returns decoded atom-keyed struct, `get_block_by_number/2` returns raw string-keyed hex map — pick one | ⬜ | 4 | 6 | 6 | 1.50 🚀 | `Onchain.RPC` |
 | 58 | Alias `Onchain.ABI.decode_types/2` → `decode_response/2` + document tuple-signature requirement | ⬜ | 1 | 3 | 4 | 3.50 🎯 | `Onchain.ABI` |
+| 63 | `defrpc` macro — codegen named JSON-RPC wrappers from declarative specs (refactor of existing 11 `Onchain.RPC.*` wrappers); follows Phoenix.Router shape, gated by Nimble.Options schema | ⬜ | 4 | 6 | 5 | 1.38 📋 | `Onchain.RPC` |
+| 64 | Vendor `openrpc.json` from `ethereum/execution-apis` + emit `Onchain.RPC.Specs` lookup that feeds `defrpc` (93 methods across `eth_*`/`engine_*`/`debug_*`/`txpool_*`/`net_*`/`testing_*`) — gated on Task 63 | ⬜ | 4 | 6 | 5 | 1.38 📋 | `Onchain.RPC.Specs` (new) |
+| 65 | Differential test harness: same RPC method via `Onchain.RPC` vs reference impl (signet first, then Web3.py / viem if needed) — catches protocol-level mistakes unit tests miss | ⬜ | 6 | 5 | 3 | 0.67 ⚠️ | `test/onchain/differential/` |
+| 66 | Tree-sitter scrape of Erigon Go source for `trace_*` / `ots_*` method enumeration (~30 methods OpenRPC doesn't cover) — gated on Task 64 + actual consumer demand | ⬜ | 5 | 4 | 3 | 0.70 ⚠️ | dev-only `Mix.Task` |
 
 **Task 55 — Harden `Onchain.RPC.Helpers` address/data validation.**
 
@@ -202,6 +207,78 @@ Breaking change for consumers of `get_block_by_number/2`; justify with a minor-v
 
 ---
 
+**Task 63 — `defrpc` macro to codegen named JSON-RPC wrappers from declarative specs.** [D:4/B:6/U:5 → Eff:1.38 📋]
+
+Discovered 2026-04-23 during Task 59 design discussion; framing revised 2026-04-23 after surfacing Phoenix.Router / Nimble.Options precedents. The 11 existing `Onchain.RPC.*` wrappers (`eth_call`, `block_number`, `chain_id`, `get_balance`, `get_block_by_number`, `get_transaction_receipt`, `get_transaction_count`, `eth_get_code`, `get_transaction_by_hash`, `eth_get_logs`, `eth_send_raw_transaction`) follow a near-identical shape: per-arg validation + param construction + `do_rpc(method, params, to_signet_opts(opts))` + an identical bang variant + a Descripex `api()` annotation. A `defrpc` macro expands a declaration like `defrpc :block_number, "eth_blockNumber", decode: :hex_unsigned, description: "..."` into the full function + bang + `api()` + `@spec`.
+
+**Precedents that disprove the "macros are scary" objection.** This shape is well-trodden in Elixir: `Phoenix.Router` (declarative HTTP route DSL handling 6+ orthogonal concerns since 2014), `Ecto.Schema` (split `field/3` / `belongs_to/3` / `has_many/3` for genuinely-different shapes), `Absinthe.Schema` (GraphQL field DSL with arg validation + resolvers). `defrpc` faces strictly *less* variance than any of them. The "macro grows unchecked knobs" failure mode is solved by `Nimble.Options` — define a `NimbleOptions.validate!/2` schema for the option keyword list; the schema *is* the macro's contract; adding a knob requires changing the schema, which makes drift visible.
+
+Variance the macro must handle: per-arg validators (`ensure_hex_address`, `normalize_block`, `ensure_hex_data`, `ensure_tx_hash`); nested-map param construction (`eth_call`'s `%{"to" => ..., "data" => ...}`); literal extra params (`get_block_by_number`'s `false`); filter-key whitelist + filter-dict construction (`eth_get_logs` per Task 56); `:decode` flag pass-through (mapping to `Onchain.Hex.to_integer/1`, raw hex passthrough, struct decoders); descripex `returns:` shape variation. If a case genuinely doesn't fit (e.g. `eth_get_logs`'s filter shape), follow Ecto's lesson and add a sibling macro (`defrpc_with_filter`) rather than overloading `defrpc`.
+
+**Gate:** prototype against the existing 11 functions in a branch. Ship if (a) the call-site diff actually shrinks, (b) the `NimbleOptions` schema stays smaller than the variance it absorbs, and (c) the public surface is byte-identical (returns, error shapes, descripex hints, dialyzer story all unchanged). Kill the prototype if the macro's option schema balloons past ~10 keys or if 3+ wrappers need bespoke escape hatches — that's the real "more knobs than duplication removed" signal, observable on the prototype, not speculated about in advance. Unblocks Task 64 (vendor `openrpc.json` + emit `Onchain.RPC.Specs` lookup → ~93 methods become declarative one-liners).
+
+Acceptance: macro lives in `Onchain.RPC` (or a private helper module); `NimbleOptions` schema documents the public contract; existing 11 functions reimplemented through it with byte-identical public behavior; test suite green without changes; CHANGELOG entry explains the refactor and notes there's no API change.
+
+---
+
+**Task 64 — Vendor `openrpc.json` + emit `Onchain.RPC.Specs` lookup feeding `defrpc`.** [D:4/B:6/U:5 → Eff:1.38 📋] *(gated on Task 63)*
+
+Discovered 2026-04-23 during Task 59 design discussion, refined after surveying 22 candidate sources for an Ethereum-RPC method spec. Winner by a wide margin: the `openrpc.json` document built from [`ethereum/execution-apis`](https://github.com/ethereum/execution-apis) (`make build` resolves all `$ref`s into a single self-contained JSON). Covers **93 methods across 6 namespaces** as of `v1.0.0-beta.4` (2026-04): `eth_*` (57), `engine_*` (26), `debug_*` (5), `txpool_*` (3), `net_*` (1), `testing_*` (1).
+
+Vendor a pinned `openrpc.json` under `priv/specs/openrpc-v1.0.0-betaN.json`. Write a `Mix.Task` (or `Onchain.RPC.SpecLoader`) that parses it with `Jason` at compile time (no YAML dep needed; the JSON form has refs already resolved) and emits a compile-time map: `%{"eth_blockNumber" => %{params: [], returns: ..., description: ...}, ...}`. Optionally wire that map into Task 63's `defrpc` so a single declaration like `defrpc :block_number, "eth_blockNumber"` pulls params/returns/description from the spec.
+
+Refresh procedure: `wget` the latest tagged release's `openrpc.json`, diff against the vendored copy, bump the pin, re-run tests. Reasonable cadence: once per Ethereum hardfork cycle (~every 6 months).
+
+Acceptance: vendored JSON + version pin documented in CHANGELOG; `Onchain.RPC.Specs.lookup("eth_blockNumber")` returns the parsed spec; if Task 63 has landed, at least 3 existing wrappers are reimplemented through `defrpc :name, "method_name"` with byte-identical behavior.
+
+**Where to find additional endpoints not in OpenRPC** (for consumers / future tasks):
+
+| Method family | Source | Notes |
+|---|---|---|
+| `web3_*` (`web3_clientVersion`, `web3_sha3`) | [ethereum.org JSON-RPC docs](https://ethereum.org/developers/docs/apis/json-rpc/) | 2 methods, hand-document — too small to codegen |
+| `net_listening`, `net_peerCount` | ethereum.org JSON-RPC docs | OpenRPC has only `net_version`; the other 2 are widely supported but missing from spec |
+| `trace_*` (Parity/Erigon trace API) | [Erigon `turbo/jsonrpc/trace_*.go`](https://github.com/erigontech/erigon/tree/main/turbo/jsonrpc) | Non-standard; geth doesn't implement. Hand-list or tree-sitter scrape |
+| `ots_*` (Otterscan extensions) | [Erigon `turbo/jsonrpc/otterscan_*.go`](https://github.com/erigontech/erigon/tree/main/turbo/jsonrpc) | Erigon-only |
+| `admin_*` | Geth wiki / [`internal/ethapi`](https://github.com/ethereum/go-ethereum/tree/master/internal/ethapi) | Non-standard, node-management |
+| `optimism_*`, `arb_*`, `base_*` (L2 extensions) | Per-L2 docs ([Optimism RPC](https://docs.optimism.io/builders/node-operators/json-rpc), [Arbitrum](https://docs.arbitrum.io/build-decentralized-apps/reference/node-providers#extra-arb-methods), Base) | Per-chain divergence — likely belongs in chain-specific packages, not core `onchain` |
+| Runtime discovery | [`rpc.discover` (OpenRPC)](https://spec.open-rpc.org/#service-discovery-method) | `RPC.call("rpc.discover", [], opts)` returns the node's self-description if the client supports it. Erigon does; geth doesn't |
+
+Rule of thumb: if a method isn't in OpenRPC, it's either node-vendor-specific (Erigon, geth-only) or chain-specific (L2). Hand-add via `defrpc` when a real consumer needs it; don't preemptively codegen the long tail.
+
+---
+
+**Task 65 — Differential test harness comparing `Onchain.RPC` results against an alternative implementation.** [D:6/B:5/U:3 → Eff:0.67 ⚠️]
+
+Discovered 2026-04-23 during the same survey. The named wrappers are unit-tested, but unit tests don't catch *protocol-level* mistakes: wrong param ordering against the spec, wrong nesting on map params, wrong block-tag handling for edge cases (`"safe"`, `"finalized"`, `"earliest"`), wrong response decoding for sparsely-populated fields. A differential harness runs the same RPC method against the same node via `Onchain.RPC` *and* a reference implementation, then asserts equality.
+
+Reference candidates (in order of cost):
+1. **signet** itself — already in deps, pure Elixir, zero new infra. Weakest oracle (errors might correlate with us) but cheapest. Worth doing first.
+2. **Web3.py** via external Python invocation — moderate cost (Python toolchain), strong oracle (independent codebase, mature).
+3. **viem** via [elixir-volt](https://github.com/efries/elixir-volt) (OXC + QuickBEAM + npm_ex) — highest cost (native NIFs), strongest oracle (canonical TS implementation, encodes Ethereum-the-spec via opinionated wrappers). Only worth it if Tasks 65a/65b find nothing.
+
+Scope: harness lives in `test/onchain/differential/`, marked `@tag :differential`, gated behind an env var, runs against `ETHEREUM_API_URL`. Tests pick ~10 methods covering map-param construction (`eth_call`, `eth_getLogs`), block-tag variance (`eth_getBlockByNumber` with all 5 tags), and decoding edge cases (`eth_getTransactionReceipt` for failed/contract-creation/EIP-1559 txs). Compares JSON-stringified Onchain output against reference output for the same inputs.
+
+Acceptance: harness runs ≥10 methods against signet as oracle; documents any divergences as either Onchain bugs (fix) or signet differences (annotate). Tasks 65b/65c (Web3.py, viem) deferred until 65a finds at least one bug — if signet-as-oracle is silent for 6 months, the higher-cost oracles aren't earning their complexity.
+
+---
+
+**Task 66 — Source-scrape `trace_*` / `ots_*` method enumeration via tree-sitter on Erigon Go source.** [D:5/B:4/U:3 → Eff:0.70 ⚠️]
+
+Discovered 2026-04-23. The OpenRPC spec doesn't cover Erigon-specific namespaces (`trace_*` ≈ 18 methods, `ots_*` ≈ 12 methods). Hand-listing them is error-prone and goes stale silently. Tree-sitter (`{:tree_sitter, "~> 0.x"}`) can parse Erigon's Go source at compile time and emit a method list.
+
+Approach: vendor a pinned commit of [`erigon/turbo/jsonrpc/`](https://github.com/erigontech/erigon/tree/main/turbo/jsonrpc) under `priv/specs/erigon-COMMIT/`. Tree-sitter grammar matches function definitions on `*TraceAPIImpl` / `*OtterscanAPIImpl` receivers; method name = lowercased method name (Erigon convention). Emit a JSON list to `priv/specs/erigon-methods.json`. Refresh quarterly.
+
+Risks:
+- Tree-sitter is a NIF — violates Onchain's pure-Elixir invariant. Mitigate by running the scrape as a `Mix.Task` (dev-only dep, not runtime) that produces a vendored JSON output. Runtime stays pure-Elixir reading the JSON.
+- Erigon refactors aggressively (scored 5/10 on drift in the source survey). Pin the commit; expect quarterly refresh churn.
+- Population is small (~30 methods total). Hand-listing in `defrpc` declarations might be cheaper than the tooling.
+
+Only worth pursuing if (a) Task 64 ships and the OpenRPC pipeline is proven, (b) consumers actually call `trace_*` / `ots_*` methods enough to motivate named wrappers, and (c) hand-maintenance of the list has produced ≥1 staleness bug. Otherwise: leave as `call/3` users with a docstring example.
+
+Acceptance: `Mix.Task` `mix onchain.scrape_erigon_methods` produces `priv/specs/erigon-methods.json`; CHANGELOG documents the pinned Erigon commit; the resulting JSON is consumable by Task 63's `defrpc` (or hand-mapped if 63 hasn't shipped).
+
+---
+
 **Task 48 — Extract subscription into `onchain_ws`.**
 
 Create a sibling package (`../onchain_ws`) that depends on `onchain` (path dep) and `zen_websocket`, and move `Onchain.Subscription` + `Onchain.Subscription.Parser` into it. Base `onchain` should no longer depend on `zen_websocket` after the move.
@@ -230,7 +307,8 @@ Acceptance criteria:
 | 52 | Telemetry events around `Onchain.RPC` request path (`[:onchain, :rpc, :request]`) | ⬜ | 3 | 5 | 5 | 1.67 🚀 | `Onchain.RPC` |
 | 53 | `Onchain.Fees.suggest_fees/2` — take `Signet.FeeHistory.t()` + percentile, return `{base_fee, max_priority, max_fee}` recommendation | ⬜ | 2 | 5 | 6 | 2.75 🎯 | `Onchain.Fees` (new) |
 | 54 | Opt-in retry/backoff wrapper over `Signet.RPC.send_rpc/3` with configurable policy (default: no retry — preserves current behavior) | ⬜ | 4 | 5 | 4 | 1.13 📋 | `Onchain.RPC` |
-| 59 | `Onchain.RPC.call/4` — generic JSON-RPC passthrough for methods not covered by named wrappers (`eth_getStorageAt`, `debug_traceTransaction`, `trace_call`, `eth_feeHistory`, …) | ⬜ | 2 | 7 | 8 | 3.75 🎯 | `Onchain.RPC` |
+| 59 | `Onchain.RPC.call/3` — generic JSON-RPC passthrough for methods not covered by named wrappers (`eth_getStorageAt`, `debug_traceTransaction`, `trace_call`, `eth_feeHistory`, …) | ✅ | 2 | 7 | 8 | 3.75 🎯 | `Onchain.RPC` |
+| 62 | `Onchain.Sleuth` — Compound-style "ship bytecode in `eth_call`" primitive for arbitrary read-only logic against live chain state | ⬜ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.Sleuth` (new) |
 
 **Task descriptions:**
 
@@ -245,6 +323,33 @@ Acceptance criteria:
 **54 — Retry/backoff.** Opt-in via keyword policy. Changing `send_rpc` default behavior upstream would be risky (silently changes every consumer); a downstream wrapper is the correct posture per the scope principle.
 
 **59 — Generic RPC passthrough.** Named wrappers cover the common Ethereum JSON-RPC surface, but debug / trace / storage-inspection work regularly needs methods not in the curated list (`eth_getStorageAt` for EIP-1967 slot inspection, `debug_traceTransaction` / `trace_call` for execution tracing, `eth_feeHistory` if Task 53's wrapper hasn't landed, `eth_getProof` if Task 49 hasn't). Discovered 2026-04-22 while verifying an upgradeable-proxy implementation address — had to drop to raw `Req.post!` for `eth_getStorageAt`. Shape: `Onchain.RPC.call(method, params, opts \\ [])` returning `{:ok, result} | {:error, term}`; thin wrapper over `Signet.RPC.send_rpc/3` (or equivalent), no decoding (the caller knows what they asked for). Complements but doesn't replace named wrappers — each named wrapper adds value (typespec, docstring, return-type decoding, descripex hints) over the bare passthrough.
+
+---
+
+**Task 62 — `Onchain.Sleuth` (deploy-as-call primitive).**
+
+Compound Finance pattern: `eth_call` with `to: nil` and `data: creation_bytecode ++ abi_encoded_constructor_args` — the node executes the constructor in-memory against live chain state and the `eth_call` response is the bytes the constructor would have deployed. The caller ABI-decodes those bytes as the "return value." Lets a single RPC round-trip run arbitrary read-only logic (conditionals, loops, storage reads, derived computation) that Multicall3 can't express because Multicall3 only batches existing view functions.
+
+Complements — does not replace — `Onchain.Multicall` and `onchain_evm` / revm:
+- Multicall3: batch N existing view-function calls against live state. Use when the logic already exists on deployed contracts.
+- Sleuth (this task): one custom read-only program against live state. Use when you need derived/conditional logic that isn't exposed.
+- revm (onchain_evm): simulate many calls locally, trace execution, modify state, run against a fork. Use when network cost matters or you need execution traces.
+
+**Scope.** Ship bytecode in, get decoded values out. Solidity source → bytecode compilation is explicitly out of scope — handled by [onchain_js](../onchain_js/ROADMAP.md) Task 2 (`OnchainJs.Solc.compile/2`) or an external build step (foundry, hardhat). Consumers supply creation bytecode directly.
+
+**Shape (draft, adapt during implementation):**
+- `Onchain.Sleuth.query(bytecode, constructor_args, return_type, opts \\ [])` returning `{:ok, decoded_values} | {:error, term}`
+- `constructor_args` as `[{type_sig, value}]` (or similar) — encoded via `Onchain.ABI` and appended to bytecode
+- `return_type` as an ABI type signature string — decoded via `Onchain.ABI.decode_response/2`
+- `opts` supports `:rpc_url`, `:block`, `:timeout` matching the `Onchain.Contract.call/5` conventions
+- Bang variant (`query!/4`) following the established pattern (ERC20, Multicall)
+
+**Acceptance:**
+- Unit tests for bytecode + constructor-arg concatenation and return decoding (pure functions)
+- Integration test against mainnet via `ETHEREUM_API_URL`: a small Sleuth contract that reads something a regular `eth_call` can't easily produce (e.g., aggregate a list of balances with in-contract filtering, or return data conditional on current block state)
+- Descripex `api()` annotations on public functions
+- CLAUDE.md Module Layout + Portfolio Context updated (the `onchain` row in "Where does this feature go?" should note custom read-only bytecode as an `onchain` concern)
+- Reference Compound's Sleuth repo in `@moduledoc` for the design inspiration
 
 ---
 

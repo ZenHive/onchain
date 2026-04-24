@@ -6,6 +6,10 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Added — Generic JSON-RPC passthrough (Task 59)
+
+- **`Onchain.RPC.call/3` + `call!/3`** — escape-hatch for any JSON-RPC method not covered by a named wrapper (`eth_getStorageAt`, `debug_traceTransaction`, `trace_call`, `eth_feeHistory`, `eth_getProof`, …). Same opts surface as the named wrappers (`:rpc_url`, `:timeout`), same error shape (`{:error, {:rpc_error, _}}`), no result decoding — caller owns interpretation. Discovered 2026-04-22 while inspecting an EIP-1967 proxy implementation slot, where no wrapper existed and the only escape was raw `Req.post!`. Named wrappers still earn their keep (typespec, decoded return, descripex hints); `call/3` is the bare alternative when none exists. Guards on `is_binary(method)` / `is_list(params)` catch type mistakes with `FunctionClauseError`. Follow-up Task 63 captured for a possible `defrpc` macro that would codegen the named wrappers from declarative specs.
+
 ### Changed — RPC input hardening (Tasks 55, 56)
 
 - **`Onchain.RPC.Helpers.ensure_hex_address/1` now rejects four previously silent-coercion / contract-violation paths.** The validator accepts canonical hex (`"0x"` + exactly 40 hex chars, returned lowercased) and the normal 20-byte raw-binary path internal callers pass after `Onchain.Address.validate/1`. All other malformed shapes — 20-byte ASCII strings that start with `"0x"` (the Task 55 collision: previously routed RPC calls to a completely different address), `"0x"` + odd-length bodies (previously silently zero-padded), bare hex without `"0x"`, and wrong-length inputs — now return `{:error, {:invalid_address, input}}`. As a deliberate Task 55 tradeoff, the prefix-first dispatch also loudly rejects the rare 20-byte raw binary whose first two bytes are the ASCII `"0x"` literal; that edge case is valid raw binary data, but rejecting it is safer than silently corrupting typo-strings into different on-chain addresses.

@@ -146,6 +146,48 @@ defmodule Onchain.RPC.IntegrationTest do
     end
   end
 
+  # --- call (generic JSON-RPC passthrough) ---
+
+  # Aave V3 Pool on mainnet — OpenZeppelin TransparentUpgradeableProxy (EIP-1967).
+  # USDC's FiatTokenProxy uses the older zeppelinos slot, NOT EIP-1967, so the
+  # EIP-1967 implementation slot legitimately reads zero on it.
+  @aave_v3_pool_proxy "0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2"
+  # EIP-1967 implementation slot: keccak256("eip1967.proxy.implementation") - 1
+  @eip1967_impl_slot "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"
+
+  describe "call/3" do
+    test "eth_getStorageAt returns the EIP-1967 implementation slot for a known proxy" do
+      assert {:ok, slot_value} =
+               RPC.call(
+                 "eth_getStorageAt",
+                 [@aave_v3_pool_proxy, @eip1967_impl_slot, "latest"],
+                 rpc_opts()
+               )
+
+      # Storage slots are 32 bytes → 0x + 64 hex chars.
+      assert is_binary(slot_value)
+      assert String.starts_with?(slot_value, "0x")
+      assert byte_size(slot_value) == 66
+
+      # Lower 20 bytes = implementation address; should be non-zero for a live proxy.
+      <<"0x", _padding::binary-size(24), addr_hex::binary-size(40)>> = slot_value
+      refute addr_hex == String.duplicate("0", 40)
+    end
+
+    test "eth_chainId returns raw 0x-hex string (no decoding applied)" do
+      # call/3 deliberately does NOT decode — proves the no-decode semantics by
+      # comparing against the typed wrapper which DOES decode to integer.
+      assert {:ok, "0x1"} = RPC.call("eth_chainId", [], rpc_opts())
+      assert {:ok, 1} = RPC.chain_id(rpc_opts())
+    end
+  end
+
+  describe "call!/3" do
+    test "returns raw result directly" do
+      assert "0x1" == RPC.call!("eth_chainId", [], rpc_opts())
+    end
+  end
+
   describe "pipeline: ABI.encode_call → RPC.eth_call → ABI.decode_response" do
     test "WETH totalSupply roundtrip returns decoded integer > 0" do
       {:ok, calldata} = ABI.encode_call("totalSupply()", [])
