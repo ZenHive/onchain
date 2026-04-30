@@ -3,8 +3,8 @@ defmodule Onchain.Signer do
   EIP-1559 transaction building, signing, encoding, and broadcasting.
 
   Stateless pipeline — no GenServer, no application config. Private key is
-  always passed explicitly. Uses `Signet.Signer.sign_direct/4` for signing
-  and `Signet.Transaction.V2` for transaction construction.
+  always passed explicitly. Uses `Cartouche.Signer.sign_direct/4` for signing
+  and `Cartouche.Transaction.V2` for transaction construction.
 
   ## Pipeline
 
@@ -25,11 +25,11 @@ defmodule Onchain.Signer do
 
   use Descripex, namespace: "/signer"
 
+  alias Cartouche.Signer.Curvy
+  alias Cartouche.Transaction.V2
   alias Onchain.Address
   alias Onchain.Hex
   alias Onchain.RPC
-  alias Signet.Signer.Curvy
-  alias Signet.Transaction.V2
 
   @default_gas_limit 100_000
   @default_max_fee_per_gas {30, :gwei}
@@ -94,7 +94,7 @@ defmodule Onchain.Signer do
       ]
     ],
     returns: %{
-      type: "{:ok, %Signet.Transaction.V2{}} | {:error, term()}",
+      type: "{:ok, %Cartouche.Transaction.V2{}} | {:error, term()}",
       description: "Unsigned EIP-1559 transaction struct"
     }
   )
@@ -163,7 +163,7 @@ defmodule Onchain.Signer do
           "Required: :nonce, :chain_id. Optional: :gas_limit, :max_fee_per_gas, :max_priority_fee_per_gas, :value, :access_list. Gas params accept integers (wei) or {n, :gwei} tuples."
       ]
     ],
-    returns: %{type: "%Signet.Transaction.V2{}", description: "Unsigned EIP-1559 transaction struct"}
+    returns: %{type: "%Cartouche.Transaction.V2{}", description: "Unsigned EIP-1559 transaction struct"}
   )
 
   @spec build_transaction!(binary(), binary() | {:raw, binary()}, keyword()) :: V2.t()
@@ -178,12 +178,12 @@ defmodule Onchain.Signer do
 
   api(:sign_transaction, "Sign a transaction with a private key.",
     params: [
-      unsigned_trx: [kind: :value, description: "Unsigned %Signet.Transaction.V2{} struct"],
+      unsigned_trx: [kind: :value, description: "Unsigned %Cartouche.Transaction.V2{} struct"],
       private_key: [kind: :value, description: "32-byte binary or hex string (with or without 0x)"],
       chain_id: [kind: :value, description: "Chain ID integer (1 = mainnet, 11155111 = Sepolia)"]
     ],
     returns: %{
-      type: "{:ok, %Signet.Transaction.V2{}} | {:error, {:sign_error, term()}}",
+      type: "{:ok, %Cartouche.Transaction.V2{}} | {:error, {:sign_error, term()}}",
       description: "Signed transaction with signature fields populated"
     }
   )
@@ -196,7 +196,7 @@ defmodule Onchain.Signer do
       encoded = V2.encode(unsigned_trx)
       mfa = {Curvy, :sign, [key_bin]}
 
-      case Signet.Signer.sign_direct(encoded, addr_bin, mfa, chain_id) do
+      case Cartouche.Signer.sign_direct(encoded, addr_bin, mfa, chain_id) do
         {:ok, signature} ->
           {:ok, V2.add_signature(unsigned_trx, signature)}
 
@@ -208,11 +208,11 @@ defmodule Onchain.Signer do
 
   api(:sign_transaction!, "Sign a transaction with a private key. Raises on error.",
     params: [
-      unsigned_trx: [kind: :value, description: "Unsigned %Signet.Transaction.V2{} struct"],
+      unsigned_trx: [kind: :value, description: "Unsigned %Cartouche.Transaction.V2{} struct"],
       private_key: [kind: :value, description: "32-byte binary or hex string (with or without 0x)"],
       chain_id: [kind: :value, description: "Chain ID integer (1 = mainnet, 11155111 = Sepolia)"]
     ],
-    returns: %{type: "%Signet.Transaction.V2{}", description: "Signed transaction with signature fields populated"}
+    returns: %{type: "%Cartouche.Transaction.V2{}", description: "Signed transaction with signature fields populated"}
   )
 
   @spec sign_transaction!(V2.t(), binary(), pos_integer()) :: V2.t()
@@ -227,7 +227,7 @@ defmodule Onchain.Signer do
 
   api(:encode_transaction, "Encode a signed transaction to 0x-prefixed hex for broadcast.",
     params: [
-      signed_trx: [kind: :value, description: "Signed %Signet.Transaction.V2{} struct"]
+      signed_trx: [kind: :value, description: "Signed %Cartouche.Transaction.V2{} struct"]
     ],
     returns: %{
       type: "{:ok, String.t()} | {:error, {:encode_error, :unsigned_transaction}}",
@@ -249,7 +249,7 @@ defmodule Onchain.Signer do
 
   api(:encode_transaction!, "Encode a signed transaction to 0x-prefixed hex for broadcast. Raises on error.",
     params: [
-      signed_trx: [kind: :value, description: "Signed %Signet.Transaction.V2{} struct"]
+      signed_trx: [kind: :value, description: "Signed %Cartouche.Transaction.V2{} struct"]
     ],
     returns: %{type: :string, description: "0x-prefixed hex string ready for broadcast"}
   )

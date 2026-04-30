@@ -55,10 +55,11 @@ defmodule Onchain.ENS do
   alias Onchain.Contract
   alias Onchain.Hex
 
-  # TODO: Remove when upstream specs are fixed (abi: ABI.decode/2 no_return, signet: Hex specs).
-  # Upstream Signet.Hex spec cascade through Contract.call/5 → ABI.decode_response/2.
-  # Last probed 2026-04-19 against signet 1.6.1 / abi 1.3.0 — still broken.
-  # Re-probe: run `mix deps.update signet abi`, confirm versions advanced, then strip and re-run dialyzer.
+  # TODO(Task 43): Remove when hieroglyph ABI.decode/2 spec is fixed. Cartouche 0.1.0
+  # already corrected its own Hex specs, but hieroglyph still spec's decode/2 as
+  # no_return(), cascading through Contract.call/5 → ABI.decode_response/2. Bundled
+  # dialyzer-strip commit (Task 43) removes this suppression — re-probe with
+  # `mix deps.update cartouche hieroglyph` first.
   @dialyzer {:no_match,
              [
                resolve: 2,
@@ -563,8 +564,8 @@ defmodule Onchain.ENS do
     |> String.split(".")
     |> Enum.reverse()
     |> Enum.reduce(@zero_node, fn label, node ->
-      label_hash = Signet.Hash.keccak(label)
-      Signet.Hash.keccak(node <> label_hash)
+      label_hash = Cartouche.Hash.keccak(label)
+      Cartouche.Hash.keccak(node <> label_hash)
     end)
   end
 end

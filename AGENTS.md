@@ -17,12 +17,12 @@ If anything in this file differs from `CLAUDE.md`, follow `CLAUDE.md`.
 
 ## Project Summary
 
-Shared Ethereum/blockchain library for the portfolio. Provides read (`eth_call`) and write (transaction signing) capabilities using `signet` as the sole Ethereum dependency.
+Shared Ethereum/blockchain library for the portfolio. Provides read (`eth_call`) and write (transaction signing) capabilities using `cartouche` as the sole Ethereum dependency.
 
 ## Core Architecture
 
-- `signet` is the only Ethereum dependency (RPC, ABI, signing, crypto).
-- Consumers can configure RPC via `config :signet` or pass URL per call.
+- `cartouche` is the only Ethereum dependency (RPC, ABI, signing, crypto).
+- Consumers can configure RPC via `config :cartouche` or pass URL per call.
 - Standard return format: `{:ok, result} | {:error, {:tag, reason}}`.
 - Use plain structs with `defstruct` + `@enforce_keys`.
 - Consumers use path dependency: `{:onchain, path: "../onchain"}`.

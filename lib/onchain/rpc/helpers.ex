@@ -16,12 +16,12 @@ defmodule Onchain.RPC.Helpers do
 
   @doc false
   # Sends an RPC request and normalizes the error format.
-  # Signet.RPC.send_rpc/3 spec says errors are always %{code: int, message: str},
+  # Cartouche.RPC.send_rpc/3 spec says errors are always %{code: int, message: str},
   # but runtime errors include non-map values (Finch timeouts, connection refused).
   @dialyzer {:no_match, do_rpc: 3}
   @spec do_rpc(String.t(), list(), keyword()) :: {:ok, term()} | {:error, term()}
   def do_rpc(method, params, opts) do
-    case Signet.RPC.send_rpc(method, params, opts) do
+    case Cartouche.RPC.send_rpc(method, params, opts) do
       {:ok, result} -> {:ok, result}
       {:error, %{} = map} -> {:error, {:rpc_error, map}}
       {:error, other} -> {:error, {:rpc_error, %{message: inspect(other)}}}
@@ -92,9 +92,9 @@ defmodule Onchain.RPC.Helpers do
   def ensure_tx_hash(other), do: {:error, {:invalid_tx_hash, other}}
 
   @doc false
-  # Maps our option names to signet's expected keys.
-  @spec to_signet_opts(keyword()) :: keyword()
-  def to_signet_opts(opts) do
+  # Maps our option names to the underlying RPC client's expected keys.
+  @spec to_rpc_opts(keyword()) :: keyword()
+  def to_rpc_opts(opts) do
     opts
     |> Keyword.take([:rpc_url, :timeout])
     |> Keyword.put_new(:timeout, @default_timeout_ms)

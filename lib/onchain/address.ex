@@ -2,13 +2,13 @@ defmodule Onchain.Address do
   @moduledoc """
   Ethereum address validation, checksumming, and comparison.
 
-  Curated 7-function API wrapping `Signet.Hex` and `Signet.Util` with flexible
-  input handling (hex strings or 20-byte binaries) and normalized error tuples.
+  Curated 7-function API wrapping `Cartouche.Hex` with flexible input handling
+  (hex strings or 20-byte binaries) and normalized error tuples.
 
   ## Error Format
 
   All failable functions return `{:error, {:invalid_address, input}}` where `input`
-  is the original value that failed validation. Bang variants raise `Signet.Hex.HexError`.
+  is the original value that failed validation. Bang variants raise `Cartouche.Hex.InvalidHex`.
 
   ## Functions
 
@@ -78,7 +78,7 @@ defmodule Onchain.Address do
   @spec checksum(term()) :: {:ok, String.t()} | {:error, {:invalid_address, term()}}
   def checksum(input) do
     case to_binary(input) do
-      {:ok, binary} -> {:ok, Signet.Util.checksum_address(binary)}
+      {:ok, binary} -> {:ok, Cartouche.Hex.checksum_address(binary)}
       :error -> {:error, {:invalid_address, input}}
     end
   end
@@ -99,8 +99,8 @@ defmodule Onchain.Address do
   @spec checksum!(term()) :: String.t()
   def checksum!(input) do
     case to_binary(input) do
-      {:ok, binary} -> Signet.Util.checksum_address(binary)
-      :error -> raise Signet.Hex.HexError, "invalid address: #{inspect(input)}"
+      {:ok, binary} -> Cartouche.Hex.checksum_address(binary)
+      :error -> raise Cartouche.Hex.InvalidHex, "invalid address: #{inspect(input)}"
     end
   end
 

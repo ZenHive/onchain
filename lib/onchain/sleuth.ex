@@ -44,11 +44,11 @@ defmodule Onchain.Sleuth do
   alias Onchain.Hex
   alias Onchain.RPC.Helpers, as: RPCHelpers
 
-  # TODO(Task 43): Same cascade as Onchain.Contract / Onchain.Multicall — abi 1.3.0
-  # ABI.decode/2 is spec'd as no_return() and signet Hex specs are off, so the
-  # success branch appears unreachable to dialyzer. Last probed 2026-04-19 against
-  # signet 1.6.1 / abi 1.3.0. Re-probe via `mix deps.update signet abi` and re-run
-  # dialyzer before removing.
+  # TODO(Task 43): Same cascade as Onchain.Contract / Onchain.Multicall — hieroglyph
+  # ABI.decode/2 is spec'd as no_return(), so the success branch appears unreachable
+  # to dialyzer. Cartouche corrected its own Hex specs at 0.1.0, but hieroglyph still
+  # carries the no_return cascade. Bundled dialyzer-strip commit (Task 43) removes
+  # this suppression — re-probe with `mix deps.update cartouche hieroglyph` first.
   @dialyzer {:no_match, [query: 5, query!: 5]}
   @dialyzer {:no_return, [query!: 4, query!: 5]}
   @dialyzer {:no_contracts, [query!: 4, query!: 5]}

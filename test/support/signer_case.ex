@@ -4,7 +4,7 @@ defmodule Onchain.SignerCase do
   # Reusable test helpers for transaction signing tests (tasks 12, 13, 14).
   # Provides credential loading from env vars and receipt polling.
 
-  alias Signet.Signer.Curvy
+  alias Cartouche.Signer.Curvy
 
   @poll_interval_ms 3_000
   @max_poll_attempts 20

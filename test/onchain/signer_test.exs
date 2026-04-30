@@ -1,10 +1,10 @@
 defmodule Onchain.SignerTest do
   use ExUnit.Case, async: true
 
+  alias Cartouche.Transaction.V2
   alias Onchain.Signer
-  alias Signet.Transaction.V2
 
-  # Deterministic test keypair from signet docs
+  # Deterministic test keypair from cartouche docs
   @test_key_hex "0x800509fa3e80882ad0be77c27505bdc91380f800d51ed80897d22f9fcc75f4bf"
   @test_key_binary Base.decode16!(
                      "800509fa3e80882ad0be77c27505bdc91380f800d51ed80897d22f9fcc75f4bf",

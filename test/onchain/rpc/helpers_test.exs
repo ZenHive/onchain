@@ -183,27 +183,27 @@ defmodule Onchain.RPC.HelpersTest do
     end
   end
 
-  # --- to_signet_opts/1 ---
+  # --- to_rpc_opts/1 ---
 
-  describe "to_signet_opts/1" do
+  describe "to_rpc_opts/1" do
     test "renames :rpc_url to :ethereum_node" do
-      opts = Helpers.to_signet_opts(rpc_url: "http://localhost:8545")
+      opts = Helpers.to_rpc_opts(rpc_url: "http://localhost:8545")
       assert Keyword.get(opts, :ethereum_node) == "http://localhost:8545"
       refute Keyword.has_key?(opts, :rpc_url)
     end
 
     test "applies default timeout when not specified" do
-      opts = Helpers.to_signet_opts([])
+      opts = Helpers.to_rpc_opts([])
       assert Keyword.get(opts, :timeout) == 30_000
     end
 
     test "preserves explicit timeout" do
-      opts = Helpers.to_signet_opts(timeout: 5_000)
+      opts = Helpers.to_rpc_opts(timeout: 5_000)
       assert Keyword.get(opts, :timeout) == 5_000
     end
 
     test "strips unknown options" do
-      opts = Helpers.to_signet_opts(rpc_url: "http://x", block: "latest", foo: :bar)
+      opts = Helpers.to_rpc_opts(rpc_url: "http://x", block: "latest", foo: :bar)
       refute Keyword.has_key?(opts, :block)
       refute Keyword.has_key?(opts, :foo)
     end

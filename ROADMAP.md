@@ -22,6 +22,7 @@
 ### ✅ Recently Completed
 | Task | Description | Notes |
 |------|-------------|-------|
+| — | **cartouche v0.1.0 published on hex.pm** (2026-04-30) | Fork of signet under `Cartouche.*` namespace, Elixir 1.20-compatible, published ABI dep (`hieroglyph` 1.0.0), cleaned dialyzer baseline. Unblocks Task 43 and triggers Task 67 (signet → cartouche dep migration). |
 | — | **v0.4.0 Package Split** | Split into onchain (pure Elixir), onchain_aave, onchain_evm |
 | 31 | Real-time subscriptions (eth_subscribe) | zen_websocket, newHeads/pendingTx/logs |
 | 33 | ERC-721/ERC-1155 read operations | 7 ERC-721 + 4 ERC-1155 reads, checksummed address returns |
@@ -36,6 +37,7 @@
 | 55 | Harden RPC address/data input validation | Tightened `ensure_hex_address/1` (rejects ASCII-"0x" 20-byte collision + odd-length bodies) and `ensure_hex_data/1` (rejects odd-length hex) |
 | 56 | `eth_get_logs/2` filter-key whitelist | Unknown keys (including JSON-RPC-style `"fromBlock"`) now return `{:invalid_filter_key, key}` instead of silent `{:ok, []}` |
 | 59 | `Onchain.RPC.call/3` + `call!/3` generic passthrough | Escape-hatch for any JSON-RPC method (`eth_getStorageAt`, `debug_traceTransaction`, `trace_call`, …); no decoding, same opts/error shape as named wrappers |
+| 67 | `:signet` → `:cartouche` dep migration | hex.pm dep swap; every `Signet.*` reference renamed to `Cartouche.*`; `Onchain.*` public API byte-identical for consumers; bundled with Task 43 in v0.5.2 |
 
 ---
 
@@ -45,11 +47,11 @@ Last shipped: **v0.5.1** (2026-04-19) — zen_websocket 0.4.x compatibility. `[U
 
 ### 🎯 v0.5.2 — Subscription hardening (next, patch, non-breaking)
 
-Finishes what v0.5.0/0.5.1 started on the subscription path and tracks dialyzer suppressions pending upstream fixes (signet > 1.6.1 or abi > 1.3.0).
+Finishes what v0.5.0/0.5.1 started on the subscription path and tracks dialyzer suppressions unblocked 2026-04-30 by the cartouche 0.1.0 fork (Task 67) — strip happens after migration.
 
 | Task | Eff | What | Why in this release |
 |------|-----|------|---------------------|
-| 43 | 3.00 | Remove `@dialyzer {:no_match, ...}` suppressions | Probed 2026-04-19 — upstream still unfixed (signet 1.6.1, abi 1.3.0). **Re-probe procedure:** `mix deps.update signet abi` first; confirm versions advanced past 1.6.1 / 1.3.0; only then strip suppressions and run `mix dialyzer.json`. |
+| 43 | 3.00 | Remove `@dialyzer {:no_match, ...}` suppressions | Unblocked 2026-04-30 by cartouche 0.1.0 (hex.pm) — fork carries the `Cartouche.Hex` spec corrections and the `hieroglyph` 1.0.0 ABI dep with the `ABI.decode/2` no_return fix. **Procedure now requires the dep migration first** (Task 67), since the suppressions reference `Signet.*` symbols that won't exist post-migration. After migration: strip suppressions and run `mix dialyzer.json`. |
 | 42 ✅ | 1.75 | Deliver subscription parse errors to handler | Silent drops → `{:parse_error, sub_id, reason}` events |
 | 39 | 1.50 | `:pending_transactions` integration test | Blocker (needed mempool-broadcasting provider) resolved by blockwatch-one |
 | 38 | 1.17 | Buffer unknown sub_ids during subscribe race | Close subscribe→Agent.update race window |
@@ -153,7 +155,7 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 | 40 | Switch Credo back to Hex release (moved from `release/1.7` git branch to `{:credo, "~> 1.7"}` — resolved at 1.7.18) | ✅ | 1 | 4 | 3 | 3.50 🎯 | `mix.exs` |
 | 41 | ENS enhancements: CCIP-Read / EIP-3668 off-chain lookups, ENSIP-10 wildcard resolution, full UTS-46 / ENSIP-15 Unicode normalization, multi-coin address resolution (currently ETH-only via `addr(bytes32)`) | ⬜ | 6 | 6 | 5 | 0.92 ⚠️ | `Onchain.ENS` |
 | 42 | Subscription: deliver parse errors to the handler as `{:parse_error, sub_id, reason}` events instead of silently dropping malformed notifications | ✅ | 2 | 4 | 3 | 1.75 🚀 | `Onchain.Subscription` |
-| 43 | Upstream spec fix tracking: remove `@dialyzer {:no_match, ...}` suppressions in ENS/Log/Multicall once upstream `abi` (`ABI.decode/2` no_return) and `signet` (`Hex` specs) publish fixes. Re-probe procedure: `mix deps.update signet abi` + version confirmation before stripping. Last probed 2026-04-19 (signet 1.6.1, abi 1.3.0 — still broken). | ⬜ | 1 | 3 | 3 | 3.00 🎯 | Multiple |
+| 43 | Upstream spec fix tracking: remove `@dialyzer {:no_match, ...}` suppressions in ENS/Log/Multicall. Unblocked 2026-04-30 by cartouche 0.1.0 (hex.pm); execute after the signet → cartouche migration (Task 67). | ⬜ | 1 | 3 | 3 | 3.00 🎯 | Multiple |
 | 44 | Fix CLAUDE.md Module Layout drift: `wallet.ex` and `erc20.ex` bullets now match actual exports | ✅ | 1 | 3 | 4 | 3.50 🎯 | `CLAUDE.md` |
 | 45 | Add `Onchain.ERC20.total_supply/2` (+ bang variant) to complete the standard ERC-20 read surface | ✅ | 2 | 5 | 6 | 2.75 🎯 | `Onchain.ERC20` |
 | 46 | Make `Onchain.Hex.from_integer/1` emit lowercase hex to match `Onchain.Hex.encode/1` | ✅ | 1 | 2 | 2 | 2.00 🚀 | `Onchain.Hex` |
@@ -169,6 +171,7 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 | 64 | Vendor `openrpc.json` from `ethereum/execution-apis` + emit `Onchain.RPC.Specs` lookup that feeds `defrpc` (93 methods across `eth_*`/`engine_*`/`debug_*`/`txpool_*`/`net_*`/`testing_*`) — gated on Task 63 | ⬜ | 4 | 6 | 5 | 1.38 📋 | `Onchain.RPC.Specs` (new) |
 | 65 | Differential test harness: same RPC method via `Onchain.RPC` vs reference impl (signet first, then Web3.py / viem if needed) — catches protocol-level mistakes unit tests miss | ⬜ | 6 | 5 | 3 | 0.67 ⚠️ | `test/onchain/differential/` |
 | 66 | Tree-sitter scrape of Erigon Go source for `trace_*` / `ots_*` method enumeration (~30 methods OpenRPC doesn't cover) — gated on Task 64 + actual consumer demand | ⬜ | 5 | 4 | 3 | 0.70 ⚠️ | dev-only `Mix.Task` |
+| 67 ✅ | Migrate `:signet` → `:cartouche` dep (renames every `Signet.*` reference to `Cartouche.*`, swaps `{:signet, "~> 1.6"}` for `{:cartouche, "~> 0.1"}` in `mix.exs`). Breaking — bumps minor version. Required before Task 43 can close. | ✅ Complete | 4 | 7 | 8 | 1.88 🚀 | Multiple |
 
 **Task 55 — Harden `Onchain.RPC.Helpers` address/data validation.**
 
@@ -279,6 +282,29 @@ Acceptance: `Mix.Task` `mix onchain.scrape_erigon_methods` produces `priv/specs/
 
 ---
 
+**Task 67 — Migrate `:signet` → `:cartouche` dep.** [D:4/B:7/U:8 → Eff:1.88 🚀]
+
+Cartouche 0.1.0 published on hex.pm 2026-04-30. The fork ports the upstream signet codebase under the `Cartouche.*` module tree (every `Signet.X` callsite becomes `Cartouche.X`), pins Elixir 1.20 compatibility, and depends on the published ABI fork `hieroglyph` 1.0.0 instead of the unpublished upstream `:abi` path dep. Cartouche's CHANGELOG documents the spec corrections that make onchain's Task 43 (`@dialyzer {:no_match, ...}` strip) safe to land — those corrections are not in upstream signet and won't be backported.
+
+**Why now.** Three pressures align: (a) Task 43 has been blocked on this since 2026-04-19; (b) cartouche carries Elixir 1.20 compatibility that upstream signet doesn't; (c) `hieroglyph` is published, so onchain stops depending on a path/git-only `:abi` if/when it would have needed one.
+
+**Scope.** `mix.exs` dep swap; `mix deps.get`; rename every `Signet.*` reference under `lib/onchain/**/*.ex` and `test/**/*.exs` to `Cartouche.*`; `config :signet, ...` keys (RPC URL config — see `Key Design Decisions #3`) change to `config :cartouche, ...` (verify the actual key name in the cartouche README/CHANGELOG before flipping). Run `mix test.json --quiet` and `mix dialyzer.json --quiet`. Update CLAUDE.md "Signet as sole Ethereum dep" wording.
+
+**Bundled with the migration:** Task 43 (strip the now-load-bearing `@dialyzer {:no_match, ...}` suppressions) — the migration is the precondition; the suppression strip is the immediate payoff. Counted separately so each can land in its own commit, but they ship in the same release.
+
+**Breaking change for onchain consumers.** `Onchain.*` public API doesn't change shape, but consumers' transitive dep tree changes (`:signet` drops, `:cartouche` + `:hieroglyph` add). Justifies a minor bump (v0.6.0 if Task 48 hasn't shipped, v0.7.0 otherwise). Document the dep-tree change in CHANGELOG.
+
+**Acceptance:**
+- `mix.exs` lists `{:cartouche, "~> 0.1"}` instead of `{:signet, ...}`; no `:signet` reference remains in the project (confirmed via `mix deps.tree`)
+- All `Signet.*` references in `lib/`, `test/`, and `config/` renamed to `Cartouche.*`
+- `mix test.json --quiet` green
+- `mix dialyzer.json --quiet` clean — Task 43's suppressions stripped in a follow-up commit, both shipping in the same release (v0.5.2)
+- CLAUDE.md "Signet as sole Ethereum dep" updated to "Cartouche as sole Ethereum dep" (the parenthetical "RPC, ABI, signing, crypto all in one" stays accurate — `hieroglyph` is the ABI dep but is pulled in transitively by cartouche, not directly by onchain)
+- README example snippets updated if they show `Signet.*` calls (verify; onchain may not have any)
+- CHANGELOG entry under `[Unreleased]` documenting the dep swap and the resulting dep-tree change for downstream consumers
+
+---
+
 **Task 48 — Extract subscription into `onchain_ws`.**
 
 Create a sibling package (`../onchain_ws`) that depends on `onchain` (path dep) and `zen_websocket`, and move `Onchain.Subscription` + `Onchain.Subscription.Parser` into it. Base `onchain` should no longer depend on `zen_websocket` after the move.
@@ -297,7 +323,7 @@ Acceptance criteria:
 
 ## Phase 10: RPC Composition Layer
 
-**Motivation:** Per the scope split with signet (see `../signet/ROADMAP.md` "Scope principle"), onchain is home for everything buildable on top of `Signet.*` public surface. This phase collects RPC method wrappers, observability facades, and helpers over signet structs that would otherwise have been upstream-PR candidates but correctly belong here. Each task is small; not urgent individually. Batch as needed — no consumer blocking.
+**Motivation:** Per the scope split with cartouche (see `../signet/ROADMAP.md` "Scope principle" — sibling design-discussion repo retains its historical name), onchain is home for everything buildable on top of `Cartouche.*` public surface. This phase collects RPC method wrappers, observability facades, and helpers over cartouche structs that would otherwise have been upstream-PR candidates but correctly belong here. Each task is small; not urgent individually. Batch as needed — no consumer blocking.
 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
@@ -322,7 +348,7 @@ Acceptance criteria:
 
 **54 — Retry/backoff.** Opt-in via keyword policy. Changing `send_rpc` default behavior upstream would be risky (silently changes every consumer); a downstream wrapper is the correct posture per the scope principle.
 
-**59 — Generic RPC passthrough.** Named wrappers cover the common Ethereum JSON-RPC surface, but debug / trace / storage-inspection work regularly needs methods not in the curated list (`eth_getStorageAt` for EIP-1967 slot inspection, `debug_traceTransaction` / `trace_call` for execution tracing, `eth_feeHistory` if Task 53's wrapper hasn't landed, `eth_getProof` if Task 49 hasn't). Discovered 2026-04-22 while verifying an upgradeable-proxy implementation address — had to drop to raw `Req.post!` for `eth_getStorageAt`. Shape: `Onchain.RPC.call(method, params, opts \\ [])` returning `{:ok, result} | {:error, term}`; thin wrapper over `Signet.RPC.send_rpc/3` (or equivalent), no decoding (the caller knows what they asked for). Complements but doesn't replace named wrappers — each named wrapper adds value (typespec, docstring, return-type decoding, descripex hints) over the bare passthrough.
+**59 — Generic RPC passthrough.** Named wrappers cover the common Ethereum JSON-RPC surface, but debug / trace / storage-inspection work regularly needs methods not in the curated list (`eth_getStorageAt` for EIP-1967 slot inspection, `debug_traceTransaction` / `trace_call` for execution tracing, `eth_feeHistory` if Task 53's wrapper hasn't landed, `eth_getProof` if Task 49 hasn't). Discovered 2026-04-22 while verifying an upgradeable-proxy implementation address — had to drop to raw `Req.post!` for `eth_getStorageAt`. Shape: `Onchain.RPC.call(method, params, opts \\ [])` returning `{:ok, result} | {:error, term}`; thin wrapper over `Cartouche.RPC.send_rpc/3`, no decoding (the caller knows what they asked for). Complements but doesn't replace named wrappers — each named wrapper adds value (typespec, docstring, return-type decoding, descripex hints) over the bare passthrough.
 
 ---
 
@@ -423,8 +449,8 @@ These are example consumer directions built on top of the current and planned pr
 ## Key Design Decisions
 
 1. **Pure Elixir** — no native deps, no Rustler (NIF work lives in onchain_evm)
-2. **Signet as sole Ethereum dep** — RPC, ABI, signing, crypto all in one
-3. **Consumers configure RPC URL** — `config :signet, ...` or pass URL per-call
+2. **Cartouche as sole Ethereum dep** — RPC, ABI, signing, crypto all in one (transitively pulls in `hieroglyph` for ABI)
+3. **Consumers configure RPC URL** — `config :cartouche, ...` or pass URL per-call
 4. **Standard error tuples** — `{:ok, result} | {:error, {:tag, reason}}`
 5. **Plain structs** — `defstruct` + `@enforce_keys`, no private macro deps
 6. **Descripex from day one** — All public modules use `api()` macro for self-describing functions

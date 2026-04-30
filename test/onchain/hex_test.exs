@@ -1,8 +1,8 @@
 defmodule Onchain.HexTest do
   use ExUnit.Case, async: true
 
+  alias Cartouche.Hex.InvalidHex
   alias Onchain.Hex
-  alias Signet.Hex.HexError
 
   describe "decode/1" do
     test "decodes hex with 0x prefix" do
@@ -40,7 +40,7 @@ defmodule Onchain.HexTest do
     end
 
     test "raises on invalid hex" do
-      assert_raise HexError, fn ->
+      assert_raise InvalidHex, fn ->
         Hex.decode!("0xgggg")
       end
     end
@@ -93,7 +93,7 @@ defmodule Onchain.HexTest do
     end
 
     test "raises on invalid hex" do
-      assert_raise HexError, fn ->
+      assert_raise InvalidHex, fn ->
         Hex.to_integer!("0xzzzz")
       end
     end

@@ -6,10 +6,12 @@ defmodule Onchain.TransferTest do
   # --- Fixture helpers ---
 
   # Precomputed topic hashes (matching the module's compile-time constants)
-  @transfer_topic Onchain.Hex.encode(Signet.Hash.keccak("Transfer(address,address,uint256)"))
-  @transfer_single_topic Onchain.Hex.encode(Signet.Hash.keccak("TransferSingle(address,address,address,uint256,uint256)"))
+  @transfer_topic Onchain.Hex.encode(Cartouche.Hash.keccak("Transfer(address,address,uint256)"))
+  @transfer_single_topic Onchain.Hex.encode(
+                           Cartouche.Hash.keccak("TransferSingle(address,address,address,uint256,uint256)")
+                         )
   @transfer_batch_topic Onchain.Hex.encode(
-                          Signet.Hash.keccak("TransferBatch(address,address,address,uint256[],uint256[])")
+                          Cartouche.Hash.keccak("TransferBatch(address,address,address,uint256[],uint256[])")
                         )
 
   # Test addresses (padded to 32 bytes for topics)
@@ -235,7 +237,7 @@ defmodule Onchain.TransferTest do
         )
 
       # Approval event — should be skipped
-      approval_topic = Onchain.Hex.encode(Signet.Hash.keccak("Approval(address,address,uint256)"))
+      approval_topic = Onchain.Hex.encode(Cartouche.Hash.keccak("Approval(address,address,uint256)"))
 
       non_transfer_log =
         build_log(

@@ -1,12 +1,12 @@
 # Onchain
 
-Pure Elixir Ethereum library. Provides read (`eth_call`) and write (transaction signing) capabilities using [`signet`](https://hex.pm/packages/signet) as the sole Ethereum dependency. No native deps, no Rustler.
+Pure Elixir Ethereum library. Provides read (`eth_call`) and write (transaction signing) capabilities using [`cartouche`](https://hex.pm/packages/cartouche) as the sole Ethereum dependency. No native deps, no Rustler.
 
 ## Package Family
 
 | Package | Purpose | Deps |
 |---------|---------|------|
-| **onchain** (this) | Core Ethereum primitives, RPC, ABI, signing | signet |
+| **onchain** (this) | Core Ethereum primitives, RPC, ABI, signing | cartouche |
 | [onchain_aave](https://github.com/ZenHive/onchain_aave) | Aave V3 protocol wrappers | onchain |
 | [onchain_evm](https://github.com/ZenHive/onchain_evm) | Rust NIFs: revm simulation, Solidity parsing, codegen | onchain + rustler |
 | [onchain_js](https://github.com/ZenHive/onchain_js) | JS bridge: npm packages on the BEAM via QuickBEAM | onchain + quickbeam |
@@ -36,7 +36,7 @@ Requires an Ethereum JSON-RPC endpoint. Configure via:
 
 ```elixir
 # config/config.exs
-config :signet, :rpc_url, "https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY"
+config :cartouche, :ethereum_node, "https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY"
 ```
 
 Or pass the URL per-call to `Onchain.RPC` functions.

@@ -1,6 +1,6 @@
 defmodule Onchain.RPC do
   @moduledoc """
-  Ethereum JSON-RPC wrapper using signet's RPC client.
+  Ethereum JSON-RPC wrapper using cartouche's RPC client.
 
   Provides a curated API for common Ethereum RPC methods with consistent
   error tuples and option handling. All functions accept `:rpc_url`,
@@ -75,7 +75,7 @@ defmodule Onchain.RPC do
          {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")) do
       call_params = %{"to" => hex_addr, "data" => hex_data}
 
-      do_rpc("eth_call", [call_params, block], to_signet_opts(opts))
+      do_rpc("eth_call", [call_params, block], to_rpc_opts(opts))
     end
   end
 
@@ -115,7 +115,7 @@ defmodule Onchain.RPC do
   @spec eth_send_raw_transaction(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def eth_send_raw_transaction(data, opts \\ []) do
     with {:ok, _hex_data} <- ensure_hex_data(data) do
-      do_rpc("eth_sendRawTransaction", [data], to_signet_opts(opts))
+      do_rpc("eth_sendRawTransaction", [data], to_rpc_opts(opts))
     end
   end
 
@@ -154,7 +154,7 @@ defmodule Onchain.RPC do
   def get_balance(address, opts \\ []) do
     with {:ok, hex_addr} <- ensure_hex_address(address),
          {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")) do
-      do_rpc("eth_getBalance", [hex_addr, block], Keyword.put(to_signet_opts(opts), :decode, :hex_unsigned))
+      do_rpc("eth_getBalance", [hex_addr, block], Keyword.put(to_rpc_opts(opts), :decode, :hex_unsigned))
     end
   end
 
@@ -190,7 +190,7 @@ defmodule Onchain.RPC do
 
   @spec block_number(keyword()) :: {:ok, non_neg_integer()} | {:error, term()}
   def block_number(opts \\ []) do
-    do_rpc("eth_blockNumber", [], Keyword.put(to_signet_opts(opts), :decode, :hex_unsigned))
+    do_rpc("eth_blockNumber", [], Keyword.put(to_rpc_opts(opts), :decode, :hex_unsigned))
   end
 
   # --- block_number! ---
@@ -241,16 +241,16 @@ defmodule Onchain.RPC do
 
   def get_block_by_number(block_id, opts) when is_integer(block_id) and block_id >= 0 do
     hex = Onchain.Hex.from_integer(block_id)
-    do_rpc("eth_getBlockByNumber", [hex, false], to_signet_opts(opts))
+    do_rpc("eth_getBlockByNumber", [hex, false], to_rpc_opts(opts))
   end
 
   def get_block_by_number(tag, opts) when tag in @block_tags do
-    do_rpc("eth_getBlockByNumber", [tag, false], to_signet_opts(opts))
+    do_rpc("eth_getBlockByNumber", [tag, false], to_rpc_opts(opts))
   end
 
   def get_block_by_number("0x" <> _ = hex_num, opts) do
     if Onchain.Hex.valid?(hex_num) do
-      do_rpc("eth_getBlockByNumber", [hex_num, false], to_signet_opts(opts))
+      do_rpc("eth_getBlockByNumber", [hex_num, false], to_rpc_opts(opts))
     else
       {:error, {:invalid_block_id, hex_num}}
     end
@@ -293,7 +293,7 @@ defmodule Onchain.RPC do
 
   @spec chain_id(keyword()) :: {:ok, non_neg_integer()} | {:error, term()}
   def chain_id(opts \\ []) do
-    do_rpc("eth_chainId", [], Keyword.put(to_signet_opts(opts), :decode, :hex_unsigned))
+    do_rpc("eth_chainId", [], Keyword.put(to_rpc_opts(opts), :decode, :hex_unsigned))
   end
 
   # --- chain_id! ---
@@ -329,7 +329,7 @@ defmodule Onchain.RPC do
   @spec get_transaction_receipt(String.t(), keyword()) :: {:ok, map() | nil} | {:error, term()}
   def get_transaction_receipt(tx_hash, opts \\ []) do
     with {:ok, _hex} <- ensure_tx_hash(tx_hash) do
-      case do_rpc("eth_getTransactionReceipt", [tx_hash], to_signet_opts(opts)) do
+      case do_rpc("eth_getTransactionReceipt", [tx_hash], to_rpc_opts(opts)) do
         {:ok, nil} -> {:ok, nil}
         {:ok, receipt} when is_map(receipt) -> {:ok, parse_receipt(receipt)}
         error -> error
@@ -376,7 +376,7 @@ defmodule Onchain.RPC do
       do_rpc(
         "eth_getTransactionCount",
         [hex_addr, block],
-        Keyword.put(to_signet_opts(opts), :decode, :hex_unsigned)
+        Keyword.put(to_rpc_opts(opts), :decode, :hex_unsigned)
       )
     end
   end
@@ -417,7 +417,7 @@ defmodule Onchain.RPC do
   def eth_get_code(address, opts \\ []) do
     with {:ok, hex_addr} <- ensure_hex_address(address),
          {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")) do
-      do_rpc("eth_getCode", [hex_addr, block], to_signet_opts(opts))
+      do_rpc("eth_getCode", [hex_addr, block], to_rpc_opts(opts))
     end
   end
 
@@ -455,7 +455,7 @@ defmodule Onchain.RPC do
   @spec get_transaction_by_hash(String.t(), keyword()) :: {:ok, map() | nil} | {:error, term()}
   def get_transaction_by_hash(tx_hash, opts \\ []) do
     with {:ok, _hex} <- ensure_tx_hash(tx_hash) do
-      case do_rpc("eth_getTransactionByHash", [tx_hash], to_signet_opts(opts)) do
+      case do_rpc("eth_getTransactionByHash", [tx_hash], to_rpc_opts(opts)) do
         {:ok, nil} -> {:ok, nil}
         {:ok, tx} when is_map(tx) -> {:ok, parse_transaction(tx)}
         error -> error
@@ -503,7 +503,7 @@ defmodule Onchain.RPC do
   def eth_get_logs(filter, opts \\ []) when is_map(filter) do
     with :ok <- validate_log_filter_keys(filter),
          {:ok, rpc_filter} <- build_log_filter(filter) do
-      case do_rpc("eth_getLogs", [rpc_filter], to_signet_opts(opts)) do
+      case do_rpc("eth_getLogs", [rpc_filter], to_rpc_opts(opts)) do
         {:ok, logs} when is_list(logs) -> {:ok, Enum.map(logs, &parse_log/1)}
         {:ok, other} -> {:error, {:rpc_error, %{message: "unexpected response: #{inspect(other)}"}}}
         error -> error
@@ -561,7 +561,7 @@ defmodule Onchain.RPC do
 
   @spec call(String.t(), [term()], keyword()) :: {:ok, term()} | {:error, term()}
   def call(method, params, opts \\ []) when is_binary(method) and is_list(params) do
-    do_rpc(method, params, to_signet_opts(opts))
+    do_rpc(method, params, to_rpc_opts(opts))
   end
 
   # --- call! ---

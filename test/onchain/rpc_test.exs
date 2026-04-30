@@ -454,7 +454,7 @@ defmodule Onchain.RPCTest do
     end
 
     test "two-arity form (default opts) dispatches identically" do
-      # No opts → no :rpc_url override → signet falls back to app config which
+      # No opts → no :rpc_url override → cartouche falls back to app config which
       # is unconfigured in test env, surfacing as a transport-level rpc_error.
       assert {:error, {:rpc_error, _}} = RPC.call("eth_blockNumber", [])
     end

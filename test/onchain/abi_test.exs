@@ -89,7 +89,7 @@ defmodule Onchain.ABITest do
     end
 
     test "raises on invalid hex" do
-      assert_raise Signet.Hex.HexError, fn ->
+      assert_raise Cartouche.Hex.InvalidHex, fn ->
         ABI.decode_response!("(uint256)", "0xzzzz")
       end
     end

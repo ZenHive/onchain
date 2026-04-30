@@ -38,7 +38,7 @@ defmodule Onchain.MixProject do
 
   defp deps do
     [
-      {:signet, "~> 1.6"},
+      {:cartouche, "~> 0.1"},
       {:decimal, "~> 2.0"},
       {:descripex, "~> 0.6"},
       {:jason, "~> 1.4"},
@@ -61,7 +61,7 @@ defmodule Onchain.MixProject do
   end
 
   defp description do
-    "Shared Ethereum/blockchain library for read (eth_call) and write (transaction signing) operations using signet."
+    "Shared Ethereum/blockchain library for read (eth_call) and write (transaction signing) operations using cartouche."
   end
 
   defp package do

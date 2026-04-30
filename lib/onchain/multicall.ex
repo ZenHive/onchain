@@ -29,9 +29,10 @@ defmodule Onchain.Multicall do
   alias Onchain.Contract
   alias Onchain.Hex
 
-  # TODO: Remove when upstream specs are fixed (abi: ABI.decode/2 no_return, signet: Hex specs).
-  # Last probed 2026-04-19 against signet 1.6.1 / abi 1.3.0 — still broken.
-  # Re-probe: run `mix deps.update signet abi`, confirm versions advanced, then strip and re-run dialyzer.
+  # TODO(Task 43): Remove when hieroglyph ABI.decode/2 spec is fixed. Cartouche 0.1.0
+  # already corrected its own Hex specs, but hieroglyph still spec's decode/2 as
+  # no_return(). Bundled dialyzer-strip commit (Task 43) removes this suppression —
+  # re-probe with `mix deps.update cartouche hieroglyph` first.
   @dialyzer {:no_match,
              [aggregate3: 2, aggregate3!: 2, call_many: 2, call_many!: 2, decode_result: 2, decode_calldata: 1]}
   @dialyzer {:no_return, [aggregate3!: 1, aggregate3!: 2, call_many!: 1, call_many!: 2]}

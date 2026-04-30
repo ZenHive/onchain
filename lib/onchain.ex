@@ -2,7 +2,7 @@ defmodule Onchain do
   @moduledoc """
   Shared Ethereum/blockchain library providing read and write capabilities.
 
-  Uses `signet` as the sole Ethereum dependency for RPC calls, ABI encoding,
+  Uses `cartouche` as the sole Ethereum dependency for RPC calls, ABI encoding,
   transaction signing, and cryptographic operations.
 
   ## Discovery

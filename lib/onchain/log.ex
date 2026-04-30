@@ -30,9 +30,10 @@ defmodule Onchain.Log do
 
   use Descripex, namespace: "/log"
 
-  # TODO: Remove when upstream abi spec is fixed (ABI.decode/2 no_return).
-  # Last probed 2026-04-19 against abi 1.3.0 — still broken.
-  # Re-probe: run `mix deps.update abi`, confirm version advanced, then strip and re-run dialyzer.
+  # TODO(Task 43): Remove when hieroglyph ABI.decode/2 spec is fixed. The
+  # no_return success typing in hieroglyph 1.0.0 makes the decode branches here
+  # appear unreachable to dialyzer. Bundled dialyzer-strip commit (Task 43)
+  # removes this suppression — re-probe with `mix deps.update cartouche hieroglyph` first.
   @dialyzer {:no_match, [decode_event: 2, decode_event!: 2, decode_non_indexed_params: 2]}
   @dialyzer {:no_return, [decode_event!: 2]}
   @dialyzer {:no_contracts, [decode_event!: 2]}
@@ -56,7 +57,7 @@ defmodule Onchain.Log do
   @spec event_topic(String.t()) :: {:ok, String.t()} | {:error, term()}
   def event_topic(signature) when is_binary(signature) do
     if String.contains?(signature, "(") and String.ends_with?(signature, ")") do
-      {:ok, Onchain.Hex.encode(Signet.Hash.keccak(signature))}
+      {:ok, Onchain.Hex.encode(Cartouche.Hash.keccak(signature))}
     else
       {:error, {:invalid_signature, signature}}
     end
@@ -141,7 +142,7 @@ defmodule Onchain.Log do
   @spec verify_topic0(String.t(), String.t()) :: :ok | {:error, term()}
   defp verify_topic0(topic0, signature) do
     canonical = to_canonical_signature(signature)
-    expected = Onchain.Hex.encode(Signet.Hash.keccak(canonical))
+    expected = Onchain.Hex.encode(Cartouche.Hash.keccak(canonical))
 
     if String.downcase(topic0) == String.downcase(expected),
       do: :ok,

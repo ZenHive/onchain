@@ -34,9 +34,9 @@ defmodule Onchain.ERC1155 do
   alias Onchain.Address
   alias Onchain.Contract
 
-  # Contract.call/5 inherits the upstream Signet.Hex spec mismatch that
-  # makes ABI.decode_response/2 appear to return no_return(). Every function
-  # here unwraps Contract.call results, so the same cascade applies.
+  # TODO(Task 43): Contract.call/5 inherits the upstream hieroglyph ABI.decode/2
+  # no_return spec that makes ABI.decode_response/2 appear to return no_return().
+  # Every function here unwraps Contract.call results, so the same cascade applies.
   @dialyzer {:no_match,
              [
                balance_of: 4,

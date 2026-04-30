@@ -1,6 +1,6 @@
 # Onchain
 
-Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) and write (transaction signing) capabilities using `signet` as the sole Ethereum dependency.
+Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) and write (transaction signing) capabilities using `cartouche` as the sole Ethereum dependency.
 
 @~/.claude/includes/across-instances.md
 @~/.claude/includes/critical-rules.md
@@ -41,7 +41,7 @@ This repo is part of a multi-library portfolio. The boundary is **ephemeral vs d
 6. Registers / queries / validates agents via EIP-8004 registries? → **onchain_agents** (when built)
 7. Composes those capabilities into a user-facing workflow? → **separate consumer repo**
 
-**Scope split with signet (substrate layer).** signet = Ethereum primitives (key management, signing, transaction encoding, raw RPC, hex/ABI/typed-data). onchain (and its siblings) = everything buildable on top of `Signet.*` from outside signet. **Rule:** if the feature requires signet internals (new tx type, signer extension, primitive encoding), it's a signet-PR candidate. Otherwise — including RPC method wrappers, ERC standards, protocol parsers, telemetry facades, retry/backoff, fee helpers, EIP-8004 registries — it lives in this portfolio. See `../signet/ROADMAP.md` "Scope principle" for the full classification and EIP triage rubric.
+**Scope split with cartouche (substrate layer).** cartouche = Ethereum primitives (key management, signing, transaction encoding, raw RPC, hex/ABI/typed-data). onchain (and its siblings) = everything buildable on top of `Cartouche.*` from outside cartouche. **Rule:** if the feature requires cartouche internals (new tx type, signer extension, primitive encoding), it's a cartouche-PR candidate. Otherwise — including RPC method wrappers, ERC standards, protocol parsers, telemetry facades, retry/backoff, fee helpers, EIP-8004 registries — it lives in this portfolio. See `../signet/ROADMAP.md` "Scope principle" for the full classification and EIP triage rubric (the sibling design-discussion repo retains its historical name).
 
 **Watch boundary:** onchain Phase 8 (eth_subscribe, Transfer parser) overlaps rexex territory. The distinction: onchain returns results to the caller (ephemeral); rexex writes facts to Postgres (durable). If a consumer needs historical queries over indexed data, that's rexex.
 
@@ -50,10 +50,10 @@ This repo is part of a multi-library portfolio. The boundary is **ephemeral vs d
 ## Architecture
 
 - **Pure Elixir** — no native deps, no Rustler, no compilation of C/Rust
-- **signet** is the primary Ethereum dep — RPC, ABI encoding, signing, crypto all in one
+- **cartouche** is the primary Ethereum dep — RPC, ABI encoding, signing, crypto all in one (transitively pulls in `hieroglyph` for ABI)
 - **zen_websocket** for WebSocket transport (eth_subscribe real-time subscriptions)
-- Signet wraps **curvy** (pure Elixir secp256k1) internally for signing/key ops — never add curvy as a direct dep
-- Consumers configure RPC URL via `config :signet` or pass URL per-call
+- Cartouche wraps **curvy** (pure Elixir secp256k1) internally for signing/key ops — never add curvy as a direct dep
+- Consumers configure RPC URL via `config :cartouche` or pass URL per-call
 - Standard error tuples: `{:ok, result} | {:error, {:tag, reason}}`
 - Plain structs with `defstruct` + `@enforce_keys`, no private macro deps
 - Path dependency in consumers: `{:onchain, path: "../onchain"}`

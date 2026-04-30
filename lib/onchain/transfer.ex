@@ -55,7 +55,8 @@ defmodule Onchain.Transfer do
 
   require Logger
 
-  # Cascade from Log.decode_event → ABI.decode upstream spec mismatches
+  # TODO(Task 43): Cascade from Log.decode_event → ABI.decode upstream spec mismatches
+  # (hieroglyph 1.0.0 no_return). Bundled dialyzer-strip commit removes this suppression.
   @dialyzer {:no_match, [do_parse_erc20: 1, do_parse_erc721: 1, do_parse_erc1155_single: 1, do_parse_erc1155_batch: 1]}
 
   # --- Event signatures ---
@@ -75,9 +76,9 @@ defmodule Onchain.Transfer do
                         "address indexed to, uint256[] ids, uint256[] values)"
 
   # Precomputed topic hashes (compile-time)
-  @transfer_topic Hex.encode(Signet.Hash.keccak("Transfer(address,address,uint256)"))
-  @transfer_single_topic Hex.encode(Signet.Hash.keccak("TransferSingle(address,address,address,uint256,uint256)"))
-  @transfer_batch_topic Hex.encode(Signet.Hash.keccak("TransferBatch(address,address,address,uint256[],uint256[])"))
+  @transfer_topic Hex.encode(Cartouche.Hash.keccak("Transfer(address,address,uint256)"))
+  @transfer_single_topic Hex.encode(Cartouche.Hash.keccak("TransferSingle(address,address,address,uint256,uint256)"))
+  @transfer_batch_topic Hex.encode(Cartouche.Hash.keccak("TransferBatch(address,address,address,uint256[],uint256[])"))
 
   # --- Struct ---
 

@@ -2,14 +2,14 @@ defmodule Onchain.Hex do
   @moduledoc """
   Hex encoding/decoding for Ethereum data.
 
-  Curated 7-function API delegating to `Signet.Hex` with normalized error tuples
+  Curated 7-function API delegating to `Cartouche.Hex` with normalized error tuples
   and descripex self-description. All hex strings use the `0x` prefix convention.
 
   ## Error Format
 
   All failable functions return `{:error, {:invalid_hex, input}}` where `input`
   is the original value that failed to decode. Bang variants raise
-  `Signet.Hex.HexError`.
+  `Cartouche.Hex.InvalidHex`.
 
   ## Functions
 
@@ -26,8 +26,8 @@ defmodule Onchain.Hex do
 
   use Descripex, namespace: "/hex"
 
-  # Signet.Hex specs don't match implementation (returns :invalid_hex, spec says :error).
-  # Dialyzer's success typing incorrectly concludes error branches are unreachable.
+  # TODO(Task 43): cartouche corrected the upstream Hex spec but the suppression
+  # remains pending the dialyzer-strip pass that bundles with this migration.
   @dialyzer {:no_match, [decode: 1, to_integer: 1]}
 
   # Matches 0x-prefixed (including bare 0x = empty bytes) or bare hex with ≥1 digit
@@ -44,9 +44,8 @@ defmodule Onchain.Hex do
 
   @spec decode(String.t()) :: {:ok, binary()} | {:error, {:invalid_hex, String.t()}}
   def decode(hex_string) do
-    case Signet.Hex.decode_hex(hex_string) do
+    case Cartouche.Hex.decode_hex(hex_string) do
       {:ok, binary} -> {:ok, binary}
-      # Signet returns :invalid_hex despite spec saying :error — catch-all is most defensive
       _error -> {:error, {:invalid_hex, hex_string}}
     end
   end
@@ -61,7 +60,7 @@ defmodule Onchain.Hex do
   )
 
   @spec decode!(String.t()) :: binary()
-  defdelegate decode!(hex_string), to: Signet.Hex, as: :decode_hex!
+  defdelegate decode!(hex_string), to: Cartouche.Hex, as: :decode_hex!
 
   # --- encode ---
 
@@ -73,7 +72,7 @@ defmodule Onchain.Hex do
   )
 
   @spec encode(binary()) :: String.t()
-  defdelegate encode(binary), to: Signet.Hex, as: :encode_hex
+  defdelegate encode(binary), to: Cartouche.Hex, as: :encode_hex
 
   # --- to_integer ---
 
@@ -91,7 +90,7 @@ defmodule Onchain.Hex do
   def to_integer(hex_string) when hex_string in ["", "0x"], do: {:error, {:invalid_hex, hex_string}}
 
   def to_integer(hex_string) do
-    case Signet.Hex.decode_hex_number(hex_string) do
+    case Cartouche.Hex.decode_hex_number(hex_string) do
       {:ok, n} -> {:ok, n}
       _error -> {:error, {:invalid_hex, hex_string}}
     end
@@ -107,7 +106,7 @@ defmodule Onchain.Hex do
   )
 
   @spec to_integer!(String.t()) :: non_neg_integer()
-  defdelegate to_integer!(hex_string), to: Signet.Hex, as: :decode_hex_number!
+  defdelegate to_integer!(hex_string), to: Cartouche.Hex, as: :decode_hex_number!
 
   # --- from_integer ---
 
@@ -120,7 +119,7 @@ defmodule Onchain.Hex do
 
   @spec from_integer(non_neg_integer()) :: String.t()
   def from_integer(n) when is_integer(n) and n >= 0 do
-    n |> Signet.Hex.encode_short_hex() |> String.downcase()
+    n |> Cartouche.Hex.encode_short_hex() |> String.downcase()
   end
 
   # --- valid? ---
