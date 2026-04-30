@@ -38,20 +38,21 @@
 | 56 | `eth_get_logs/2` filter-key whitelist | Unknown keys (including JSON-RPC-style `"fromBlock"`) now return `{:invalid_filter_key, key}` instead of silent `{:ok, []}` |
 | 59 | `Onchain.RPC.call/3` + `call!/3` generic passthrough | Escape-hatch for any JSON-RPC method (`eth_getStorageAt`, `debug_traceTransaction`, `trace_call`, …); no decoding, same opts/error shape as named wrappers |
 | 67 | `:signet` → `:cartouche` dep migration | hex.pm dep swap; every `Signet.*` reference renamed to `Cartouche.*`; `Onchain.*` public API byte-identical for consumers; bundled with Task 43 in v0.5.2 |
+| 43 | Strip upstream-cascade dialyzer suppressions | All eleven `@dialyzer {:no_match, :no_return, :no_contracts}` blocks (`Onchain.ABI/Contract/ENS/Log/Multicall/Sleuth/Transfer/ERC20/ERC721/ERC1155/Hex`) now stale once cartouche 0.1.0 + hieroglyph 1.0.0 corrected the upstream specs; `mix dialyzer.json` clean post-strip. Bundled with Task 67 in v0.5.2. |
 
 ---
 
 ## Release Plan
 
-Last shipped: **v0.5.1** (2026-04-19) — zen_websocket 0.4.x compatibility. `[Unreleased]` now carries Tasks 42 (subscription parse-error delivery), 55 + 56 (RPC input hardening), 59 (generic JSON-RPC passthrough), 62 (Sleuth deploy-as-call), and the 2026-04-19 Task 43 upstream-dialyzer re-probe notes.
+Last shipped: **v0.5.1** (2026-04-19) — zen_websocket 0.4.x compatibility. `[Unreleased]` now carries Tasks 42 (subscription parse-error delivery), 55 + 56 (RPC input hardening), 59 (generic JSON-RPC passthrough), 62 (Sleuth deploy-as-call), 67 (`:signet` → `:cartouche` dep migration), and 43 (strip the upstream-cascade dialyzer suppressions now that cartouche 0.1.0 + hieroglyph 1.0.0 carry the corrected specs).
 
 ### 🎯 v0.5.2 — Subscription hardening (next, patch, non-breaking)
 
-Finishes what v0.5.0/0.5.1 started on the subscription path and tracks dialyzer suppressions unblocked 2026-04-30 by the cartouche 0.1.0 fork (Task 67) — strip happens after migration.
+Finishes what v0.5.0/0.5.1 started on the subscription path and clears the upstream-cascade dialyzer suppressions that the cartouche 0.1.0 fork (Task 67) unblocked — Task 43 stripped them post-migration on 2026-04-30.
 
 | Task | Eff | What | Why in this release |
 |------|-----|------|---------------------|
-| 43 | 3.00 | Remove `@dialyzer {:no_match, ...}` suppressions | Unblocked 2026-04-30 by cartouche 0.1.0 (hex.pm) — fork carries the `Cartouche.Hex` spec corrections and the `hieroglyph` 1.0.0 ABI dep with the `ABI.decode/2` no_return fix. **Procedure now requires the dep migration first** (Task 67), since the suppressions reference `Signet.*` symbols that won't exist post-migration. After migration: strip suppressions and run `mix dialyzer.json`. |
+| 43 ✅ | 3.00 | Remove `@dialyzer {:no_match, ...}` suppressions | Stripped 2026-04-30 in the commit immediately after Task 67. All eleven module suppressions (`Onchain.ABI/Contract/ENS/Log/Multicall/Sleuth/Transfer/ERC20/ERC721/ERC1155/Hex`) were stale once cartouche 0.1.0 + hieroglyph 1.0.0 landed; `mix dialyzer.json` clean post-strip. `Onchain.Subscription` (zen_websocket cause) and `Onchain.RPC.Helpers.do_rpc/3` (cartouche RPC error-shape — re-probed, still narrow) intentionally retained. |
 | 42 ✅ | 1.75 | Deliver subscription parse errors to handler | Silent drops → `{:parse_error, sub_id, reason}` events |
 | 39 | 1.50 | `:pending_transactions` integration test | Blocker (needed mempool-broadcasting provider) resolved by blockwatch-one |
 | 38 | 1.17 | Buffer unknown sub_ids during subscribe race | Close subscribe→Agent.update race window |
@@ -155,7 +156,7 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 | 40 | Switch Credo back to Hex release (moved from `release/1.7` git branch to `{:credo, "~> 1.7"}` — resolved at 1.7.18) | ✅ | 1 | 4 | 3 | 3.50 🎯 | `mix.exs` |
 | 41 | ENS enhancements: CCIP-Read / EIP-3668 off-chain lookups, ENSIP-10 wildcard resolution, full UTS-46 / ENSIP-15 Unicode normalization, multi-coin address resolution (currently ETH-only via `addr(bytes32)`) | ⬜ | 6 | 6 | 5 | 0.92 ⚠️ | `Onchain.ENS` |
 | 42 | Subscription: deliver parse errors to the handler as `{:parse_error, sub_id, reason}` events instead of silently dropping malformed notifications | ✅ | 2 | 4 | 3 | 1.75 🚀 | `Onchain.Subscription` |
-| 43 | Upstream spec fix tracking: remove `@dialyzer {:no_match, ...}` suppressions in ENS/Log/Multicall. Unblocked 2026-04-30 by cartouche 0.1.0 (hex.pm); execute after the signet → cartouche migration (Task 67). | ⬜ | 1 | 3 | 3 | 3.00 🎯 | Multiple |
+| 43 ✅ | Upstream spec fix tracking: remove `@dialyzer {:no_match, ...}` suppressions across the eleven modules that flow through `ABI.decode_response/2` (`Onchain.ABI/Contract/ENS/Log/Multicall/Sleuth/Transfer/ERC20/ERC721/ERC1155/Hex`). Stripped 2026-04-30 immediately after Task 67; cartouche 0.1.0 + hieroglyph 1.0.0 carry the corrected upstream specs. `Onchain.Subscription` (zen_websocket) and `Onchain.RPC.Helpers.do_rpc/3` (cartouche RPC error-shape) intentionally retained. | ✅ Complete | 1 | 3 | 3 | 3.00 🎯 | Multiple |
 | 44 | Fix CLAUDE.md Module Layout drift: `wallet.ex` and `erc20.ex` bullets now match actual exports | ✅ | 1 | 3 | 4 | 3.50 🎯 | `CLAUDE.md` |
 | 45 | Add `Onchain.ERC20.total_supply/2` (+ bang variant) to complete the standard ERC-20 read surface | ✅ | 2 | 5 | 6 | 2.75 🎯 | `Onchain.ERC20` |
 | 46 | Make `Onchain.Hex.from_integer/1` emit lowercase hex to match `Onchain.Hex.encode/1` | ✅ | 1 | 2 | 2 | 2.00 🚀 | `Onchain.Hex` |

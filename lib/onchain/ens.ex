@@ -55,65 +55,6 @@ defmodule Onchain.ENS do
   alias Onchain.Contract
   alias Onchain.Hex
 
-  # TODO(Task 43): Remove when hieroglyph ABI.decode/2 spec is fixed. Cartouche 0.1.0
-  # already corrected its own Hex specs, but hieroglyph still spec's decode/2 as
-  # no_return(), cascading through Contract.call/5 → ABI.decode_response/2. Bundled
-  # dialyzer-strip commit (Task 43) removes this suppression — re-probe with
-  # `mix deps.update cartouche hieroglyph` first.
-  @dialyzer {:no_match,
-             [
-               resolve: 2,
-               resolve!: 2,
-               resolver: 2,
-               resolver!: 2,
-               reverse: 2,
-               reverse!: 2,
-               text: 3,
-               text!: 3,
-               contenthash: 2,
-               contenthash!: 2,
-               pubkey: 2,
-               pubkey!: 2,
-               abi: 3,
-               abi!: 3,
-               with_resolver: 6,
-               get_resolver: 2
-             ]}
-  @dialyzer {:no_return,
-             [
-               resolve!: 1,
-               resolve!: 2,
-               resolver!: 1,
-               resolver!: 2,
-               reverse!: 1,
-               reverse!: 2,
-               text!: 2,
-               text!: 3,
-               contenthash!: 1,
-               contenthash!: 2,
-               pubkey!: 1,
-               pubkey!: 2,
-               abi!: 2,
-               abi!: 3
-             ]}
-  @dialyzer {:no_contracts,
-             [
-               resolve!: 1,
-               resolve!: 2,
-               resolver!: 1,
-               resolver!: 2,
-               reverse!: 1,
-               reverse!: 2,
-               text!: 2,
-               text!: 3,
-               contenthash!: 1,
-               contenthash!: 2,
-               pubkey!: 1,
-               pubkey!: 2,
-               abi!: 2,
-               abi!: 3
-             ]}
-
   @ens_registry "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
   @addr_reverse_suffix "addr.reverse"
   @zero_address <<0::160>>

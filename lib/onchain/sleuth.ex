@@ -44,15 +44,6 @@ defmodule Onchain.Sleuth do
   alias Onchain.Hex
   alias Onchain.RPC.Helpers, as: RPCHelpers
 
-  # TODO(Task 43): Same cascade as Onchain.Contract / Onchain.Multicall — hieroglyph
-  # ABI.decode/2 is spec'd as no_return(), so the success branch appears unreachable
-  # to dialyzer. Cartouche corrected its own Hex specs at 0.1.0, but hieroglyph still
-  # carries the no_return cascade. Bundled dialyzer-strip commit (Task 43) removes
-  # this suppression — re-probe with `mix deps.update cartouche hieroglyph` first.
-  @dialyzer {:no_match, [query: 5, query!: 5]}
-  @dialyzer {:no_return, [query!: 4, query!: 5]}
-  @dialyzer {:no_contracts, [query!: 4, query!: 5]}
-
   # --- query ---
 
   api(:query, "Execute a Sleuth deploy-as-call: encode ctor args, append to bytecode, eth_call, decode.",

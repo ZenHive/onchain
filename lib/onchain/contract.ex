@@ -31,16 +31,6 @@ defmodule Onchain.Contract do
   alias Onchain.Address
   alias Onchain.RPC
 
-  # TODO(Task 43): ABI.decode_response/2 has upstream spec mismatch (success
-  # typing is no_return() under hieroglyph 1.0.0). This cascades through the
-  # entire call chain:
-  # 1. {:ok, values} pattern in call/5 appears unreachable → no_match
-  # 2. Bang variant calls it, inherits "no return" → no_return, no_match, no_contracts
-  # Same root cause as @dialyzer annotations in abi.ex and the ERC modules.
-  @dialyzer {:no_match, [call: 5, call!: 5]}
-  @dialyzer {:no_return, [call!: 4, call!: 5]}
-  @dialyzer {:no_contracts, [call!: 4, call!: 5]}
-
   # --- call ---
 
   api(:call, "Execute a read-only contract call: encode → eth_call → decode.",

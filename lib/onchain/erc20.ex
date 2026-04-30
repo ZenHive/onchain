@@ -44,26 +44,6 @@ defmodule Onchain.ERC20 do
   alias Onchain.Hex
   alias Onchain.Signer
 
-  # TODO(Task 43): Contract.call/5 inherits the upstream hieroglyph ABI.decode/2
-  # no_return spec that makes ABI.decode_response/2 appear to return no_return().
-  # Every function here unwraps Contract.call results, so the same cascade applies.
-  @dialyzer {:no_match, [balance_of: 3, balance_of!: 3, allowance: 4, allowance!: 4]}
-  @dialyzer {:no_match, [decimals: 2, decimals!: 2, symbol: 2, symbol!: 2]}
-  @dialyzer {:no_match, [total_supply: 2, total_supply!: 2]}
-  @dialyzer {:no_match, [approve: 4, approve!: 4, transfer: 4, transfer!: 4]}
-  @dialyzer {:no_return, [balance_of!: 2, balance_of!: 3]}
-  @dialyzer {:no_return, [allowance!: 3, allowance!: 4]}
-  @dialyzer {:no_return, [decimals!: 1, decimals!: 2]}
-  @dialyzer {:no_return, [symbol!: 1, symbol!: 2]}
-  @dialyzer {:no_return, [total_supply!: 1, total_supply!: 2]}
-  @dialyzer {:no_return, [approve!: 4, transfer!: 4]}
-  @dialyzer {:no_contracts, [balance_of!: 2, balance_of!: 3]}
-  @dialyzer {:no_contracts, [allowance!: 3, allowance!: 4]}
-  @dialyzer {:no_contracts, [decimals!: 1, decimals!: 2]}
-  @dialyzer {:no_contracts, [symbol!: 1, symbol!: 2]}
-  @dialyzer {:no_contracts, [total_supply!: 1, total_supply!: 2]}
-  @dialyzer {:no_contracts, [approve!: 4, transfer!: 4]}
-
   # --- balance_of ---
 
   api(:balance_of, "Get the token balance of an address.",

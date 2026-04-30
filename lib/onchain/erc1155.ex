@@ -34,43 +34,6 @@ defmodule Onchain.ERC1155 do
   alias Onchain.Address
   alias Onchain.Contract
 
-  # TODO(Task 43): Contract.call/5 inherits the upstream hieroglyph ABI.decode/2
-  # no_return spec that makes ABI.decode_response/2 appear to return no_return().
-  # Every function here unwraps Contract.call results, so the same cascade applies.
-  @dialyzer {:no_match,
-             [
-               balance_of: 4,
-               balance_of!: 4,
-               balance_of_batch: 4,
-               balance_of_batch!: 4,
-               uri: 3,
-               uri!: 3,
-               approved_for_all?: 4,
-               approved_for_all!: 4
-             ]}
-  @dialyzer {:no_return,
-             [
-               balance_of!: 3,
-               balance_of!: 4,
-               balance_of_batch!: 3,
-               balance_of_batch!: 4,
-               uri!: 2,
-               uri!: 3,
-               approved_for_all!: 3,
-               approved_for_all!: 4
-             ]}
-  @dialyzer {:no_contracts,
-             [
-               balance_of!: 3,
-               balance_of!: 4,
-               balance_of_batch!: 3,
-               balance_of_batch!: 4,
-               uri!: 2,
-               uri!: 3,
-               approved_for_all!: 3,
-               approved_for_all!: 4
-             ]}
-
   # --- balance_of ---
 
   api(:balance_of, "Get the balance of a specific token ID for an owner.",

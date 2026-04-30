@@ -33,13 +33,6 @@ defmodule Onchain.ABI do
 
   use Descripex, namespace: "/abi"
 
-  # TODO(Task 43): Cartouche.Hex corrected the spec but the bundled dialyzer-strip
-  # commit removes this suppression. Until then, the branch in decode_response/2
-  # still appears unreachable to dialyzer because ABI.decode/2 success typing is
-  # no_return() under hieroglyph 1.0.0.
-  @dialyzer {:no_match, decode_response: 2}
-  @dialyzer {:no_contracts, decode_response!: 2}
-
   # --- encode_call ---
 
   api(:encode_call, "Encode a function call to 0x-prefixed hex calldata.",

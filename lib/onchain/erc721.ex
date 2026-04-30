@@ -39,61 +39,6 @@ defmodule Onchain.ERC721 do
   alias Onchain.Address
   alias Onchain.Contract
 
-  # TODO(Task 43): Contract.call/5 inherits the upstream hieroglyph ABI.decode/2
-  # no_return spec that makes ABI.decode_response/2 appear to return no_return().
-  # Every function here unwraps Contract.call results, so the same cascade applies.
-  @dialyzer {:no_match,
-             [
-               balance_of: 3,
-               balance_of!: 3,
-               owner_of: 3,
-               owner_of!: 3,
-               token_uri: 3,
-               token_uri!: 3,
-               name: 2,
-               name!: 2,
-               symbol: 2,
-               symbol!: 2,
-               get_approved: 3,
-               get_approved!: 3,
-               approved_for_all?: 4,
-               approved_for_all!: 4
-             ]}
-  @dialyzer {:no_return,
-             [
-               balance_of!: 2,
-               balance_of!: 3,
-               owner_of!: 2,
-               owner_of!: 3,
-               token_uri!: 2,
-               token_uri!: 3,
-               name!: 1,
-               name!: 2,
-               symbol!: 1,
-               symbol!: 2,
-               get_approved!: 2,
-               get_approved!: 3,
-               approved_for_all!: 3,
-               approved_for_all!: 4
-             ]}
-  @dialyzer {:no_contracts,
-             [
-               balance_of!: 2,
-               balance_of!: 3,
-               owner_of!: 2,
-               owner_of!: 3,
-               token_uri!: 2,
-               token_uri!: 3,
-               name!: 1,
-               name!: 2,
-               symbol!: 1,
-               symbol!: 2,
-               get_approved!: 2,
-               get_approved!: 3,
-               approved_for_all!: 3,
-               approved_for_all!: 4
-             ]}
-
   # --- balance_of ---
 
   api(:balance_of, "Get the number of NFTs owned by an address.",

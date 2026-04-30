@@ -16,8 +16,13 @@ defmodule Onchain.RPC.Helpers do
 
   @doc false
   # Sends an RPC request and normalizes the error format.
-  # Cartouche.RPC.send_rpc/3 spec says errors are always %{code: int, message: str},
+  # Cartouche.RPC.send_rpc/3 narrowly types errors as %{code: int, message: str},
   # but runtime errors include non-map values (Finch timeouts, connection refused).
+  # Tracked upstream as cartouche ROADMAP Phase 2, Tasks 14+15+35 — error-shape
+  # widening + JSON-encode rescue (see ../cartouche/ROADMAP.md). Re-probed
+  # 2026-04-30 against cartouche 0.1.0,
+  # still narrow. Re-probe on next cartouche bump; strip this suppression once
+  # the upstream union lands.
   @dialyzer {:no_match, do_rpc: 3}
   @spec do_rpc(String.t(), list(), keyword()) :: {:ok, term()} | {:error, term()}
   def do_rpc(method, params, opts) do

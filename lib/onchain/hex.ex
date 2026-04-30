@@ -26,10 +26,6 @@ defmodule Onchain.Hex do
 
   use Descripex, namespace: "/hex"
 
-  # TODO(Task 43): cartouche corrected the upstream Hex spec but the suppression
-  # remains pending the dialyzer-strip pass that bundles with this migration.
-  @dialyzer {:no_match, [decode: 1, to_integer: 1]}
-
   # Matches 0x-prefixed (including bare 0x = empty bytes) or bare hex with ≥1 digit
   @hex_pattern ~r/^(0x[0-9a-fA-F]*|[0-9a-fA-F]+)$/
 

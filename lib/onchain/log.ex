@@ -30,14 +30,6 @@ defmodule Onchain.Log do
 
   use Descripex, namespace: "/log"
 
-  # TODO(Task 43): Remove when hieroglyph ABI.decode/2 spec is fixed. The
-  # no_return success typing in hieroglyph 1.0.0 makes the decode branches here
-  # appear unreachable to dialyzer. Bundled dialyzer-strip commit (Task 43)
-  # removes this suppression — re-probe with `mix deps.update cartouche hieroglyph` first.
-  @dialyzer {:no_match, [decode_event: 2, decode_event!: 2, decode_non_indexed_params: 2]}
-  @dialyzer {:no_return, [decode_event!: 2]}
-  @dialyzer {:no_contracts, [decode_event!: 2]}
-
   # --- event_topic ---
 
   api(:event_topic, "Compute the keccak256 topic hash for an event signature.",

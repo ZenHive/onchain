@@ -55,10 +55,6 @@ defmodule Onchain.Transfer do
 
   require Logger
 
-  # TODO(Task 43): Cascade from Log.decode_event → ABI.decode upstream spec mismatches
-  # (hieroglyph 1.0.0 no_return). Bundled dialyzer-strip commit removes this suppression.
-  @dialyzer {:no_match, [do_parse_erc20: 1, do_parse_erc721: 1, do_parse_erc1155_single: 1, do_parse_erc1155_batch: 1]}
-
   # --- Event signatures ---
 
   # ERC-20: Transfer(address indexed from, address indexed to, uint256 value)
