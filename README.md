@@ -88,6 +88,7 @@ balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
 | `Onchain.Transfer` | Parse ERC-20/721/1155 Transfer events into normalized structs |
 | `Onchain.ENS` | ENS name resolution (forward, reverse, text records, contenthash) |
 | `Onchain.Subscription` | Real-time streaming via eth_subscribe (newHeads, pendingTx, logs) |
+| `Onchain.Subscription.Parser` | Pure parsing for eth_subscribe notification payloads (newHeads, pendingTx, logs) |
 
 All public functions have `function!/1` bang variants that raise on error instead of returning `{:error, reason}` tuples.
 

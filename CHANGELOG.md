@@ -4,7 +4,7 @@ Completed roadmap tasks.
 
 ---
 
-## [Unreleased]
+## v0.5.3 — Surface-area polish (2026-05-02)
 
 ### Added — `Onchain.ABI.decode_types/2` alias (Task 58)
 

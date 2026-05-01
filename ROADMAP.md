@@ -15,7 +15,7 @@
 
 **Phase 8: Chain Intelligence Primitives ✅** — All tasks complete. Wallet analytics, transfer parsing, ENS resolution, NFT reads, and real-time subscriptions. Phase 9 (JS bridge) extracted to [onchain_js](../onchain_js/ROADMAP.md).
 
-**Up next — v0.5.3:** small surface-area polish patch. Tasks 50, 58, 60, 61 staged 2026-05-01. Non-breaking, ready to tag.
+**Up next — v0.6.0:** package split — extract `Onchain.Subscription` into sibling `onchain_ws` so HTTP-only consumers don't pull `zen_websocket`. Breaking; minor bump. See Task 48.
 
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
 >
@@ -52,9 +52,28 @@
 
 ## Release Plan
 
-Last shipped: **v0.5.2** (2026-05-01) — Subscription hardening. Closes Tasks 38 (pre-registration buffer for subscription notifications) and 39 (`:pending_transactions` integration test against blockwatch-one), bundled with the deferred Tasks 42 (subscription parse-error delivery), 43 (strip upstream-cascade dialyzer suppressions), 55 + 56 (RPC input hardening), 59 (generic JSON-RPC passthrough), 62 (Sleuth deploy-as-call), and 67 (`:signet` → `:cartouche` dep migration) from the v0.5.0–v0.5.1 backlog.
+Last shipped: **v0.5.3** (2026-05-02) — Bundled subscription hardening (v0.5.2 task set: 38, 39, 42, 43, 55, 56, 59, 62, 67) + surface-area polish (v0.5.3 task set: 50, 58, 60, 61) under a single tag covering `v0.5.1..HEAD`. v0.5.2 work was committed but never tagged separately — folded into the v0.5.3 tag rather than retroactively labeling.
 
-### ✅ v0.5.2 — Subscription hardening (patch, shipped 2026-05-01)
+### Release Discipline
+
+**When to ship:** when every task in a release-plan sub-section is ✅ AND `mix test.json --quiet` / `mix dialyzer.json --quiet` / `mix credo --strict --format json` are clean on touched files. Don't accumulate multiple unshipped release groups — that's how `v0.5.2` ended up rolled into `v0.5.3`.
+
+**Single-tag rule:** if a planned `v0.x.y` was never pushed to origin, fold its work into the next tag rather than retroactively labeling. The CHANGELOG keeps both sections (narrative); only the published tag becomes a mechanical fact.
+
+**Release commit:** bump `mix.exs` `@version`, promote CHANGELOG `[Unreleased]` → `## v0.x.y — <name> (YYYY-MM-DD)`, update ROADMAP "Last shipped" line — all in **one** commit titled `chore(release): v0.x.y`. Tag immediately after, then push branch and tag.
+
+**After every task** — non-negotiable doc updates:
+
+| File | What to update |
+|------|----------------|
+| `ROADMAP.md` | Mark task ⬜ → ✅ with shipped-date note; move from current-tasks to "Recently Completed" |
+| `CHANGELOG.md` | Add entry under `## [Unreleased]` describing what shipped + key decisions |
+| `README.md` | Update if module surface, public API, or user-facing behavior changed |
+| `CLAUDE.md` | Update Module Layout / Architecture if files moved or conventions changed |
+
+Pre-commit code-review **must verify all four** were checked. Reject reviews where doc updates are missing.
+
+### ✅ v0.5.2 — Subscription hardening (patch, shipped 2026-05-01, bundled into v0.5.3 tag)
 
 Finishes what v0.5.0/0.5.1 started on the subscription path and clears the upstream-cascade dialyzer suppressions that the cartouche 0.1.0 fork (Task 67) unblocked — Task 43 stripped them post-migration on 2026-04-30.
 
@@ -65,9 +84,9 @@ Finishes what v0.5.0/0.5.1 started on the subscription path and clears the upstr
 | 39 ✅ | 1.50 | `:pending_transactions` integration test | Shipped 2026-05-01. Live mempool broadcast via blockwatch-one; assert hash shape, unsubscribe cleanly |
 | 38 ✅ | 1.17 | Buffer unknown sub_ids during subscribe race | Shipped 2026-05-01. Per-sub_id pending buffer (cap 100, FIFO drain on register), atomic Agent ops, bang-variant coverage; `Onchain.Subscription` coverage 51% → 91% |
 
-**Acceptance:** all four tasks closed or returned with written rationale; no breaking API changes; CHANGELOG `[Unreleased]` → `v0.5.2` on tag. **Status: ready to tag** — Tasks 38, 39, 42, 43, 55, 56, 59, 62, 67 all shipped under `v0.5.2` in CHANGELOG (2026-05-01).
+**Acceptance:** all four tasks closed or returned with written rationale; no breaking API changes; CHANGELOG `[Unreleased]` → `v0.5.2` on tag. **Status: shipped under v0.5.3 tag** — Tasks 38, 39, 42, 43, 55, 56, 59, 62, 67 all shipped under `v0.5.2` in CHANGELOG (2026-05-01); v0.5.2 was never tagged separately, work flushed under the v0.5.3 tag (2026-05-02).
 
-### 🎯 v0.5.3 — Surface-area polish (next, patch, non-breaking)
+### ✅ v0.5.3 — Surface-area polish (patch, shipped 2026-05-02)
 
 Bundle of four small additions to the public API. None breaks existing callers; everything is purely additive.
 
@@ -78,7 +97,7 @@ Bundle of four small additions to the public API. None breaks existing callers; 
 | 60 ✅ | 2.00 | `eth_get_logs/2` accepts canonical camelCase string-key aliases (`"fromBlock"`, `"toBlock"`, `"address"`, `"topics"`, `"blockHash"`) |
 | 61 ✅ | 1.75 | `eth_get_logs/2` accepts `:block_hash` (EIP-1474); mutually exclusive with `:from_block`/`:to_block` before dispatch |
 
-**Acceptance:** all four shipped 2026-05-01; CHANGELOG `[Unreleased]` → `v0.5.3` on tag. Coverage post-mutation: `Onchain.ABI` 91.67%, `Onchain.RPC` 91.84% (both ≥80% standard tier). Dialyzer + Credo clean on touched files.
+**Acceptance:** all four shipped 2026-05-02 under the v0.5.3 tag. Coverage post-mutation: `Onchain.ABI` 91.67%, `Onchain.RPC` 91.84% (both ≥80% standard tier). Dialyzer + Credo clean on touched files.
 
 ### 🚀 v0.6.0 — Package split: `onchain_ws` (minor, breaking)
 
