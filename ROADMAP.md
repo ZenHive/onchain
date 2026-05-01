@@ -15,7 +15,7 @@
 
 **Phase 8: Chain Intelligence Primitives ✅** — All tasks complete. Wallet analytics, transfer parsing, ENS resolution, NFT reads, and real-time subscriptions. Phase 9 (JS bridge) extracted to [onchain_js](../onchain_js/ROADMAP.md).
 
-**Up next — v0.6.0:** package split — extract `Onchain.Subscription` into sibling `onchain_ws` so HTTP-only consumers don't pull `zen_websocket`. Breaking; minor bump. See Task 48.
+**Up next:** Code Health backlog — no breaking change pending. Next release will be patch (v0.5.4) or minor (v0.6.0) depending on which Code Health / Phase 10 task lands next. Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code Health rationale.
 
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
 >
@@ -99,17 +99,9 @@ Bundle of four small additions to the public API. None breaks existing callers; 
 
 **Acceptance:** all four shipped 2026-05-02 under the v0.5.3 tag. Coverage post-mutation: `Onchain.ABI` 91.67%, `Onchain.RPC` 91.84% (both ≥80% standard tier). Dialyzer + Credo clean on touched files.
 
-### 🚀 v0.6.0 — Package split: `onchain_ws` (minor, breaking)
+### Future (unscheduled)
 
-| Task | Eff | What |
-|------|-----|------|
-| 48 | 1.38 | Extract `Onchain.Subscription` (+ `.Parser`) into sibling `onchain_ws`, drop `zen_websocket` dep from `onchain` |
-
-**Breaking:** consumers using subscriptions must add `{:onchain_ws, path: "../onchain_ws"}`. Justifies minor bump. Ship standalone — do not bundle with v0.5.2 patches.
-
-**Acceptance:** per Task 48 criteria already in Code Health section.
-
-### Future (v0.7.0+, unscheduled)
+No breaking change pending after Task 48 was closed as won't-fix (2026-05-02). Open Code Health and Phase 10 tasks will batch into patch (v0.5.4) or minor (v0.6.0) releases as they land.
 
 Phase 7 (Tasks 28–29: DEX routing, MEV protection) and Task 41 (ENS enhancements) remain unscored for release grouping — they need consumer-project pressure and their own design phases before inclusion.
 
@@ -200,54 +192,33 @@ Add ERC-4337 support: UserOperation construction, signing, and bundler RPC (`eth
 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
-| 36 | Extract shared RPC helpers (DRY: 7 duplicated functions between RPC + Trace) | ✅ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.RPC.Helpers` |
+| 36 | Extract shared RPC helpers (DRY: 7 duplicated functions between RPC + Trace) — see [CHANGELOG](CHANGELOG.md#task-36-extract-shared-rpc-helpers) | ✅ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.RPC.Helpers` |
 | — | Code review fixes: batch state commit, defensive parsing, array handling, NatSpec | ✅ | — | — | — | — | Multiple |
-| 37 | zen_websocket: `send_message/2` should return `{:error, :disconnected}` instead of `:noproc` exit when server is dead | ✅ | 2 | 7 | 6 | 3.25 🎯 | `ZenWebsocket.Client` (resolved upstream in 0.4.1, R042) |
-| 38 ✅ | Subscription: buffer unknown sub_ids to close subscribe→Agent.update race window. Shipped 2026-05-01 — per-sub_id pending buffer (cap 100, FIFO drain on register), atomic Agent ops via `lookup_or_buffer/3` + `register_and_drain/3` + `remove_subscription/2` helpers. `Onchain.Subscription` test coverage 51% → 91%. | ✅ Complete | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
-| 39 ✅ | Subscription: `:pending_transactions` integration test against blockwatch-one (live mempool broadcast). Shipped 2026-05-01. Asserts at least one 32-byte tx hash arrives within 30s, unsubscribes cleanly. Lifecycle test simultaneously upgraded to exercise bang variants (`connect!`/`subscribe!`/`unsubscribe!`). | ✅ Complete | 2 | 3 | 3 | 1.50 📋 | `test/onchain/subscription_integration_test.exs` |
-| 40 | Switch Credo back to Hex release (moved from `release/1.7` git branch to `{:credo, "~> 1.7"}` — resolved at 1.7.18) | ✅ | 1 | 4 | 3 | 3.50 🎯 | `mix.exs` |
+| 37 | zen_websocket `send_message/2` returns `{:error, :disconnected}` on dead server — resolved upstream in 0.4.1 (R042); see [CHANGELOG](CHANGELOG.md#v051--zen_websocket-04x-compatibility-2026-04-19) | ✅ | 2 | 7 | 6 | 3.25 🎯 | `ZenWebsocket.Client` |
+| 38 | Subscription: buffer unknown sub_ids to close subscribe→Agent.update race — see [CHANGELOG](CHANGELOG.md#added--pre-registration-buffer-for-subscription-notifications-task-38) | ✅ | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
+| 39 | Subscription: `:pending_transactions` integration test — see [CHANGELOG](CHANGELOG.md#added--pending-transactions-integration-test-task-39) | ✅ | 2 | 3 | 3 | 1.50 📋 | `test/onchain/subscription_integration_test.exs` |
+| 40 | Switch Credo from `release/1.7` git branch to Hex release `{:credo, "~> 1.7"}` (1.7.18) — see [CHANGELOG](CHANGELOG.md#v050--chain-intelligence-subscriptions-nft-reads) | ✅ | 1 | 4 | 3 | 3.50 🎯 | `mix.exs` |
 | 41 | ENS enhancements: CCIP-Read / EIP-3668 off-chain lookups, ENSIP-10 wildcard resolution, full UTS-46 / ENSIP-15 Unicode normalization, multi-coin address resolution (currently ETH-only via `addr(bytes32)`) | ⬜ | 6 | 6 | 5 | 0.92 ⚠️ | `Onchain.ENS` |
-| 42 | Subscription: deliver parse errors to the handler as `{:parse_error, sub_id, reason}` events instead of silently dropping malformed notifications | ✅ | 2 | 4 | 3 | 1.75 🚀 | `Onchain.Subscription` |
-| 43 ✅ | Upstream spec fix tracking: remove `@dialyzer {:no_match, ...}` suppressions across the eleven modules that flow through `ABI.decode_response/2` (`Onchain.ABI/Contract/ENS/Log/Multicall/Sleuth/Transfer/ERC20/ERC721/ERC1155/Hex`). Stripped 2026-04-30 immediately after Task 67; cartouche 0.1.0 + hieroglyph 1.0.0 carry the corrected upstream specs. `Onchain.Subscription` (zen_websocket) and `Onchain.RPC.Helpers.do_rpc/3` (cartouche RPC error-shape) intentionally retained. | ✅ Complete | 1 | 3 | 3 | 3.00 🎯 | Multiple |
-| 44 | Fix CLAUDE.md Module Layout drift: `wallet.ex` and `erc20.ex` bullets now match actual exports | ✅ | 1 | 3 | 4 | 3.50 🎯 | `CLAUDE.md` |
-| 45 | Add `Onchain.ERC20.total_supply/2` (+ bang variant) to complete the standard ERC-20 read surface | ✅ | 2 | 5 | 6 | 2.75 🎯 | `Onchain.ERC20` |
-| 46 | Make `Onchain.Hex.from_integer/1` emit lowercase hex to match `Onchain.Hex.encode/1` | ✅ | 1 | 2 | 2 | 2.00 🚀 | `Onchain.Hex` |
-| 47 | Hotfix: zen_websocket 0.4.x handler contract — decoded maps replace raw binaries in `{:message, _}`; subscription notifications were silently dropped under the old pattern match | ✅ | 2 | 7 | 8 | 3.75 🎯 | `Onchain.Subscription` |
-| 48 | Extract `Onchain.Subscription` into `onchain_ws` package so HTTP-only consumers don't pull `zen_websocket` and its transitive WebSocket deps | ⬜ | 4 | 6 | 5 | 1.38 📋 | `onchain_ws` (new package) |
-| 55 | Harden `Onchain.RPC.Helpers` address/data validation — four silent-corruption / contract-violation paths | ✅ | 2 | 9 | 8 | 4.25 🎯 | `Onchain.RPC.Helpers` |
-| 56 | 🐛 `Onchain.RPC.eth_get_logs/2` silently ignores wrong filter-key names (`fromBlock`/`toBlock` vs `:from_block`/`:to_block`) — returns `{:ok, []}` instead of erroring | ✅ | 2 | 6 | 7 | 3.25 🎯 | `Onchain.RPC` |
-| 60 ✅ | Log filter ergonomics: accept canonical camelCase string-key aliases (`"fromBlock"`, `"toBlock"`, `"address"`, `"topics"`, `"blockHash"`) for the atom-keyed filter; non-canonical string keys still fail the Task 56 whitelist. Atom wins silently on conflict. Shipped 2026-05-01. | ✅ Complete | 2 | 4 | 4 | 2.00 🚀 | `Onchain.RPC` |
-| 61 ✅ | `eth_get_logs/2` filter accepts `:block_hash` (canonical) + `"blockHash"` (alias). Validates via `ensure_tx_hash/1`; errors as `{:invalid_filter, {:blockHash, _}}`. Mutually exclusive with `:from_block`/`:to_block` per EIP-1474 — combination errors as `{:invalid_filter, {:block_hash_mutually_exclusive, present}}` before any RPC dispatch. Shipped 2026-05-01. | ✅ Complete | 2 | 3 | 4 | 1.75 🚀 | `Onchain.RPC` |
+| 42 | Subscription: deliver parse errors to handler as `{:parse_error, sub_id, reason}` events — see [CHANGELOG](CHANGELOG.md#v052--subscription-hardening-2026-05-01) | ✅ | 2 | 4 | 3 | 1.75 🚀 | `Onchain.Subscription` |
+| 43 | Strip upstream-cascade `@dialyzer {:no_match, ...}` suppressions — see [CHANGELOG](CHANGELOG.md#maintenance--strip-upstream-cascade-dialyzer-suppressions-task-43) | ✅ | 1 | 3 | 3 | 3.00 🎯 | Multiple |
+| 44 | Fix CLAUDE.md Module Layout drift (`wallet.ex` + `erc20.ex` bullets) — see [CHANGELOG](CHANGELOG.md#task-44-claudemd-module-layout-drift-fix) | ✅ | 1 | 3 | 4 | 3.50 🎯 | `CLAUDE.md` |
+| 45 | Add `Onchain.ERC20.total_supply/2` (+ bang) — see [CHANGELOG](CHANGELOG.md#task-45-onchainerc20total_supply2--bang-variant) | ✅ | 2 | 5 | 6 | 2.75 🎯 | `Onchain.ERC20` |
+| 46 | Make `Onchain.Hex.from_integer/1` emit lowercase hex — see [CHANGELOG](CHANGELOG.md#task-46-lowercase-onchainhexfrom_integer1) | ✅ | 1 | 2 | 2 | 2.00 🚀 | `Onchain.Hex` |
+| 47 | Hotfix: zen_websocket 0.4.x handler contract (decoded maps replace raw binaries) — see [CHANGELOG](CHANGELOG.md#v051--zen_websocket-04x-compatibility-2026-04-19) | ✅ | 2 | 7 | 8 | 3.75 🎯 | `Onchain.Subscription` |
+| 48 | Extract `Onchain.Subscription` into `onchain_ws` package — see won't-fix rationale below | 🔶 Won't fix (2026-05-02) | — | — | — | — | `onchain_ws` (new package) |
+| 55 | Harden `Onchain.RPC.Helpers` address/data validation (four silent-corruption paths) — see [CHANGELOG](CHANGELOG.md#changed--rpc-input-hardening-tasks-55-56) | ✅ | 2 | 9 | 8 | 4.25 🎯 | `Onchain.RPC.Helpers` |
+| 56 | 🐛 `eth_get_logs/2` silently dropped wrong filter keys — see [CHANGELOG](CHANGELOG.md#changed--rpc-input-hardening-tasks-55-56) | ✅ | 2 | 6 | 7 | 3.25 🎯 | `Onchain.RPC` |
 | 57 | Unify RPC return shapes: `get_transaction_by_hash/2` returns decoded atom-keyed struct, `get_block_by_number/2` returns raw string-keyed hex map — pick one | ⬜ | 4 | 6 | 6 | 1.50 🚀 | `Onchain.RPC` |
-| 58 ✅ | `Onchain.ABI.decode_types/2` + `decode_types!/2` ship as thin aliases of `decode_response/2` and `decode_response!/2`. Tuple-sig footgun (parens required around the type list) documented inline on both names + moduledoc. Shipped 2026-05-01. | ✅ Complete | 1 | 3 | 4 | 3.50 🎯 | `Onchain.ABI` |
+| 58 | `Onchain.ABI.decode_types/2` + bang variant alias of `decode_response/2`; tuple-sig footgun documented — see [CHANGELOG](CHANGELOG.md#added--onchainabidecode_types2-alias-task-58) | ✅ | 1 | 3 | 4 | 3.50 🎯 | `Onchain.ABI` |
+| 60 | `eth_get_logs/2` accepts canonical camelCase string-key aliases — see [CHANGELOG](CHANGELOG.md#changed--eth_get_logs2-filter-ergonomics-tasks-60-61) | ✅ | 2 | 4 | 4 | 2.00 🚀 | `Onchain.RPC` |
+| 61 | `eth_get_logs/2` accepts `:block_hash` (EIP-1474) — see [CHANGELOG](CHANGELOG.md#changed--eth_get_logs2-filter-ergonomics-tasks-60-61) | ✅ | 2 | 3 | 4 | 1.75 🚀 | `Onchain.RPC` |
 | 63 | `defrpc` macro — codegen named JSON-RPC wrappers from declarative specs (refactor of existing 11 `Onchain.RPC.*` wrappers); follows Phoenix.Router shape, gated by Nimble.Options schema | ⬜ | 4 | 6 | 5 | 1.38 📋 | `Onchain.RPC` |
 | 64 | Vendor `openrpc.json` from `ethereum/execution-apis` + emit `Onchain.RPC.Specs` lookup that feeds `defrpc` (93 methods across `eth_*`/`engine_*`/`debug_*`/`txpool_*`/`net_*`/`testing_*`) — gated on Task 63 | ⬜ | 4 | 6 | 5 | 1.38 📋 | `Onchain.RPC.Specs` (new) |
 | 65 | Differential test harness: same RPC method via `Onchain.RPC` vs reference impl (signet first, then Web3.py / viem if needed) — catches protocol-level mistakes unit tests miss | ⬜ | 6 | 5 | 3 | 0.67 ⚠️ | `test/onchain/differential/` |
 | 66 | Tree-sitter scrape of Erigon Go source for `trace_*` / `ots_*` method enumeration (~30 methods OpenRPC doesn't cover) — gated on Task 64 + actual consumer demand | ⬜ | 5 | 4 | 3 | 0.70 ⚠️ | dev-only `Mix.Task` |
-| 67 ✅ | Migrate `:signet` → `:cartouche` dep (renames every `Signet.*` reference to `Cartouche.*`, swaps `{:signet, "~> 1.6"}` for `{:cartouche, "~> 0.1"}` in `mix.exs`). Breaking — bumps minor version. Required before Task 43 can close. | ✅ Complete | 4 | 7 | 8 | 1.88 🚀 | Multiple |
+| 67 | Migrate `:signet` → `:cartouche` dep (renames every `Signet.*` reference, swaps in `{:cartouche, "~> 0.1"}`) — see [CHANGELOG](CHANGELOG.md#changed--signet--cartouche-dep-migration-task-67) | ✅ | 4 | 7 | 8 | 1.88 🚀 | Multiple |
 | 68 | Mine `defi-skills:intent-to-transaction` action surface for `onchain` coverage gaps | ⬜ | 3 | 8 | 7 | 2.50 🎯 | (cross-cutting research) |
-| 70 | Harden `Onchain.Subscription.lookup_or_buffer/3` against unsolicited sub_id keys: `pending` map has per-key cap of 100 but unbounded distinct-keys count. Server emitting notifications for never-`subscribe`-d sub_ids grows key set until connection closes (per-connection Agent dies with the conn, so blast radius is bounded — but worth fixing). Buffer only sub_ids in an in-flight subscribe state, or add a global key cap with eviction. Carry forward to `onchain_ws` extraction (Task 48). | ⬜ | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
-
-**Task 55 — Harden `Onchain.RPC.Helpers` address/data validation.**
-
-Discovered 2026-04-22 during `onchain_aave` Task 41 (first real consumer integration through `onchain_evm`). Four bugs in one file — all silent-corruption or contract-violating. Two are critical:
-
-- **`ensure_hex_address/1` silently corrupts 20-byte strings that look like short `0x` inputs.** `"0x" <> String.duplicate("a", 18)` is 20 chars / 20 bytes (ASCII); it matches the 20-byte-binary branch and returns `{:ok, "0x3078616161..."}` — the ASCII codes of `"0x"` and `"a"` hex-encoded into a completely different address. A user typo routes an RPC call to a wrong address with no way to detect. Fix: dispatch on `"0x" <> _` prefix before the 20-byte-binary branch.
-- **`ensure_hex_address/1` silently zero-pads 39-char `0x` strings.** `"0x" <> "a" * 39` → `{:ok, "0x0aaa...aaa"}` (odd-length hex body silently zero-padded to 40 = 20 bytes). Fix: reject all non-42-char `0x`-prefixed inputs.
-- **`ensure_hex_address/1` accepts 40-char hex without `0x` prefix.** Inherited from `Address.validate/1`'s permissive input handling (by design — "with or without 0x"), but the RPC-helper layer should require `0x`-prefix so ambiguity doesn't reach `Signet.RPC`. Also the stepping stone to the critical 20-byte collision above.
-- **`ensure_hex_data/1` accepts odd-length `0x` strings.** `"0xabc"` passes Elixir; Rust in `onchain_evm` surfaces it as `{:evm_error, "invalid hex: Odd number of digits"}` — wrong error class for what's clearly invalid input data. Catch at Elixir as `{:invalid_data, _}`.
-
-**Acceptance:** per-failure-mode unit tests; all four paths return `{:error, {:invalid_address, _}}` or `{:error, {:invalid_data, _}}`; zero silent coercion; `onchain_aave` and `onchain_evm` test suites stay green.
-
----
-
-**Task 56 — `eth_get_logs/2` silent key-drop.**
-
-Discovered 2026-04-22 during onchain_aave on-chain investigation: passing JSON-RPC-style keys (`fromBlock`, `toBlock`) to the filter map returns `{:ok, []}` instead of erroring — the caller sees "no logs in range" when the real cause is "filter had zero matching keys". Lost ~15 minutes to this; silent empties are the worst failure mode for discovery code.
-
-Fix: validate filter keys at entry. Either reject unknown keys (`{:error, {:invalid_filter_key, key}}`), or accept both snake_case and camelCase. Either beats silent drop. Unit test the rejection / normalization path.
-
----
+| 70 | Harden `Onchain.Subscription.lookup_or_buffer/3` against unsolicited sub_id keys: `pending` map has per-key cap of 100 but unbounded distinct-keys count. Server emitting notifications for never-`subscribe`-d sub_ids grows key set until connection closes (per-connection Agent dies with the conn, so blast radius is bounded — but worth fixing). Buffer only sub_ids in an in-flight subscribe state, or add a global key cap with eviction. | ⬜ | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
 
 **Task 57 — Unify `get_block_*` / `get_transaction_*` return shapes.**
 
@@ -256,12 +227,6 @@ Fix: validate filter keys at entry. Either reject unknown keys (`{:error, {:inva
 Pick one: either both decode to atom-keyed structs (`Onchain.Block.t()`, `Onchain.Transaction.t()`), or both surface raw string-keyed maps (caller-decodes). Leaning toward decoded structs — matches the Phase 8 transfer-parser direction and the `Onchain.Transfer` pattern.
 
 Breaking change for consumers of `get_block_by_number/2`; justify with a minor-version bump and a brief migration note in CHANGELOG.
-
----
-
-**Task 58 — `ABI.decode_types` alias + tuple-sig docs.**
-
-`decode_response(sig, hex)` is the right function for decoding calldata return data by type signature, but `decode_types` is a more natural name when the input isn't an RPC response (e.g. decoding arbitrary ABI-encoded bytes). Aliasing is 5 lines. Also document in the docstring that the sig string *must* be wrapped in parentheses (`"(address,uint256)"` not `"address,uint256"`) — bare comma-separated types error with an unhelpful message. Minor polish, but both footguns are real (I hit the first, expected the second by name).
 
 ---
 
@@ -337,45 +302,6 @@ Acceptance: `Mix.Task` `mix onchain.scrape_erigon_methods` produces `priv/specs/
 
 ---
 
-**Task 67 — Migrate `:signet` → `:cartouche` dep.** [D:4/B:7/U:8 → Eff:1.88 🚀]
-
-Cartouche 0.1.0 published on hex.pm 2026-04-30. The fork ports the upstream signet codebase under the `Cartouche.*` module tree (every `Signet.X` callsite becomes `Cartouche.X`), pins Elixir 1.20 compatibility, and depends on the published ABI fork `hieroglyph` 1.0.0 instead of the unpublished upstream `:abi` path dep. Cartouche's CHANGELOG documents the spec corrections that make onchain's Task 43 (`@dialyzer {:no_match, ...}` strip) safe to land — those corrections are not in upstream signet and won't be backported.
-
-**Why now.** Three pressures align: (a) Task 43 has been blocked on this since 2026-04-19; (b) cartouche carries Elixir 1.20 compatibility that upstream signet doesn't; (c) `hieroglyph` is published, so onchain stops depending on a path/git-only `:abi` if/when it would have needed one.
-
-**Scope.** `mix.exs` dep swap; `mix deps.get`; rename every `Signet.*` reference under `lib/onchain/**/*.ex` and `test/**/*.exs` to `Cartouche.*`; `config :signet, ...` keys (RPC URL config — see `Key Design Decisions #3`) change to `config :cartouche, ...` (verify the actual key name in the cartouche README/CHANGELOG before flipping). Run `mix test.json --quiet` and `mix dialyzer.json --quiet`. Update CLAUDE.md "Signet as sole Ethereum dep" wording.
-
-**Bundled with the migration:** Task 43 (strip the now-load-bearing `@dialyzer {:no_match, ...}` suppressions) — the migration is the precondition; the suppression strip is the immediate payoff. Counted separately so each can land in its own commit, but they ship in the same release.
-
-**Breaking change for onchain consumers.** `Onchain.*` public API doesn't change shape, but consumers' transitive dep tree changes (`:signet` drops, `:cartouche` + `:hieroglyph` add). Justifies a minor bump (v0.6.0 if Task 48 hasn't shipped, v0.7.0 otherwise). Document the dep-tree change in CHANGELOG.
-
-**Acceptance:**
-- `mix.exs` lists `{:cartouche, "~> 0.1"}` instead of `{:signet, ...}`; no `:signet` reference remains in the project (confirmed via `mix deps.tree`)
-- All `Signet.*` references in `lib/`, `test/`, and `config/` renamed to `Cartouche.*`
-- `mix test.json --quiet` green
-- `mix dialyzer.json --quiet` clean — Task 43's suppressions stripped in a follow-up commit, both shipping in the same release (v0.5.2)
-- CLAUDE.md "Signet as sole Ethereum dep" updated to "Cartouche as sole Ethereum dep" (the parenthetical "RPC, ABI, signing, crypto all in one" stays accurate — `hieroglyph` is the ABI dep but is pulled in transitively by cartouche, not directly by onchain)
-- README example snippets updated if they show `Signet.*` calls (verify; onchain may not have any)
-- CHANGELOG entry under `[Unreleased]` documenting the dep swap and the resulting dep-tree change for downstream consumers
-
----
-
-**Task 48 — Extract subscription into `onchain_ws`.**
-
-Create a sibling package (`../onchain_ws`) that depends on `onchain` (path dep) and `zen_websocket`, and move `Onchain.Subscription` + `Onchain.Subscription.Parser` into it. Base `onchain` should no longer depend on `zen_websocket` after the move.
-
-Motivation: HTTP-only consumers (RPC reads, signing, ERC-20 transfers) currently pull `zen_websocket` and its WebSocket transitive deps transitively even when they never subscribe. Making subscriptions an opt-in capability package matches the portfolio pattern (onchain_aave, onchain_evm, onchain_js, onchain_tempo).
-
-Acceptance criteria:
-- `onchain` `mix.exs` no longer lists `zen_websocket` as a dep
-- `Onchain.Subscription.*` tests run in the new package and pass
-- New repo mirrors sibling packages (CHANGELOG, README, ROADMAP, CLAUDE.md, standard dev tooling per `elixir-setup`)
-- CLAUDE.md Module Layout in `onchain` updated to remove `subscription.ex` + `subscription/parser.ex`
-- CLAUDE.md Portfolio Context section adds `onchain_ws` with "Where does this feature go?" entry
-- Decide on namespace: keep `Onchain.Subscription` (transparent to consumers) or move to `OnchainWS.Subscription` (explicit package boundary). Leaning toward keeping `Onchain.Subscription` since consumers don't need to care about the split.
-
----
-
 **Task 68 — Mine `defi-skills:intent-to-transaction` action surface for `onchain` coverage gaps.** [D:3/B:8/U:7 → Eff:2.50 🎯]
 
 Planted 2026-04-30 from a cartouche session that surveyed cross-repo applicability of the `defi-skills` skill. Self-contained discovery exercise — execute it from a fresh `onchain` Claude Code session so this repo's CLAUDE.md, hooks, and test fixtures are loaded.
@@ -394,6 +320,25 @@ Planted 2026-04-30 from a cartouche session that surveyed cross-repo applicabili
 
 ---
 
+**Task 48 — `onchain_ws` extraction. 🔶 Won't fix (2026-05-02).**
+
+Closed without implementation. Rationale grounded in concrete data, not architectural-hygiene speculation:
+
+- **Transitive-dep cost is small.** `zen_websocket ~> 0.4.2` adds `gun` + `cowlib` + `certifi` over what `onchain` already pulls. All pure Erlang, no NIFs, no native compile time, mature Erlang/OTP ecosystem libraries.
+- **Zero consumer pressure.** All four sibling repos (`onchain_aave`, `onchain_evm`, `onchain_js`, `onchain_tempo`) are HTTP-only today — none reference `Onchain.Subscription` or `ZenWebsocket` in `lib/` or `test/`. The "HTTP-only consumers suffer" framing was hypothetical; the consumers exist and haven't complained.
+- **Portfolio-split precedents don't transfer.** `onchain_aave` = protocol-specific. `onchain_evm` = Rust NIFs (different runtime). `onchain_js` = Zig NIFs (different runtime). `onchain_tempo` = different chain. Subscription is **same chain, same RPC method namespace, just WebSocket transport** — none of those splitting axes apply. Mainstream Elixir libs (Tesla, Finch, Phoenix) keep transports together.
+- **Boundary isn't clean.** `Onchain.Subscription.Parser` imports `Onchain.RPC.Helpers` (`parse_log/1`, `parse_hex_integer/1`, `parse_address/1`) and calls `Onchain.Hex.valid?/1`. Extraction means either a path-dep on `onchain` (consumers pull both anyway, defeating the stated benefit) or extracting the helpers into a third tier (premature without a second consumer).
+- **Acceptance criteria signaled the answer.** Original Task 48 leaned toward keeping the module name as `Onchain.Subscription` "since consumers don't need to care about the split." If consumers don't need to care, the split isn't earning its weight.
+
+**Revisit triggers** — re-open this task only if **one** of:
+1. `zen_websocket` adds a NIF or other native dependency (concrete cost, not theoretical),
+2. A real consumer surfaces a packaging constraint that the current arrangement blocks, or
+3. Elixir tooling makes optional-dep / conditional-compile patterns materially cheaper than they are today.
+
+Until then, `Onchain.Subscription` + `.Parser` stay in `onchain`.
+
+---
+
 ## Phase 10: RPC Composition Layer
 
 **Motivation:** Per the scope split with cartouche (see `../signet/ROADMAP.md` "Scope principle" — sibling design-discussion repo retains its historical name), onchain is home for everything buildable on top of `Cartouche.*` public surface. This phase collects RPC method wrappers, observability facades, and helpers over cartouche structs that would otherwise have been upstream-PR candidates but correctly belong here. Each task is small; not urgent individually. Batch as needed — no consumer blocking.
@@ -401,13 +346,13 @@ Planted 2026-04-30 from a cartouche session that surveyed cross-repo applicabili
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
 | 49 | `Onchain.RPC.get_proof/3` — wrap `eth_getProof` (account + storage-slot Merkle proofs) | ⬜ | 2 | 4 | 4 | 2.00 🚀 | `Onchain.RPC` |
-| 50 ✅ | `Onchain.RPC.syncing/1` + `syncing!/1` wrap `eth_syncing`. Raw passthrough — `{:ok, false}` when synced, `{:ok, %{...}}` with hex-encoded fields otherwise; caller decodes. Shipped 2026-05-01. | ✅ Complete | 1 | 2 | 3 | 2.50 🎯 | `Onchain.RPC` |
+| 50 | `Onchain.RPC.syncing/1` (+ bang) wraps `eth_syncing` — see [CHANGELOG](CHANGELOG.md#added--onchainrpcsyncing1-task-50) | ✅ | 1 | 2 | 3 | 2.50 🎯 | `Onchain.RPC` |
 | 51 | `Onchain.RPC.batch/2` — JSON-RPC 2.0 array-batched requests (single round-trip over N method calls) | ⬜ | 4 | 6 | 5 | 1.38 📋 | `Onchain.RPC` |
 | 52 | Telemetry events around `Onchain.RPC` request path (`[:onchain, :rpc, :request]`) | ⬜ | 3 | 5 | 5 | 1.67 🚀 | `Onchain.RPC` |
-| 53 | `Onchain.Fees.suggest_fees/2` — take `Signet.FeeHistory.t()` + percentile, return `{base_fee, max_priority, max_fee}` recommendation | ⬜ | 2 | 5 | 6 | 2.75 🎯 | `Onchain.Fees` (new) |
+| 53 | `Onchain.Fees.suggest_fees/2` — take `Cartouche.FeeHistory.t()` + percentile, return `{base_fee, max_priority, max_fee}` recommendation. Bundled with paired `Onchain.RPC.fee_history/2` wrapper. | 🔄 development | 2 | 5 | 6 | 2.75 🎯 | `Onchain.Fees` (new) |
 | 54 | Opt-in retry/backoff wrapper over `Signet.RPC.send_rpc/3` with configurable policy (default: no retry — preserves current behavior) | ⬜ | 4 | 5 | 4 | 1.13 📋 | `Onchain.RPC` |
-| 59 | `Onchain.RPC.call/3` — generic JSON-RPC passthrough for methods not covered by named wrappers (`eth_getStorageAt`, `debug_traceTransaction`, `trace_call`, `eth_feeHistory`, …) | ✅ | 2 | 7 | 8 | 3.75 🎯 | `Onchain.RPC` |
-| 62 | `Onchain.Sleuth` — Compound-style "ship bytecode in `eth_call`" primitive for arbitrary read-only logic against live chain state | ✅ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.Sleuth` |
+| 59 | `Onchain.RPC.call/3` — generic JSON-RPC passthrough — see [CHANGELOG](CHANGELOG.md#added--generic-json-rpc-passthrough-task-59) | ✅ | 2 | 7 | 8 | 3.75 🎯 | `Onchain.RPC` |
+| 62 | `Onchain.Sleuth` — Compound-style "ship bytecode in `eth_call`" primitive — see [CHANGELOG](CHANGELOG.md#added--sleuth-deploy-as-call-primitive-task-62) | ✅ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.Sleuth` |
 
 **Task descriptions:**
 
@@ -420,35 +365,6 @@ Planted 2026-04-30 from a cartouche session that surveyed cross-repo applicabili
 **53 — Fee suggestion.** `Signet.FeeHistory` is a deserializer-only module. Every app reimplements base-fee + priority-fee percentile math. Pure function over the struct.
 
 **54 — Retry/backoff.** Opt-in via keyword policy. Changing `send_rpc` default behavior upstream would be risky (silently changes every consumer); a downstream wrapper is the correct posture per the scope principle.
-
-**59 — Generic RPC passthrough.** Named wrappers cover the common Ethereum JSON-RPC surface, but debug / trace / storage-inspection work regularly needs methods not in the curated list (`eth_getStorageAt` for EIP-1967 slot inspection, `debug_traceTransaction` / `trace_call` for execution tracing, `eth_feeHistory` if Task 53's wrapper hasn't landed, `eth_getProof` if Task 49 hasn't). Discovered 2026-04-22 while verifying an upgradeable-proxy implementation address — had to drop to raw `Req.post!` for `eth_getStorageAt`. Shape: `Onchain.RPC.call(method, params, opts \\ [])` returning `{:ok, result} | {:error, term}`; thin wrapper over `Cartouche.RPC.send_rpc/3`, no decoding (the caller knows what they asked for). Complements but doesn't replace named wrappers — each named wrapper adds value (typespec, docstring, return-type decoding, descripex hints) over the bare passthrough.
-
----
-
-**Task 62 — `Onchain.Sleuth` (deploy-as-call primitive). ✅ Completed** — see [CHANGELOG.md](CHANGELOG.md#added--sleuth-deploy-as-call-primitive-task-62).
-
-Compound Finance pattern: `eth_call` with `to: nil` and `data: creation_bytecode ++ abi_encoded_constructor_args` — the node executes the constructor in-memory against live chain state and the `eth_call` response is the bytes the constructor would have deployed. The caller ABI-decodes those bytes as the "return value." Lets a single RPC round-trip run arbitrary read-only logic (conditionals, loops, storage reads, derived computation) that Multicall3 can't express because Multicall3 only batches existing view functions.
-
-Complements — does not replace — `Onchain.Multicall` and `onchain_evm` / revm:
-- Multicall3: batch N existing view-function calls against live state. Use when the logic already exists on deployed contracts.
-- Sleuth (this task): one custom read-only program against live state. Use when you need derived/conditional logic that isn't exposed.
-- revm (onchain_evm): simulate many calls locally, trace execution, modify state, run against a fork. Use when network cost matters or you need execution traces.
-
-**Scope.** Ship bytecode in, get decoded values out. Solidity source → bytecode compilation is explicitly out of scope — handled by [onchain_js](../onchain_js/ROADMAP.md) Task 2 (`OnchainJs.Solc.compile/2`) or an external build step (foundry, hardhat). Consumers supply creation bytecode directly.
-
-**Shape (draft, adapt during implementation):**
-- `Onchain.Sleuth.query(bytecode, constructor_args, return_type, opts \\ [])` returning `{:ok, decoded_values} | {:error, term}`
-- `constructor_args` as `[{type_sig, value}]` (or similar) — encoded via `Onchain.ABI` and appended to bytecode
-- `return_type` as an ABI type signature string — decoded via `Onchain.ABI.decode_response/2`
-- `opts` supports `:rpc_url`, `:block`, `:timeout` matching the `Onchain.Contract.call/5` conventions
-- Bang variant (`query!/4`) following the established pattern (ERC20, Multicall)
-
-**Acceptance:**
-- Unit tests for bytecode + constructor-arg concatenation and return decoding (pure functions)
-- Integration test against mainnet via `ETHEREUM_API_URL`: a small Sleuth contract that reads something a regular `eth_call` can't easily produce (e.g., aggregate a list of balances with in-contract filtering, or return data conditional on current block state)
-- Descripex `api()` annotations on public functions
-- CLAUDE.md Module Layout + Portfolio Context updated (the `onchain` row in "Where does this feature go?" should note custom read-only bytecode as an `onchain` concern)
-- Reference Compound's Sleuth repo in `@moduledoc` for the design inspiration
 
 ---
 
