@@ -24,6 +24,7 @@
 ### ✅ Recently Completed
 | Task | Description | Notes |
 |------|-------------|-------|
+| 53 | `Onchain.Fees.suggest_fees/2` (+ bang) + `Onchain.RPC.fee_history/2` (+ bang) | Pure EIP-1559 fee math over `Cartouche.FeeHistory.t()` (median priority + buffered base fee, defaults: `:percentile_index 0`, `:buffer 1.2` — matches cartouche `v2_gas_parameters`) bundled with the named `eth_feeHistory` wrapper that produces it. Closes the wrapper gap noted in Task 59. |
 | 50 | `Onchain.RPC.syncing/1` (+ bang) | Raw passthrough wrapping `eth_syncing`. `{:ok, false}` synced, `{:ok, %{...}}` otherwise. Closes the trivial-RPC surface gap. |
 | 58 | `Onchain.ABI.decode_types/2` alias + tuple-sig docs | Alias of `decode_response/2` for non-RPC callers. Tuple-wrap requirement (parens around the type list) documented inline on both names. |
 | 60 | `eth_get_logs/2` camelCase string-key aliases | Accepts `"fromBlock"`/`"toBlock"`/`"address"`/`"topics"`/`"blockHash"` as aliases. Non-canonical string keys still fail the Task 56 whitelist. Atom wins silently on conflict. |
@@ -349,7 +350,7 @@ Until then, `Onchain.Subscription` + `.Parser` stay in `onchain`.
 | 50 | `Onchain.RPC.syncing/1` (+ bang) wraps `eth_syncing` — see [CHANGELOG](CHANGELOG.md#added--onchainrpcsyncing1-task-50) | ✅ | 1 | 2 | 3 | 2.50 🎯 | `Onchain.RPC` |
 | 51 | `Onchain.RPC.batch/2` — JSON-RPC 2.0 array-batched requests (single round-trip over N method calls) | ⬜ | 4 | 6 | 5 | 1.38 📋 | `Onchain.RPC` |
 | 52 | Telemetry events around `Onchain.RPC` request path (`[:onchain, :rpc, :request]`) | ⬜ | 3 | 5 | 5 | 1.67 🚀 | `Onchain.RPC` |
-| 53 | `Onchain.Fees.suggest_fees/2` — take `Cartouche.FeeHistory.t()` + percentile, return `{base_fee, max_priority, max_fee}` recommendation. Bundled with paired `Onchain.RPC.fee_history/2` wrapper. | 🔄 development | 2 | 5 | 6 | 2.75 🎯 | `Onchain.Fees` (new) |
+| 53 | `Onchain.Fees.suggest_fees/2` — take `Cartouche.FeeHistory.t()` + percentile, return `{base_fee, max_priority, max_fee}` recommendation. Bundled with paired `Onchain.RPC.fee_history/2` wrapper — see [CHANGELOG](CHANGELOG.md#added--onchainfees--onchainrpcfee_history-task-53) | ✅ | 2 | 5 | 6 | 2.75 🎯 | `Onchain.Fees` (new) |
 | 54 | Opt-in retry/backoff wrapper over `Signet.RPC.send_rpc/3` with configurable policy (default: no retry — preserves current behavior) | ⬜ | 4 | 5 | 4 | 1.13 📋 | `Onchain.RPC` |
 | 59 | `Onchain.RPC.call/3` — generic JSON-RPC passthrough — see [CHANGELOG](CHANGELOG.md#added--generic-json-rpc-passthrough-task-59) | ✅ | 2 | 7 | 8 | 3.75 🎯 | `Onchain.RPC` |
 | 62 | `Onchain.Sleuth` — Compound-style "ship bytecode in `eth_call`" primitive — see [CHANGELOG](CHANGELOG.md#added--sleuth-deploy-as-call-primitive-task-62) | ✅ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.Sleuth` |
@@ -362,7 +363,7 @@ Until then, `Onchain.Subscription` + `.Parser` stay in `onchain`.
 
 **52 — Telemetry.** Zero runtime cost when no handler is attached. Standard Elixir lib pattern. Consumers measure RPC latency / error rates without patching signet.
 
-**53 — Fee suggestion.** `Signet.FeeHistory` is a deserializer-only module. Every app reimplements base-fee + priority-fee percentile math. Pure function over the struct.
+**53 — Fee suggestion.** ✅ Shipped 2026-05-02. `Cartouche.FeeHistory` is a deserializer-only module. Every app reimplements base-fee + priority-fee percentile math. Pure function over the struct, bundled with paired `Onchain.RPC.fee_history/2` named wrapper (closes the gap noted in Task 59).
 
 **54 — Retry/backoff.** Opt-in via keyword policy. Changing `send_rpc` default behavior upstream would be risky (silently changes every consumer); a downstream wrapper is the correct posture per the scope principle.
 
@@ -498,9 +499,10 @@ lib/
     address.ex                      # validate, checksum (EIP-55), normalize
     abi.ex                          # encode_call/2, decode_response/2
     decimal.ex                      # to_decimal/2, to_basis_points/1, div_pow10/2
+    fees.ex                         # suggest_fees/2 — EIP-1559 fee recommendation over Cartouche.FeeHistory.t()
     block.ex                        # get_by_number, find_by_timestamp (binary search)
     contract.ex                     # generic call/4 (encode → eth_call → decode)
-    rpc.ex                          # eth_call, eth_getLogs, get_transaction_receipt, etc.
+    rpc.ex                          # eth_call, eth_getLogs, get_transaction_receipt, fee_history, etc.
     rpc/
       helpers.ex                    # shared RPC helper functions
     log.ex                          # event log parsing against ABI signatures

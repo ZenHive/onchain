@@ -602,4 +602,73 @@ defmodule Onchain.RPCTest do
       end
     end
   end
+
+  describe "fee_history/2 block_count validation" do
+    test "rejects zero" do
+      assert {:error, {:invalid_block_count, 0}} = RPC.fee_history(0, rpc_url: "http://localhost:1")
+    end
+
+    test "rejects negative integer" do
+      assert {:error, {:invalid_block_count, -1}} = RPC.fee_history(-1, rpc_url: "http://localhost:1")
+    end
+
+    test "rejects values above 1024" do
+      assert {:error, {:invalid_block_count, 1025}} = RPC.fee_history(1025, rpc_url: "http://localhost:1")
+    end
+
+    test "rejects non-integer (string)" do
+      assert {:error, {:invalid_block_count, "20"}} = RPC.fee_history("20", rpc_url: "http://localhost:1")
+    end
+
+    test "rejects non-integer (float)" do
+      assert {:error, {:invalid_block_count, 1.5}} = RPC.fee_history(1.5, rpc_url: "http://localhost:1")
+    end
+  end
+
+  describe "fee_history/2 reward_percentiles validation" do
+    test "rejects empty list" do
+      assert {:error, {:invalid_reward_percentiles, :empty}} =
+               RPC.fee_history(20, reward_percentiles: [], rpc_url: "http://localhost:1")
+    end
+
+    test "rejects out-of-range value above 100" do
+      assert {:error, {:invalid_reward_percentiles, {:out_of_range, 150}}} =
+               RPC.fee_history(20, reward_percentiles: [50, 150], rpc_url: "http://localhost:1")
+    end
+
+    test "rejects out-of-range negative value" do
+      assert {:error, {:invalid_reward_percentiles, {:out_of_range, -10}}} =
+               RPC.fee_history(20, reward_percentiles: [-10, 50], rpc_url: "http://localhost:1")
+    end
+
+    test "rejects non-monotonic list" do
+      assert {:error, {:invalid_reward_percentiles, :not_monotonic}} =
+               RPC.fee_history(20, reward_percentiles: [50, 25], rpc_url: "http://localhost:1")
+    end
+
+    test "rejects non-list" do
+      assert {:error, {:invalid_reward_percentiles, :not_a_list}} =
+               RPC.fee_history(20, reward_percentiles: 50, rpc_url: "http://localhost:1")
+    end
+
+    test "rejects non-integer entries" do
+      assert {:error, {:invalid_reward_percentiles, {:out_of_range, 50.0}}} =
+               RPC.fee_history(20, reward_percentiles: [50.0], rpc_url: "http://localhost:1")
+    end
+  end
+
+  describe "fee_history/2 newest_block validation" do
+    test "rejects unknown tag" do
+      assert {:error, {:invalid_block, "bogus"}} =
+               RPC.fee_history(20, newest_block: "bogus", rpc_url: "http://localhost:1")
+    end
+  end
+
+  describe "fee_history!/2" do
+    test "raises when validation fails" do
+      assert_raise RuntimeError, ~r/fee_history failed.*invalid_block_count/, fn ->
+        RPC.fee_history!(0, rpc_url: "http://localhost:1")
+      end
+    end
+  end
 end

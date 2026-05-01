@@ -56,6 +56,10 @@ usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
 
 # All functions have bang variants that raise on error
 balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
+
+# EIP-1559 fee suggestion: fetch history, compute base/priority/max in one go
+{:ok, history} = Onchain.RPC.fee_history(20, reward_percentiles: [50])
+{:ok, {base_fee, max_priority, max_fee}} = Onchain.Fees.suggest_fees(history)
 ```
 
 ## Modules
@@ -68,7 +72,8 @@ balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
 | `Onchain.ABI` | ABI encoding/decoding for contract calls (`encode_call/2`, `decode_response/2`, `decode_types/2`) |
 | `Onchain.Address` | Address validation, EIP-55 checksum, normalization |
 | `Onchain.Decimal` | Decimal precision helpers (to_decimal, div_pow10, to_basis_points) |
-| `Onchain.RPC` | Ethereum JSON-RPC wrapper (eth_call, eth_getLogs, receipts, nonces, balances, syncing; `call/3` for any other method). `eth_get_logs/2` accepts atom keys or canonical camelCase string aliases (`"fromBlock"`, `"toBlock"`, `"blockHash"`, `"address"`, `"topics"`); `:block_hash` is mutually exclusive with `:from_block`/`:to_block` per EIP-1474 |
+| `Onchain.Fees` | EIP-1559 fee recommendation (`suggest_fees/2`) over `Cartouche.FeeHistory.t()` — pure function, returns `{base_fee, max_priority, max_fee}` |
+| `Onchain.RPC` | Ethereum JSON-RPC wrapper (eth_call, eth_getLogs, receipts, nonces, balances, syncing, fee_history; `call/3` for any other method). `eth_get_logs/2` accepts atom keys or canonical camelCase string aliases (`"fromBlock"`, `"toBlock"`, `"blockHash"`, `"address"`, `"topics"`); `:block_hash` is mutually exclusive with `:from_block`/`:to_block` per EIP-1474 |
 | `Onchain.RPC.Helpers` | Shared RPC helper functions (hex normalization, block tags, tx hash validation) |
 | `Onchain.Block` | Block fetching with parsed fields, timestamp-based binary search |
 | `Onchain.Contract` | Generic contract call (encode -> eth_call -> decode in one function) |

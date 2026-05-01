@@ -4,6 +4,17 @@ Completed roadmap tasks.
 
 ---
 
+## [Unreleased]
+
+### Added — `Onchain.Fees` + `Onchain.RPC.fee_history` (Task 53)
+
+- **`Onchain.Fees.suggest_fees/2` + `suggest_fees!/2`** — pure EIP-1559 fee recommendation over `Cartouche.FeeHistory.t()`. Returns `{base_fee, max_priority, max_fee}` in wei. `base_fee` is `List.last(history.base_fee_per_gas)` — the `eth_feeHistory` array runs oldest-to-newest with the projected next-block fee at the LAST index per spec; `max_priority` is the median of per-block priority fees at the requested column; `max_fee = ceil(base_fee × buffer) + max_priority`. Opts: `:percentile_index` (default `0`, must match the column index of the percentile the caller passed to `eth_feeHistory`'s `reward_percentiles`); `:buffer` (default `1.2` for parity with cartouche's `v2_gas_parameters` — pass `2.0` for the EIP-1559 reference recommendation that buys ~12-block headroom). No RPC, no I/O — caller fetches the struct and calls in.
+- **`Onchain.RPC.fee_history/2` + `fee_history!/2`** — named `eth_feeHistory` wrapper returning the deserialized `Cartouche.FeeHistory` struct. Closes the wrapper gap noted in Task 59 ("`eth_feeHistory` if Task 53's wrapper hasn't landed"). Validates `block_count` is in `1..1024` (EIP-1474 cap), `:reward_percentiles` is a non-empty monotonically-non-decreasing list of integers in `0..100`, and routes `:newest_block` through the existing block-tag normalizer. Errors short-circuit before RPC dispatch with `{:invalid_block_count, _}` / `{:invalid_reward_percentiles, _}` / `{:invalid_block, _}`.
+- **Two new private validators in `Onchain.RPC.Helpers`** — `ensure_block_count/1` (1..1024, encoded as lowercase 0x hex via `Onchain.Hex.from_integer/1`) and `ensure_reward_percentiles/1` (range + monotonic check). Mirror the existing `ensure_*` family — single-shape, single-error tag.
+- **Why bundle:** Task 53 specifies the math, Task 59 reserved the named-wrapper namespace; shipping them together gives consumers an end-to-end fee story (`fee_history(20) → suggest_fees(history) → {base, prio, max}`) without a downstream code change once the wrapper lands. Purely additive — no breaking changes; v0.5.4 patch tag candidate.
+
+---
+
 ## v0.5.3 — Surface-area polish (2026-05-02)
 
 ### Added — `Onchain.ABI.decode_types/2` alias (Task 58)

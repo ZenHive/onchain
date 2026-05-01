@@ -97,6 +97,41 @@ defmodule Onchain.RPC.Helpers do
   def ensure_tx_hash(other), do: {:error, {:invalid_tx_hash, other}}
 
   @doc false
+  # Validates `eth_feeHistory` block_count: integer in 1..1024 (EIP-1474 cap).
+  # Encodes the integer to lowercase 0x hex on success.
+  @spec ensure_block_count(term()) :: {:ok, String.t()} | {:error, term()}
+  def ensure_block_count(n) when is_integer(n) and n >= 1 and n <= 1024, do: {:ok, Onchain.Hex.from_integer(n)}
+
+  def ensure_block_count(other), do: {:error, {:invalid_block_count, other}}
+
+  @doc false
+  # Validates `eth_feeHistory` reward_percentiles: non-empty list of integers in 0..100,
+  # monotonically non-decreasing per EIP-1474.
+  @spec ensure_reward_percentiles(term()) :: :ok | {:error, term()}
+  def ensure_reward_percentiles([]), do: {:error, {:invalid_reward_percentiles, :empty}}
+
+  def ensure_reward_percentiles(list) when is_list(list) do
+    with :ok <- check_percentile_range(list) do
+      check_percentile_monotonic(list)
+    end
+  end
+
+  def ensure_reward_percentiles(_other), do: {:error, {:invalid_reward_percentiles, :not_a_list}}
+
+  defp check_percentile_range(list) do
+    Enum.reduce_while(list, :ok, fn
+      n, :ok when is_integer(n) and n >= 0 and n <= 100 -> {:cont, :ok}
+      n, _ -> {:halt, {:error, {:invalid_reward_percentiles, {:out_of_range, n}}}}
+    end)
+  end
+
+  defp check_percentile_monotonic(list) do
+    if list == Enum.sort(list),
+      do: :ok,
+      else: {:error, {:invalid_reward_percentiles, :not_monotonic}}
+  end
+
+  @doc false
   # Maps our option names to the underlying RPC client's expected keys.
   @spec to_rpc_opts(keyword()) :: keyword()
   def to_rpc_opts(opts) do

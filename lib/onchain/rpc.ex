@@ -48,6 +48,8 @@ defmodule Onchain.RPC do
   | `get_transaction_by_hash!/2` | Same, raises on error |
   | `call/3` | Generic JSON-RPC passthrough — any method, raw result |
   | `call!/3` | Same, raises on error |
+  | `fee_history/2` | EIP-1559 fee history (`eth_feeHistory`) → `Cartouche.FeeHistory.t()` |
+  | `fee_history!/2` | Same, raises on error |
   """
 
   use Descripex, namespace: "/rpc"
@@ -644,6 +646,63 @@ defmodule Onchain.RPC do
     case call(method, params, opts) do
       {:ok, result} -> result
       {:error, reason} -> raise "RPC #{method} failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- fee_history (eth_feeHistory) ---
+
+  api(:fee_history, "Fetch base-fee history and per-block priority-fee percentiles (eth_feeHistory).",
+    params: [
+      block_count: [
+        kind: :value,
+        description: "Number of recent blocks to query, 1..1024 (EIP-1474 cap)"
+      ],
+      opts: [
+        kind: :value,
+        default: [],
+        description:
+          "Options: :newest_block (default \"latest\"), :reward_percentiles (default [50] — list of ints 0..100, monotonically non-decreasing), :rpc_url, :timeout"
+      ]
+    ],
+    returns: %{
+      type: "{:ok, Cartouche.FeeHistory.t()} | {:error, term}",
+      description:
+        "Deserialized fee history struct: oldest_block, base_fee_per_gas (block_count + 1 entries), gas_used_ratio, reward (block_count rows × length(reward_percentiles) cols)"
+    }
+  )
+
+  @spec fee_history(pos_integer(), keyword()) ::
+          {:ok, Cartouche.FeeHistory.t()} | {:error, term()}
+  def fee_history(block_count, opts \\ []) do
+    percentiles = Keyword.get(opts, :reward_percentiles, [50])
+
+    with {:ok, hex_count} <- ensure_block_count(block_count),
+         {:ok, newest} <- normalize_block(Keyword.get(opts, :newest_block, "latest")),
+         :ok <- ensure_reward_percentiles(percentiles),
+         {:ok, raw} <- do_rpc("eth_feeHistory", [hex_count, newest, percentiles], to_rpc_opts(opts)) do
+      {:ok, Cartouche.FeeHistory.deserialize(raw)}
+    end
+  end
+
+  # --- fee_history! ---
+
+  api(:fee_history!, "Fetch fee history. Raises on error.",
+    params: [
+      block_count: [kind: :value, description: "Number of recent blocks to query, 1..1024"],
+      opts: [
+        kind: :value,
+        default: [],
+        description: "Options: :newest_block, :reward_percentiles, :rpc_url, :timeout"
+      ]
+    ],
+    returns: %{type: "Cartouche.FeeHistory.t()", description: "Deserialized fee history struct"}
+  )
+
+  @spec fee_history!(pos_integer(), keyword()) :: Cartouche.FeeHistory.t()
+  def fee_history!(block_count, opts \\ []) do
+    case fee_history(block_count, opts) do
+      {:ok, result} -> result
+      {:error, reason} -> raise "fee_history failed: #{inspect(reason)}"
     end
   end
 

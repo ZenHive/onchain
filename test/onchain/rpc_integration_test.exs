@@ -198,4 +198,53 @@ defmodule Onchain.RPC.IntegrationTest do
       assert total_supply > 0
     end
   end
+
+  describe "fee_history/2" do
+    test "returns deserialized struct with expected shape" do
+      block_count = 5
+      percentiles = [25, 50, 75]
+
+      assert {:ok, history} =
+               RPC.fee_history(block_count,
+                 reward_percentiles: percentiles,
+                 rpc_url: Onchain.RPCCase.rpc_url!()
+               )
+
+      assert %Cartouche.FeeHistory{} = history
+      # base_fee_per_gas has block_count + 1 entries (next-block fee at index 0)
+      assert length(history.base_fee_per_gas) == block_count + 1
+      assert Enum.all?(history.base_fee_per_gas, &(is_integer(&1) and &1 > 0))
+
+      # gas_used_ratio has block_count entries
+      assert length(history.gas_used_ratio) == block_count
+
+      # reward is block_count rows × length(percentiles) cols
+      assert length(history.reward) == block_count
+      assert Enum.all?(history.reward, fn row -> length(row) == length(percentiles) end)
+
+      assert is_integer(history.oldest_block) and history.oldest_block > 0
+    end
+
+    test "default reward_percentiles ([50]) returns single-column reward rows" do
+      assert {:ok, history} = RPC.fee_history(3, rpc_opts())
+      assert Enum.all?(history.reward, fn row -> length(row) == 1 end)
+    end
+
+    test "composes with Onchain.Fees.suggest_fees/2 for end-to-end recommendation" do
+      assert {:ok, history} =
+               RPC.fee_history(20, reward_percentiles: [50], rpc_url: Onchain.RPCCase.rpc_url!())
+
+      assert {:ok, {base, prio, max_fee}} = Onchain.Fees.suggest_fees(history)
+
+      assert is_integer(base) and base > 0
+      assert is_integer(prio) and prio >= 0
+      assert is_integer(max_fee) and max_fee >= base + prio
+    end
+  end
+
+  describe "fee_history!/2" do
+    test "returns struct directly on success" do
+      assert %Cartouche.FeeHistory{} = RPC.fee_history!(3, rpc_opts())
+    end
+  end
 end
