@@ -162,7 +162,7 @@ defmodule Onchain.RPCTest do
     end
   end
 
-  describe "syncing/2 (connection failure)" do
+  describe "syncing/1 (connection failure)" do
     test "returns rpc_error tuple when RPC unavailable" do
       assert {:error, {:rpc_error, %{message: _}}} = RPC.syncing(rpc_url: "http://localhost:1")
     end

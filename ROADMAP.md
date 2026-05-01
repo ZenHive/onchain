@@ -54,7 +54,7 @@
 
 Last shipped: **v0.5.2** (2026-05-01) — Subscription hardening. Closes Tasks 38 (pre-registration buffer for subscription notifications) and 39 (`:pending_transactions` integration test against blockwatch-one), bundled with the deferred Tasks 42 (subscription parse-error delivery), 43 (strip upstream-cascade dialyzer suppressions), 55 + 56 (RPC input hardening), 59 (generic JSON-RPC passthrough), 62 (Sleuth deploy-as-call), and 67 (`:signet` → `:cartouche` dep migration) from the v0.5.0–v0.5.1 backlog.
 
-### 🎯 v0.5.2 — Subscription hardening (next, patch, non-breaking)
+### ✅ v0.5.2 — Subscription hardening (patch, shipped 2026-05-01)
 
 Finishes what v0.5.0/0.5.1 started on the subscription path and clears the upstream-cascade dialyzer suppressions that the cartouche 0.1.0 fork (Task 67) unblocked — Task 43 stripped them post-migration on 2026-04-30.
 

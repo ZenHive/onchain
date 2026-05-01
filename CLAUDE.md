@@ -64,9 +64,9 @@ This repo is part of a multi-library portfolio. The boundary is **ephemeral vs d
 lib/onchain/
   hex.ex            # hex<->binary, hex<->integer, 0x prefix
   address.ex        # validate, checksum (EIP-55), normalize
-  abi.ex            # encode_call/2, decode_response/2
+  abi.ex            # encode_call/2, decode_response/2, decode_types/2
   decimal.ex        # to_decimal/2, to_basis_points/1, div_pow10/2
-  rpc.ex            # eth_call, eth_getLogs, eth_getBalance, receipts, nonces, generic call/3 passthrough
+  rpc.ex            # eth_call, eth_getLogs, eth_getBalance, receipts, nonces, syncing, generic call/3 passthrough
   rpc/helpers.ex    # shared RPC helper functions
   signer.ex         # key management, transaction signing
   erc20.ex          # reads + writes: balanceOf, allowance, decimals, symbol, totalSupply, approve, transfer
