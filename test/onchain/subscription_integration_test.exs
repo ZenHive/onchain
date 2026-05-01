@@ -60,15 +60,15 @@ defmodule Onchain.SubscriptionIntegrationTest do
     end
   end
 
-  describe "subscribe and unsubscribe lifecycle" do
+  describe "subscribe and unsubscribe lifecycle (bang variants)" do
     @tag timeout: 60_000
-    test "can subscribe, receive events, unsubscribe, and close cleanly" do
+    test "can subscribe!, receive events, unsubscribe!, and close cleanly" do
       url = ws_url!()
 
-      {:ok, sub} = Subscription.connect(url)
+      sub = Subscription.connect!(url)
       on_exit(fn -> Subscription.close(sub) end)
 
-      {:ok, sub_id} = Subscription.subscribe(sub, :new_heads)
+      sub_id = Subscription.subscribe!(sub, :new_heads)
 
       # Wait for one block to confirm subscription is active
       receive do
@@ -78,8 +78,8 @@ defmodule Onchain.SubscriptionIntegrationTest do
           flunk("No event received before unsubscribe test")
       end
 
-      # Unsubscribe
-      assert {:ok, true} = Subscription.unsubscribe(sub, sub_id)
+      # Unsubscribe via bang variant
+      assert true == Subscription.unsubscribe!(sub, sub_id)
 
       # After unsubscribe, no more events should arrive (wait a few seconds)
       receive do
@@ -119,6 +119,38 @@ defmodule Onchain.SubscriptionIntegrationTest do
       assert is_integer(log.log_index)
       assert is_binary(log.transaction_hash)
       assert log.removed == false
+
+      assert {:ok, true} = Subscription.unsubscribe(sub, sub_id)
+    end
+  end
+
+  # Requires a node that broadcasts mempool (e.g. a local full node).
+  # blockwatch-one returns hashes (no `full` flag passed); a non-conforming
+  # provider that returns full tx objects would surface as
+  # {:parse_error, sub_id, {:invalid_tx_hash, _}} rather than crash.
+  describe "pendingTransactions subscription" do
+    @tag timeout: 60_000
+    test "receives at least one pending transaction hash" do
+      url = ws_url!()
+
+      {:ok, sub} = Subscription.connect(url)
+      on_exit(fn -> Subscription.close(sub) end)
+
+      {:ok, sub_id} = Subscription.subscribe(sub, :pending_transactions)
+      assert is_binary(sub_id)
+      assert String.starts_with?(sub_id, "0x")
+
+      hash =
+        receive do
+          {:subscription, {:pending_transactions, ^sub_id, hash}} -> hash
+        after
+          @new_heads_timeout_ms ->
+            flunk("No pendingTransactions event received within #{@new_heads_timeout_ms}ms")
+        end
+
+      assert is_binary(hash)
+      assert String.starts_with?(hash, "0x")
+      assert String.length(hash) == 66
 
       assert {:ok, true} = Subscription.unsubscribe(sub, sub_id)
     end

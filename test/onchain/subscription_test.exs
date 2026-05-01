@@ -1,6 +1,8 @@
 defmodule Onchain.SubscriptionTest do
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureLog
+
   alias Onchain.Subscription
 
   @fake_client %ZenWebsocket.Client{
@@ -12,15 +14,43 @@ defmodule Onchain.SubscriptionTest do
     server_pid: nil
   }
 
+  defp start_agent! do
+    {:ok, agent} = Agent.start_link(fn -> %{registry: %{}, pending: %{}} end)
+    on_exit(fn -> if Process.alive?(agent), do: Agent.stop(agent) end)
+    agent
+  end
+
+  defp register!(agent, sub_id, type) do
+    Agent.update(agent, fn state -> %{state | registry: Map.put(state.registry, sub_id, type)} end)
+  end
+
   describe "subscribe/3 type validation" do
     test "rejects invalid subscription type" do
-      {:ok, agent} = Agent.start_link(fn -> %{} end)
-      on_exit(fn -> if Process.alive?(agent), do: Agent.stop(agent) end)
-
+      agent = start_agent!()
       sub = %Subscription{client: @fake_client, agent: agent, handler: fn _ -> :ok end}
 
       assert {:error, {:invalid_subscription_type, :invalid}} = Subscription.subscribe(sub, :invalid)
       assert {:error, {:invalid_subscription_type, "newHeads"}} = Subscription.subscribe(sub, "newHeads")
+    end
+  end
+
+  describe "bang variants raise on error" do
+    test "subscribe!/2 raises when send_message fails on disconnected client" do
+      agent = start_agent!()
+      sub = %Subscription{client: @fake_client, agent: agent, handler: fn _ -> :ok end}
+
+      assert_raise RuntimeError, ~r/Subscription failed/, fn ->
+        Subscription.subscribe!(sub, :new_heads)
+      end
+    end
+
+    test "unsubscribe!/2 raises when send_message fails on disconnected client" do
+      agent = start_agent!()
+      sub = %Subscription{client: @fake_client, agent: agent, handler: fn _ -> :ok end}
+
+      assert_raise RuntimeError, ~r/Unsubscribe failed/, fn ->
+        Subscription.unsubscribe!(sub, "0xfake")
+      end
     end
   end
 
@@ -34,8 +64,7 @@ defmodule Onchain.SubscriptionTest do
 
   describe "close/1" do
     test "stops the agent and returns :ok" do
-      {:ok, agent} = Agent.start_link(fn -> %{} end)
-
+      agent = start_agent!()
       sub = %Subscription{client: @fake_client, agent: agent, handler: fn _ -> :ok end}
 
       assert :ok = Subscription.close(sub)
@@ -43,7 +72,7 @@ defmodule Onchain.SubscriptionTest do
     end
 
     test "handles already-stopped agent gracefully" do
-      {:ok, agent} = Agent.start_link(fn -> %{} end)
+      agent = start_agent!()
       Agent.stop(agent)
 
       sub = %Subscription{client: @fake_client, agent: agent, handler: fn _ -> :ok end}
@@ -56,8 +85,7 @@ defmodule Onchain.SubscriptionTest do
   # These tests pin the dispatch path to the new contract.
   describe "build_internal_handler/2 — zen_websocket 0.4.x contract" do
     setup do
-      {:ok, agent} = Agent.start_link(fn -> %{} end)
-      on_exit(fn -> if Process.alive?(agent), do: Agent.stop(agent) end)
+      agent = start_agent!()
 
       caller = self()
       handler = fn event -> send(caller, {:event, event}) end
@@ -68,7 +96,7 @@ defmodule Onchain.SubscriptionTest do
     end
 
     test "dispatches :new_heads notification when message is a decoded map", ctx do
-      Agent.update(ctx.agent, &Map.put(&1, "0xsub_heads", :new_heads))
+      register!(ctx.agent, "0xsub_heads", :new_heads)
 
       ctx.internal.(
         {:message,
@@ -101,7 +129,7 @@ defmodule Onchain.SubscriptionTest do
     end
 
     test "dispatches :pending_transactions notification (string hash)", ctx do
-      Agent.update(ctx.agent, &Map.put(&1, "0xsub_pending", :pending_transactions))
+      register!(ctx.agent, "0xsub_pending", :pending_transactions)
       hash = "0x" <> String.duplicate("a", 64)
 
       ctx.internal.(
@@ -116,7 +144,7 @@ defmodule Onchain.SubscriptionTest do
     end
 
     test "dispatches :logs notification", ctx do
-      Agent.update(ctx.agent, &Map.put(&1, "0xsub_logs", {:logs, %{}}))
+      register!(ctx.agent, "0xsub_logs", {:logs, %{}})
 
       ctx.internal.(
         {:message,
@@ -145,7 +173,7 @@ defmodule Onchain.SubscriptionTest do
     end
 
     test "dispatches {:parse_error, sub_id, {:invalid_head, _}} on malformed :new_heads result", ctx do
-      Agent.update(ctx.agent, &Map.put(&1, "0xsub_heads", :new_heads))
+      register!(ctx.agent, "0xsub_heads", :new_heads)
 
       ctx.internal.(
         {:message,
@@ -159,7 +187,7 @@ defmodule Onchain.SubscriptionTest do
     end
 
     test "dispatches {:parse_error, sub_id, {:invalid_log, _}} on malformed :logs result", ctx do
-      Agent.update(ctx.agent, &Map.put(&1, "0xsub_logs", {:logs, %{}}))
+      register!(ctx.agent, "0xsub_logs", {:logs, %{}})
 
       ctx.internal.(
         {:message,
@@ -172,16 +200,141 @@ defmodule Onchain.SubscriptionTest do
       assert_receive {:event, {:parse_error, "0xsub_logs", {:invalid_log, "not a map"}}}, 100
     end
 
-    test "silently drops notification for unknown subscription_id", ctx do
+    test "buffers notification when subscription_id is not yet registered", ctx do
       ctx.internal.(
         {:message,
          %{
            "method" => "eth_subscription",
-           "params" => %{"subscription" => "0xunknown", "result" => %{}}
+           "params" => %{"subscription" => "0xfuture", "result" => %{"hello" => "world"}}
          }}
       )
 
+      # No event delivered yet — it's buffered
       refute_receive {:event, _}, 50
+
+      # The pending buffer holds the result
+      pending = Agent.get(ctx.agent, & &1.pending)
+      assert pending["0xfuture"] == [%{"hello" => "world"}]
+    end
+  end
+
+  describe "buffered notification flush on registration" do
+    setup do
+      agent = start_agent!()
+
+      caller = self()
+      handler = fn event -> send(caller, {:event, event}) end
+
+      internal = Subscription.build_internal_handler(agent, handler)
+
+      {:ok, agent: agent, internal: internal, handler: handler}
+    end
+
+    test "register_and_drain returns buffered results in FIFO order", ctx do
+      # Buffer two pending-tx hashes for an unregistered sub_id
+      hash1 = "0x" <> String.duplicate("a", 64)
+      hash2 = "0x" <> String.duplicate("b", 64)
+
+      ctx.internal.(
+        {:message, %{"method" => "eth_subscription", "params" => %{"subscription" => "0xfuture", "result" => hash1}}}
+      )
+
+      ctx.internal.(
+        {:message, %{"method" => "eth_subscription", "params" => %{"subscription" => "0xfuture", "result" => hash2}}}
+      )
+
+      # Registration drains them FIFO
+      drained = Subscription.register_and_drain(ctx.agent, "0xfuture", :pending_transactions)
+      assert drained == [hash1, hash2]
+
+      # Buffer is now empty for that sub_id
+      assert Agent.get(ctx.agent, & &1.pending) == %{}
+
+      # Registry has the new entry
+      assert Agent.get(ctx.agent, & &1.registry) == %{"0xfuture" => :pending_transactions}
+    end
+
+    test "buffered notifications dispatch through handler when flushed manually", ctx do
+      hash = "0x" <> String.duplicate("c", 64)
+
+      ctx.internal.(
+        {:message, %{"method" => "eth_subscription", "params" => %{"subscription" => "0xfuture", "result" => hash}}}
+      )
+
+      refute_receive {:event, _}, 30
+
+      # Manually flush — same code path do_subscribe runs after RPC reply
+      drained = Subscription.register_and_drain(ctx.agent, "0xfuture", :pending_transactions)
+      Enum.each(drained, fn r -> ctx.handler.({:pending_transactions, "0xfuture", r}) end)
+
+      assert_receive {:event, {:pending_transactions, "0xfuture", ^hash}}, 100
+    end
+
+    test "register_and_drain on a sub_id with no buffered notifications returns []", ctx do
+      assert [] == Subscription.register_and_drain(ctx.agent, "0xempty", :new_heads)
+      assert Agent.get(ctx.agent, & &1.registry) == %{"0xempty" => :new_heads}
+    end
+  end
+
+  describe "buffer overflow" do
+    setup do
+      agent = start_agent!()
+
+      caller = self()
+      handler = fn event -> send(caller, {:event, event}) end
+
+      internal = Subscription.build_internal_handler(agent, handler)
+
+      {:ok, agent: agent, internal: internal}
+    end
+
+    test "drops oldest entry and emits Logger.warning when buffer exceeds 100 entries", ctx do
+      log =
+        capture_log(fn ->
+          for n <- 1..101 do
+            ctx.internal.(
+              {:message,
+               %{
+                 "method" => "eth_subscription",
+                 "params" => %{"subscription" => "0xbuf", "result" => "0x#{n}"}
+               }}
+            )
+          end
+        end)
+
+      assert log =~ "exceeded 100 entries"
+
+      # Buffer is capped at 100; oldest ("0x1") was dropped
+      pending = Agent.get(ctx.agent, & &1.pending)
+      assert length(pending["0xbuf"]) == 100
+      assert hd(pending["0xbuf"]) == "0x101"
+      refute "0x1" in pending["0xbuf"]
+    end
+  end
+
+  describe "remove_subscription/2" do
+    test "removes sub_id from both registry and pending" do
+      agent = start_agent!()
+
+      Agent.update(agent, fn _ ->
+        %{registry: %{"0xa" => :new_heads}, pending: %{"0xa" => ["one"], "0xb" => ["two"]}}
+      end)
+
+      Subscription.remove_subscription(agent, "0xa")
+
+      state = Agent.get(agent, & &1)
+      assert state.registry == %{}
+      assert state.pending == %{"0xb" => ["two"]}
+    end
+  end
+
+  describe "frame ignoring" do
+    setup do
+      agent = start_agent!()
+      caller = self()
+      handler = fn event -> send(caller, {:event, event}) end
+      internal = Subscription.build_internal_handler(agent, handler)
+      {:ok, agent: agent, internal: internal}
     end
 
     test "ignores non-JSON text frames", ctx do

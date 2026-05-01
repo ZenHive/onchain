@@ -33,6 +33,24 @@ defmodule Onchain.Subscription do
     tagged tuple from the internal parser
     (`{:invalid_head, _}` | `{:invalid_tx_hash, _}` | `{:invalid_log, _}`)
 
+  ## Subscribe Race Buffering
+
+  The race between `eth_subscribe`'s RPC reply (which returns the `subscription_id`)
+  and the Agent registration of that id is closed by buffering: notifications that
+  arrive for an unregistered `subscription_id` are queued per-id (cap
+  `100` entries; oldest dropped on overflow with a `Logger.warning`).
+  On registration, buffered notifications are flushed FIFO through the same handler
+  path before `subscribe/3` returns.
+
+  Cross-buffer / post-registration ordering is best-effort: a notification that
+  arrives between the atomic register-and-drain step and the synchronous flush is
+  dispatched immediately and may interleave with buffered events. Acceptable for
+  self-contained, independent notifications (heads, hashes, logs).
+
+  Handler exceptions during flush propagate (consistent with fire-and-forget
+  `dispatch_event/4` semantics). Remaining buffered events for that flush are lost;
+  Agent state remains consistent.
+
   ## Error Format
 
   - Connection failures: `{:error, {:connection_error, reason}}`
@@ -65,15 +83,20 @@ defmodule Onchain.Subscription do
   # Cascade: build_request spec mismatch → do_subscribe "won't succeed" →
   # subscribe/unsubscribe "no return" → bang variants "invalid contract".
   @dialyzer [
-    {:no_match, [do_subscribe: 4, unsubscribe: 2]},
-    {:no_return, [subscribe!: 2, subscribe!: 3, unsubscribe: 2, unsubscribe!: 2, do_subscribe: 4]},
-    {:no_fail_call, [do_subscribe: 4, unsubscribe: 2, subscribe: 3]},
-    {:no_contracts, [subscribe!: 2, subscribe!: 3, unsubscribe: 2, unsubscribe!: 2, do_subscribe: 4]},
+    {:no_match, [do_subscribe: 3, unsubscribe: 2]},
+    {:no_return, [subscribe!: 2, subscribe!: 3, unsubscribe: 2, unsubscribe!: 2, do_subscribe: 3]},
+    {:no_fail_call, [do_subscribe: 3, unsubscribe: 2, subscribe: 3]},
+    {:no_contracts, [subscribe!: 2, subscribe!: 3, unsubscribe: 2, unsubscribe!: 2, do_subscribe: 3]},
     {:no_match, [subscribe!: 3]}
   ]
 
   @enforce_keys [:client, :agent]
   defstruct [:client, :agent, :handler]
+
+  # Per-sub_id cap on the pre-registration buffer. Generous enough for ~1s of
+  # mainnet pendingTransactions burst at 100 tx/s; not so high that a misbehaving
+  # server can wedge memory.
+  @max_pending_per_sub_id 100
 
   @type subscription_type :: :new_heads | :pending_transactions | {:logs, map()}
 
@@ -140,7 +163,7 @@ defmodule Onchain.Subscription do
     {user_handler, ws_opts} = Keyword.pop(opts, :handler)
     caller = self()
 
-    {:ok, agent} = Agent.start_link(fn -> %{} end)
+    {:ok, agent} = Agent.start_link(fn -> %{registry: %{}, pending: %{}} end)
 
     handler = user_handler || default_handler(caller)
 
@@ -197,17 +220,17 @@ defmodule Onchain.Subscription do
   @spec subscribe(t(), subscription_type(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def subscribe(sub, type, opts \\ [])
 
-  def subscribe(%__MODULE__{client: client, agent: agent}, :new_heads, _opts) do
-    do_subscribe(client, agent, :new_heads, ["newHeads"])
+  def subscribe(%__MODULE__{} = sub, :new_heads, _opts) do
+    do_subscribe(sub, :new_heads, ["newHeads"])
   end
 
-  def subscribe(%__MODULE__{client: client, agent: agent}, :pending_transactions, _opts) do
-    do_subscribe(client, agent, :pending_transactions, ["newPendingTransactions"])
+  def subscribe(%__MODULE__{} = sub, :pending_transactions, _opts) do
+    do_subscribe(sub, :pending_transactions, ["newPendingTransactions"])
   end
 
-  def subscribe(%__MODULE__{client: client, agent: agent}, {:logs, filter}, _opts) when is_map(filter) do
+  def subscribe(%__MODULE__{} = sub, {:logs, filter}, _opts) when is_map(filter) do
     eth_filter = build_log_filter(filter)
-    do_subscribe(client, agent, {:logs, filter}, ["logs", eth_filter])
+    do_subscribe(sub, {:logs, filter}, ["logs", eth_filter])
   end
 
   def subscribe(%__MODULE__{}, type, _opts) do
@@ -250,7 +273,7 @@ defmodule Onchain.Subscription do
 
     case Client.send_message(client, Jason.encode!(request)) do
       {:ok, %{"result" => result}} ->
-        Agent.update(agent, &Map.delete(&1, subscription_id))
+        remove_subscription(agent, subscription_id)
         {:ok, result}
 
       {:ok, %{"error" => %{"code" => code, "message" => message}}} ->
@@ -260,7 +283,7 @@ defmodule Onchain.Subscription do
         {:error, {:connection_error, reason}}
 
       :ok ->
-        Agent.update(agent, &Map.delete(&1, subscription_id))
+        remove_subscription(agent, subscription_id)
         {:ok, true}
     end
   end
@@ -306,20 +329,18 @@ defmodule Onchain.Subscription do
 
   # --- Internal helpers ---
 
-  # Sends eth_subscribe and stores the sub_id → type mapping in the Agent.
-  @spec do_subscribe(Client.t(), pid(), subscription_type(), list()) ::
+  # Sends eth_subscribe, atomically registers the sub_id → type mapping, drains
+  # any notifications that were buffered in the race window, and dispatches them
+  # FIFO through the connection's handler before returning.
+  @spec do_subscribe(t(), subscription_type(), list()) ::
           {:ok, String.t()} | {:error, term()}
-  defp do_subscribe(client, agent, type, params) do
+  defp do_subscribe(%__MODULE__{client: client, agent: agent, handler: handler}, type, params) do
     {:ok, request} = JsonRpc.build_request("eth_subscribe", params)
 
     case Client.send_message(client, Jason.encode!(request)) do
       {:ok, %{"result" => subscription_id}} when is_binary(subscription_id) ->
-        # NOTE: Theoretical race — a notification arriving between send_message
-        # returning the sub_id and Agent.update completing would hit dispatch_event(nil, ...)
-        # and be silently dropped. Benign for standard Ethereum JSON-RPC (nodes order the
-        # subscribe response before notifications on the same connection), but not guaranteed
-        # for every WebSocket endpoint. See ROADMAP Task 38.
-        Agent.update(agent, &Map.put(&1, subscription_id, type))
+        drained = register_and_drain(agent, subscription_id, type)
+        Enum.each(drained, &dispatch_event(type, subscription_id, &1, handler))
         {:ok, subscription_id}
 
       {:ok, %{"error" => %{"code" => code, "message" => message}}} ->
@@ -377,18 +398,77 @@ defmodule Onchain.Subscription do
   defp dispatch_decoded(decoded, agent, handler) do
     case JsonRpc.match_response(decoded) do
       {:notification, "eth_subscription", %{"subscription" => sub_id, "result" => result}} ->
-        type = Agent.get(agent, &Map.get(&1, sub_id))
-        dispatch_event(type, sub_id, result, handler)
+        case lookup_or_buffer(agent, sub_id, result) do
+          :buffered -> :ok
+          {:registered, type} -> dispatch_event(type, sub_id, result, handler)
+        end
 
       _other ->
         :ok
     end
   end
 
-  # Parses and delivers a subscription event based on its type.
-  @spec dispatch_event(subscription_type() | nil, String.t(), term(), handler()) :: any()
-  defp dispatch_event(nil, _sub_id, _result, _handler), do: :ok
+  # Atomically: if `sub_id` is registered, return `{:registered, type}` so the caller
+  # can dispatch immediately; otherwise push `result` onto the per-sub_id pending
+  # buffer and return `:buffered`. See @moduledoc "Subscribe Race Buffering".
+  @doc false
+  @spec lookup_or_buffer(pid(), String.t(), term()) :: :buffered | {:registered, subscription_type()}
+  def lookup_or_buffer(agent, sub_id, result) do
+    Agent.get_and_update(agent, fn state ->
+      case Map.get(state.registry, sub_id) do
+        nil ->
+          {:buffered, %{state | pending: push_bounded(state.pending, sub_id, result)}}
 
+        type ->
+          {{:registered, type}, state}
+      end
+    end)
+  end
+
+  # Atomically register the sub_id → type mapping AND pop any buffered notifications
+  # for that sub_id. Returns the buffered list in arrival (FIFO) order; the caller
+  # is expected to iterate and dispatch through the connection's handler.
+  @doc false
+  @spec register_and_drain(pid(), String.t(), subscription_type()) :: [term()]
+  def register_and_drain(agent, sub_id, type) do
+    Agent.get_and_update(agent, fn state ->
+      {pending, new_pending} = Map.pop(state.pending, sub_id, [])
+      new_state = %{state | registry: Map.put(state.registry, sub_id, type), pending: new_pending}
+      {Enum.reverse(pending), new_state}
+    end)
+  end
+
+  # Removes a sub_id from both registry and pending buffer (cleanup on unsubscribe).
+  @doc false
+  @spec remove_subscription(pid(), String.t()) :: :ok
+  def remove_subscription(agent, sub_id) do
+    Agent.update(agent, fn state ->
+      %{state | registry: Map.delete(state.registry, sub_id), pending: Map.delete(state.pending, sub_id)}
+    end)
+  end
+
+  # Prepends `result` onto pending[sub_id], dropping the oldest entry if the per-sub_id
+  # cap is exceeded. Pending is kept as a stack (newest first); FIFO order is restored
+  # by Enum.reverse on drain. Overflow emits a Logger.warning every time.
+  @spec push_bounded(map(), String.t(), term()) :: map()
+  defp push_bounded(pending, sub_id, result) do
+    current = Map.get(pending, sub_id, [])
+    next = [result | current]
+
+    if length(next) > @max_pending_per_sub_id do
+      Logger.warning(
+        "Subscription: pending buffer for sub_id #{inspect(sub_id)} exceeded #{@max_pending_per_sub_id} entries; dropping oldest"
+      )
+
+      {kept, _dropped} = Enum.split(next, @max_pending_per_sub_id)
+      Map.put(pending, sub_id, kept)
+    else
+      Map.put(pending, sub_id, next)
+    end
+  end
+
+  # Parses and delivers a subscription event based on its type.
+  @spec dispatch_event(subscription_type(), String.t(), term(), handler()) :: any()
   defp dispatch_event({:logs, _filter}, sub_id, result, handler) do
     case Parser.parse_event(:logs, result) do
       {:ok, parsed} -> handler.({:logs, sub_id, parsed})

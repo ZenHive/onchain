@@ -22,6 +22,8 @@
 ### ✅ Recently Completed
 | Task | Description | Notes |
 |------|-------------|-------|
+| 38 | Pre-registration subscription buffer | Closes subscribe→Agent.update race silently-dropping notifications. Per-sub_id buffer cap 100, FIFO drain on registration, atomic Agent ops. Coverage 51% → 91% on `Onchain.Subscription`. |
+| 39 | `:pending_transactions` integration test | Live mempool subscription against blockwatch-one; lifecycle test extended to exercise bang variants. Closes the v0.5.2 release plan. |
 | — | **cartouche v0.1.0 published on hex.pm** (2026-04-30) | Fork of signet under `Cartouche.*` namespace, Elixir 1.20-compatible, published ABI dep (`hieroglyph` 1.0.0), cleaned dialyzer baseline. Unblocks Task 43 and triggers Task 67 (signet → cartouche dep migration). |
 | — | **v0.4.0 Package Split** | Split into onchain (pure Elixir), onchain_aave, onchain_evm |
 | 31 | Real-time subscriptions (eth_subscribe) | zen_websocket, newHeads/pendingTx/logs |
@@ -44,7 +46,7 @@
 
 ## Release Plan
 
-Last shipped: **v0.5.1** (2026-04-19) — zen_websocket 0.4.x compatibility. `[Unreleased]` now carries Tasks 42 (subscription parse-error delivery), 55 + 56 (RPC input hardening), 59 (generic JSON-RPC passthrough), 62 (Sleuth deploy-as-call), 67 (`:signet` → `:cartouche` dep migration), and 43 (strip the upstream-cascade dialyzer suppressions now that cartouche 0.1.0 + hieroglyph 1.0.0 carry the corrected specs).
+Last shipped: **v0.5.2** (2026-05-01) — Subscription hardening. Closes Tasks 38 (pre-registration buffer for subscription notifications) and 39 (`:pending_transactions` integration test against blockwatch-one), bundled with the deferred Tasks 42 (subscription parse-error delivery), 43 (strip upstream-cascade dialyzer suppressions), 55 + 56 (RPC input hardening), 59 (generic JSON-RPC passthrough), 62 (Sleuth deploy-as-call), and 67 (`:signet` → `:cartouche` dep migration) from the v0.5.0–v0.5.1 backlog.
 
 ### 🎯 v0.5.2 — Subscription hardening (next, patch, non-breaking)
 
@@ -54,10 +56,10 @@ Finishes what v0.5.0/0.5.1 started on the subscription path and clears the upstr
 |------|-----|------|---------------------|
 | 43 ✅ | 3.00 | Remove `@dialyzer {:no_match, ...}` suppressions | Stripped 2026-04-30 in the commit immediately after Task 67. All eleven module suppressions (`Onchain.ABI/Contract/ENS/Log/Multicall/Sleuth/Transfer/ERC20/ERC721/ERC1155/Hex`) were stale once cartouche 0.1.0 + hieroglyph 1.0.0 landed; `mix dialyzer.json` clean post-strip. `Onchain.Subscription` (zen_websocket cause) and `Onchain.RPC.Helpers.do_rpc/3` (cartouche RPC error-shape — re-probed, still narrow) intentionally retained. |
 | 42 ✅ | 1.75 | Deliver subscription parse errors to handler | Silent drops → `{:parse_error, sub_id, reason}` events |
-| 39 | 1.50 | `:pending_transactions` integration test | Blocker (needed mempool-broadcasting provider) resolved by blockwatch-one |
-| 38 | 1.17 | Buffer unknown sub_ids during subscribe race | Close subscribe→Agent.update race window |
+| 39 ✅ | 1.50 | `:pending_transactions` integration test | Shipped 2026-05-01. Live mempool broadcast via blockwatch-one; assert hash shape, unsubscribe cleanly |
+| 38 ✅ | 1.17 | Buffer unknown sub_ids during subscribe race | Shipped 2026-05-01. Per-sub_id pending buffer (cap 100, FIFO drain on register), atomic Agent ops, bang-variant coverage; `Onchain.Subscription` coverage 51% → 91% |
 
-**Acceptance:** all four tasks closed or returned with written rationale; no breaking API changes; CHANGELOG `[Unreleased]` → `v0.5.2` on tag.
+**Acceptance:** all four tasks closed or returned with written rationale; no breaking API changes; CHANGELOG `[Unreleased]` → `v0.5.2` on tag. **Status: ready to tag** — Tasks 38, 39, 42, 43, 55, 56, 59, 62, 67 all shipped under `v0.5.2` in CHANGELOG (2026-05-01).
 
 ### 🚀 v0.6.0 — Package split: `onchain_ws` (minor, breaking)
 
@@ -124,6 +126,18 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 
 ---
 
+## Phase 9: Account Abstraction (ERC-4337)
+
+| # | Task | Status | D | B | U | Eff | Module |
+|---|------|--------|---|---|---|-----|--------|
+| 69 | ERC-4337 UserOperation construction, signing, and bundler RPC | ⬜ | 7 | 8 | 7 | 1.07 📋 | `Onchain.AA` (new) |
+
+**Task 69 — ERC-4337 account abstraction.** [D:7/B:8/U:7 → Eff:1.07 📋]
+
+Add ERC-4337 support: UserOperation construction, signing, and bundler RPC (`eth_sendUserOperation`, `eth_estimateUserOperationGas`, `eth_getUserOperationByHash`, `eth_getUserOperationReceipt`, `eth_supportedEntryPoints`). Cover both v0.6 and v0.7 EntryPoint shapes if they're both still relevant when this is picked up. Include tests.
+
+---
+
 ## Phase 8: Chain Intelligence Primitives ✅
 
 > 6 tasks complete. Read-layer primitives for wallet analytics and on-chain intelligence.
@@ -151,8 +165,8 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 | 36 | Extract shared RPC helpers (DRY: 7 duplicated functions between RPC + Trace) | ✅ | 3 | 6 | 5 | 1.83 🚀 | `Onchain.RPC.Helpers` |
 | — | Code review fixes: batch state commit, defensive parsing, array handling, NatSpec | ✅ | — | — | — | — | Multiple |
 | 37 | zen_websocket: `send_message/2` should return `{:error, :disconnected}` instead of `:noproc` exit when server is dead | ✅ | 2 | 7 | 6 | 3.25 🎯 | `ZenWebsocket.Client` (resolved upstream in 0.4.1, R042) |
-| 38 | Subscription: buffer unknown sub_ids to close subscribe→Agent.update race window (drops notifications silently if WS endpoint doesn't order subscribe response before notifications) | ⬜ | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
-| 39 | Subscription: add `:pending_transactions` integration test (needs provider that broadcasts mempool — Alchemy custom method or local full node) | ⬜ | 2 | 3 | 3 | 1.50 📋 | `test/onchain/subscription_integration_test.exs` |
+| 38 ✅ | Subscription: buffer unknown sub_ids to close subscribe→Agent.update race window. Shipped 2026-05-01 — per-sub_id pending buffer (cap 100, FIFO drain on register), atomic Agent ops via `lookup_or_buffer/3` + `register_and_drain/3` + `remove_subscription/2` helpers. `Onchain.Subscription` test coverage 51% → 91%. | ✅ Complete | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
+| 39 ✅ | Subscription: `:pending_transactions` integration test against blockwatch-one (live mempool broadcast). Shipped 2026-05-01. Asserts at least one 32-byte tx hash arrives within 30s, unsubscribes cleanly. Lifecycle test simultaneously upgraded to exercise bang variants (`connect!`/`subscribe!`/`unsubscribe!`). | ✅ Complete | 2 | 3 | 3 | 1.50 📋 | `test/onchain/subscription_integration_test.exs` |
 | 40 | Switch Credo back to Hex release (moved from `release/1.7` git branch to `{:credo, "~> 1.7"}` — resolved at 1.7.18) | ✅ | 1 | 4 | 3 | 3.50 🎯 | `mix.exs` |
 | 41 | ENS enhancements: CCIP-Read / EIP-3668 off-chain lookups, ENSIP-10 wildcard resolution, full UTS-46 / ENSIP-15 Unicode normalization, multi-coin address resolution (currently ETH-only via `addr(bytes32)`) | ⬜ | 6 | 6 | 5 | 0.92 ⚠️ | `Onchain.ENS` |
 | 42 | Subscription: deliver parse errors to the handler as `{:parse_error, sub_id, reason}` events instead of silently dropping malformed notifications | ✅ | 2 | 4 | 3 | 1.75 🚀 | `Onchain.Subscription` |
@@ -173,6 +187,8 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 | 65 | Differential test harness: same RPC method via `Onchain.RPC` vs reference impl (signet first, then Web3.py / viem if needed) — catches protocol-level mistakes unit tests miss | ⬜ | 6 | 5 | 3 | 0.67 ⚠️ | `test/onchain/differential/` |
 | 66 | Tree-sitter scrape of Erigon Go source for `trace_*` / `ots_*` method enumeration (~30 methods OpenRPC doesn't cover) — gated on Task 64 + actual consumer demand | ⬜ | 5 | 4 | 3 | 0.70 ⚠️ | dev-only `Mix.Task` |
 | 67 ✅ | Migrate `:signet` → `:cartouche` dep (renames every `Signet.*` reference to `Cartouche.*`, swaps `{:signet, "~> 1.6"}` for `{:cartouche, "~> 0.1"}` in `mix.exs`). Breaking — bumps minor version. Required before Task 43 can close. | ✅ Complete | 4 | 7 | 8 | 1.88 🚀 | Multiple |
+| 68 | Mine `defi-skills:intent-to-transaction` action surface for `onchain` coverage gaps | ⬜ | 3 | 8 | 7 | 2.50 🎯 | (cross-cutting research) |
+| 70 | Harden `Onchain.Subscription.lookup_or_buffer/3` against unsolicited sub_id keys: `pending` map has per-key cap of 100 but unbounded distinct-keys count. Server emitting notifications for never-`subscribe`-d sub_ids grows key set until connection closes (per-connection Agent dies with the conn, so blast radius is bounded — but worth fixing). Buffer only sub_ids in an in-flight subscribe state, or add a global key cap with eviction. Carry forward to `onchain_ws` extraction (Task 48). | ⬜ | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
 
 **Task 55 — Harden `Onchain.RPC.Helpers` address/data validation.**
 
@@ -322,6 +338,24 @@ Acceptance criteria:
 
 ---
 
+**Task 68 — Mine `defi-skills:intent-to-transaction` action surface for `onchain` coverage gaps.** [D:3/B:8/U:7 → Eff:2.50 🎯]
+
+Planted 2026-04-30 from a cartouche session that surveyed cross-repo applicability of the `defi-skills` skill. Self-contained discovery exercise — execute it from a fresh `onchain` Claude Code session so this repo's CLAUDE.md, hooks, and test fixtures are loaded.
+
+**Prompt for the executing session:**
+
+> Invoke `/defi-skills:intent-to-transaction` to load the skill, then run `defi-skills actions --json` to enumerate the supported action surface (~50 actions across Aave, Uniswap, Lido, Compound, Balancer, Pendle, EigenLayer, Curve, MakerDAO, Rocket Pool, Fibrous, WETH).
+>
+> Map relevant actions to **`onchain`'s scope: higher-level wrapper patterns** — token-symbol resolution (e.g. `USDC` → address), base-unit conversion (decimals lookup), approval-then-action sequencing, multi-tx orchestration. Don't propose protocol-specific wrappers (those go to `onchain_aave` etc.); focus on cross-protocol primitives that every protocol package would otherwise reimplement.
+>
+> For each gap or coverage opportunity, propose a ROADMAP entry with D/B/U scoring per `~/.claude/includes/task-prioritization.md`. Output: a "Proposed additions from defi-skills mining" section the user reviews and merges into the main task tables before any implementation begins.
+>
+> Read-only exercise — discovery + scoring only, no `Onchain.*` code edits in this task itself. The skill is already installed (`pip install defi-skills`); no new deps. Companion tasks were planted in `hieroglyph`, `onchain_aave`, and `onchain_evm` ROADMAPs the same day, with a downstream cartouche audit task gated on all four landing.
+
+**Acceptance:** a "Proposed additions from defi-skills mining" section lands in this ROADMAP listing each candidate task with D/B/U scores, scope notes, and which `defi-skills` actions motivated it. The user merges accepted entries into the Code Health table.
+
+---
+
 ## Phase 10: RPC Composition Layer
 
 **Motivation:** Per the scope split with cartouche (see `../signet/ROADMAP.md` "Scope principle" — sibling design-discussion repo retains its historical name), onchain is home for everything buildable on top of `Cartouche.*` public surface. This phase collects RPC method wrappers, observability facades, and helpers over cartouche structs that would otherwise have been upstream-PR candidates but correctly belong here. Each task is small; not urgent individually. Batch as needed — no consumer blocking.
@@ -377,6 +411,47 @@ Complements — does not replace — `Onchain.Multicall` and `onchain_evm` / rev
 - Descripex `api()` annotations on public functions
 - CLAUDE.md Module Layout + Portfolio Context updated (the `onchain` row in "Where does this feature go?" should note custom read-only bytecode as an `onchain` concern)
 - Reference Compound's Sleuth repo in `@moduledoc` for the design inspiration
+
+---
+
+## Phase 11: hieroglyph 1.0.0 → 1.4.0 adoption advisory
+
+**Status:** ⬜ pending — planted 2026-05-01 by a hieroglyph session surveying downstream impact.
+
+**Context.** `hieroglyph` shipped four minor releases between 2026-04-24 and 2026-05-01: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0. onchain consumes hieroglyph **transitively through cartouche** (cartouche pins `{:hieroglyph, "~> 1.0"}`, which already accepts 1.4.0). Full release notes in `../hieroglyph/CHANGELOG.md`; sibling roadmap at `../hieroglyph/ROADMAP.md` (now in maintenance posture). Cartouche has its own adoption advisory in `../cartouche/ROADMAP.md` (Phase 11) covering the codegen path and the `decode_structs: true` audit — onchain doesn't use `decode_structs: true` directly, so the 1.4.0 BREAKING change is not load-bearing here. Two onchain-specific concerns instead.
+
+### Tasks
+
+| # | Task | Status | D | B | U | Eff | Module |
+|---|------|--------|---|---|---|-----|--------|
+| TBD | Bug-fix audit: re-test onchain flows against silently-fixed hieroglyph behaviors | ⬜ | 3 | 5 | 4 | 1.50 📋 | `Onchain.Log` + `Onchain.ABI` |
+| TBD | Optional: extend `Onchain.ABI` wrapper with `decode_call/3` and `decode_error/2` | ⬜ | 2 | 4 | 5 | 2.25 🚀 | `Onchain.ABI` |
+
+### Audit — silent bug-fix windfall (1.0.0–1.2.0)
+
+Hieroglyph fixes that flow into onchain transparently through `Onchain.ABI.encode_call/2` / `Onchain.ABI.decode_response/2`, plus one that does NOT:
+
+- **`:string` decode NUL truncation** (1.2.0) — pre-existing upstream bug since 2018. Any contract returning strings with embedded NUL codepoints silently truncated. Re-run integration tests for ENS resolver text records, ERC-20 `name`/`symbol`, and any custom-error revert paths in `lib/onchain/erc20.ex` (`Cool(uint256,string)` style) on mainnet. If anything decodes differently now, that's the bug fix taking effect.
+- **`encode_int/2` overflow guard** (1.1.0) — `int8`/`int16`/etc. were rejecting all valid values. onchain doesn't use small int types in any current public surface (mostly `uint256`), but worth grepping `lib/` for `int<N>` types in case a caller was accidentally avoiding them.
+- **Indexed reference-type event params** (1.0.0) — **does NOT auto-apply.** `lib/onchain/log.ex` reimplements event decoding (lines 99–107: `decode_event/2` parses the signature itself, then routes indexed params through manual `ABI.decode("(#{type})", binary)` on line 262 rather than delegating to `ABI.Event.decode_event/4`). The hieroglyph fix lives inside `ABI.Event.decode_event/4` and never runs in the onchain path. Two ways to address: (a) audit `Onchain.Log.decode_event/2`'s indexed-param branch against the spec rule (indexed dynamic types — `string`, `bytes`, `T[]`, tuples — should resolve to a 32-byte topic hash, not a decoded value), or (b) refactor `Onchain.Log.decode_event/2` to delegate to `ABI.Event.decode_event/4` and let hieroglyph handle the spec compliance. Today onchain's `lib/onchain/transfer.ex` only decodes ERC-20/721/1155 transfer events, which use `address` and `uint256` (static value types), so the bug doesn't surface there — but any future event with indexed reference-type params would hit it.
+- **`dynamic?/1` crash on `T[0]`** (1.1.0) — niche. Not likely surfaced by current onchain callers.
+
+### Optional adoption — new hieroglyph public APIs
+
+Two new hieroglyph APIs map cleanly onto the `Onchain.ABI` wrapper layer; adopting in onchain gives sibling repos (`onchain_aave`, `onchain_evm`, `onchain_js`, `onchain_tempo`) the new functionality for free without each rewriting integration code:
+
+- `ABI.decode_call/3` (1.1.0) — selector-prefixed calldata decoding (`{:ok, %{function, types, args}}` or `{:error, :calldata_too_short | :selector_mismatch | ...}`). `Onchain.ABI.decode_response/2` is response-payload-only; if any caller hands selector-prefixed calldata (debug paths, mempool-decoded transactions), expose `Onchain.ABI.decode_call/2` as a thin wrapper.
+- `ABI.decode_error/2` (1.2.0) — Solidity 0.8.4+ custom-error revert decoding. Useful in `lib/onchain/rpc.ex` revert handling and anywhere a contract returns custom-error revert data. Could land as `Onchain.ABI.decode_error/2`.
+
+`ABI.encode_packed/2` (1.2.0) and `ABI.method_id/1` (1.1.0) are also new but have no obvious onchain consumer today — defer.
+
+### Sibling repos
+
+`onchain_aave` / `onchain_evm` / `onchain_js` / `onchain_tempo` all consume hieroglyph through `Onchain.ABI.*` wrappers (or, for `onchain_js`/`onchain_tempo`, not at all). Bug fixes flow through transparently; new-API adoption depends on this task. **No per-sibling task needed** unless their integration tests surface a regression — which would be a sign that the silent bug-fix windfall above had been miscompiling production data, in which case the relevant sibling can plant its own follow-up.
+
+**Acceptance:** integration tests re-run with hieroglyph 1.4.0 to surface any string/int decoding deltas; `lib/onchain/log.ex` indexed-param branch audited against the spec rule fixed in hieroglyph 1.0.0 (or refactored to delegate); `Onchain.ABI` wrapper extensions added or formally declined.
+
+**Docs:** ROADMAP (this section); CHANGELOG `[Unreleased]` if `Onchain.ABI` wrapper grows or `Onchain.Log.decode_event/2` is refactored.
 
 ---
 

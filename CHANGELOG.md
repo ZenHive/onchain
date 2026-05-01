@@ -4,7 +4,19 @@ Completed roadmap tasks.
 
 ---
 
-## [Unreleased]
+## v0.5.2 — Subscription hardening (2026-05-01)
+
+### Added — Pre-registration buffer for subscription notifications (Task 38)
+
+- **Closed the `subscribe → Agent.update` race window in `Onchain.Subscription`.** A notification arriving for a `subscription_id` not yet registered in the per-connection Agent was previously delivered to `dispatch_event(nil, ...)` and silently dropped — `:ok` return, no Logger line. Standard Ethereum nodes order subscribe-response before notifications on the same connection, so the bug was theoretical for compliant servers; for non-conforming endpoints it was a permanently-lost event with no observability. Now: notifications for unregistered sub_ids are buffered per-id and flushed FIFO on registration via `register_and_drain/3`, before `subscribe/3` returns to the caller. Buffer is bounded at 100 entries per sub_id with `Logger.warning` on overflow (oldest dropped). Cross-buffer / post-registration ordering is best-effort — documented in `@moduledoc`.
+- **Agent state shape changed** from a flat `%{sub_id => type}` map to `%{registry: %{sub_id => type}, pending: %{sub_id => [result, ...]}}`. Three private-but-`@doc false`-public helpers expose the atomic operations for unit testing: `lookup_or_buffer/3` (buffer-or-dispatch), `register_and_drain/3` (atomic register + FIFO pop), `remove_subscription/2` (cleanup of both registry and pending). All Agent operations on the new state are single-call atomic, removing read-then-write races.
+- **`do_subscribe/4` → `do_subscribe/3`** — the helper now takes the `%Subscription{}` struct rather than separate client/agent args so the synchronous flush after registration has access to the connection's handler.
+- **Test coverage for `Onchain.Subscription` raised from 51% to 91%.** New unit tests cover buffer behavior (unregistered notifications buffer instead of drop, registry inspection), drain semantics (FIFO order, empty drain, manual flush dispatching through handler), buffer overflow (101 entries → cap to 100 + Logger.warning), `remove_subscription/2` cleanup, and bang-variant error paths. The pre-existing `"silently drops notification for unknown subscription_id"` test was replaced — the silent-drop behavior is no longer correct.
+
+### Added — Pending-transactions integration test (Task 39)
+
+- **`test/onchain/subscription_integration_test.exs` gains a `:pending_transactions` test.** Subscribes to `newPendingTransactions` against `ETHEREUM_WS_URL`, asserts arrival of at least one tx hash within the 30-second timeout, validates the hash is a 32-byte (66-char) `0x`-prefixed string, and unsubscribes cleanly. The blocker — needing a node that broadcasts mempool — was resolved by the in-house full archive node at `blockwatch-one`; mainstream public providers (Alchemy, Infura) don't broadcast pending tx hashes by default. A code comment notes that providers returning full tx objects (e.g., Alchemy's custom variant) would surface as `{:parse_error, sub_id, {:invalid_tx_hash, _}}` rather than crash the suite.
+- **Lifecycle test switched to bang variants** (`connect!/1`, `subscribe!/2`, `unsubscribe!/2`) to add coverage for the bang happy paths alongside the existing non-bang assertions.
 
 ### Changed — `:signet` → `:cartouche` dep migration (Task 67)
 
@@ -31,7 +43,7 @@ Completed roadmap tasks.
 Non-breaking for canonical hex callers and the malformed shapes above; the one compatibility tradeoff is the rare 20-byte raw binary whose leading bytes are ASCII `"0x"`, which now fails loudly instead of being silently re-encoded. Two follow-ups captured as Tasks 60 (accept camelCase `"fromBlock"` / `"toBlock"` aliases) and 61 (`:block_hash` filter key per EIP-1474).
 
 ### Changed
-- **Task 42 — Subscription parse errors delivered to handler.** `Onchain.Subscription` previously logged parse failures at `Logger.debug` and dropped the notification. Dispatch now emits `{:parse_error, sub_id, reason}` to the handler, where `reason` is the tagged tuple from `Onchain.Subscription.Parser.parse_event/2` (`{:invalid_head, _}` | `{:invalid_tx_hash, _}` | `{:invalid_log, _}`). Consumers can now see, count, or react to malformed notifications without destabilizing the WebSocket transport (dispatch still runs inside zen_websocket's callback, so handler errors remain the consumer's concern). The Logger.debug lines are removed — double-emission would just be noise. The `nil`-sub_id branch (subscribe→Agent.update race, Task 38) is unchanged.
+- **Task 42 — Subscription parse errors delivered to handler.** `Onchain.Subscription` previously logged parse failures at `Logger.debug` and dropped the notification. Dispatch now emits `{:parse_error, sub_id, reason}` to the handler, where `reason` is the tagged tuple from `Onchain.Subscription.Parser.parse_event/2` (`{:invalid_head, _}` | `{:invalid_tx_hash, _}` | `{:invalid_log, _}`). Consumers can now see, count, or react to malformed notifications without destabilizing the WebSocket transport (dispatch still runs inside zen_websocket's callback, so handler errors remain the consumer's concern). The Logger.debug lines are removed — double-emission would just be noise.
 
 ### Maintenance — Strip upstream-cascade dialyzer suppressions (Task 43)
 
