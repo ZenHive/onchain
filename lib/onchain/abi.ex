@@ -8,9 +8,16 @@ defmodule Onchain.ABI do
 
   ## Type Signatures
 
-  `decode_response/2` expects **tuple type syntax** for return values, e.g.
-  `"(uint256)"` or `"(uint256,bool)"`. This is the standard pattern for
-  decoding `eth_call` responses — NOT function signatures with names.
+  `decode_response/2` (and its alias `decode_types/2`) expects **tuple type
+  syntax** for return values — the type list MUST be wrapped in parentheses,
+  e.g. `"(uint256)"` or `"(uint256,bool)"`. Bare comma-separated types
+  (`"uint256,bool"`) raise an unhelpful upstream error and are not accepted.
+  This is the standard pattern for decoding `eth_call` responses — NOT
+  function signatures with names.
+
+  Use `decode_response/2` when the input is an `eth_call` reply; use
+  `decode_types/2` when the input is arbitrary ABI-encoded bytes
+  (mempool calldata, custom payloads). They behave identically.
 
   ## Error Format
 
@@ -29,6 +36,8 @@ defmodule Onchain.ABI do
   | `encode_call!/2` | Same, raises on error |
   | `decode_response/2` | Type signature + hex data → decoded values |
   | `decode_response!/2` | Same, raises on error |
+  | `decode_types/2` | Alias of `decode_response/2` for non-RPC callers |
+  | `decode_types!/2` | Alias of `decode_response!/2`, raises on error |
   """
 
   use Descripex, namespace: "/abi"
@@ -75,7 +84,8 @@ defmodule Onchain.ABI do
     params: [
       type_signature: [
         kind: :value,
-        description: ~s{Tuple type signature, e.g. "(uint256)" or "(uint256,bool)"}
+        description:
+          ~s{Tuple type signature wrapped in parentheses, e.g. "(uint256)" or "(uint256,bool)". Bare comma-separated types like "uint256,bool" are NOT accepted and raise an unhelpful upstream error.}
       ],
       hex_data: [kind: :value, description: "0x-prefixed hex string of ABI-encoded data"]
     ],
@@ -105,7 +115,8 @@ defmodule Onchain.ABI do
     params: [
       type_signature: [
         kind: :value,
-        description: ~s{Tuple type signature, e.g. "(uint256)" or "(uint256,bool)"}
+        description:
+          ~s{Tuple type signature wrapped in parentheses, e.g. "(uint256)" or "(uint256,bool)". Bare comma-separated types are NOT accepted.}
       ],
       hex_data: [kind: :value, description: "0x-prefixed hex string of ABI-encoded data"]
     ],
@@ -116,4 +127,43 @@ defmodule Onchain.ABI do
   def decode_response!(type_signature, hex_data) do
     ABI.decode(type_signature, Onchain.Hex.decode!(hex_data))
   end
+
+  # --- decode_types ---
+
+  api(:decode_types, "Decode arbitrary ABI-encoded hex data. Alias of decode_response/2.",
+    params: [
+      type_signature: [
+        kind: :value,
+        description:
+          ~s{Tuple type signature wrapped in parentheses, e.g. "(uint256)" or "(uint256,bool)". Bare comma-separated types are NOT accepted.}
+      ],
+      hex_data: [kind: :value, description: "0x-prefixed hex string of ABI-encoded data"]
+    ],
+    returns: %{
+      type: "{:ok, list} | {:error, {:decode_error, reason}}",
+      description:
+        "List of decoded values. Identical to decode_response/2 — use this name when the input isn't an RPC response (mempool calldata, custom ABI payloads)."
+    }
+  )
+
+  @spec decode_types(String.t(), String.t()) ::
+          {:ok, list()} | {:error, {:decode_error, term()}}
+  def decode_types(type_signature, hex_data), do: decode_response(type_signature, hex_data)
+
+  # --- decode_types! ---
+
+  api(:decode_types!, "Decode arbitrary ABI-encoded hex data. Alias of decode_response!/2.",
+    params: [
+      type_signature: [
+        kind: :value,
+        description:
+          ~s{Tuple type signature wrapped in parentheses, e.g. "(uint256)" or "(uint256,bool)". Bare comma-separated types are NOT accepted.}
+      ],
+      hex_data: [kind: :value, description: "0x-prefixed hex string of ABI-encoded data"]
+    ],
+    returns: %{type: :list, description: "List of decoded values"}
+  )
+
+  @spec decode_types!(String.t(), String.t()) :: list()
+  def decode_types!(type_signature, hex_data), do: decode_response!(type_signature, hex_data)
 end

@@ -30,6 +30,8 @@ defmodule Onchain.RPC do
   | `get_balance!/2` | Same, raises on error |
   | `block_number/1` | Current block height |
   | `block_number!/1` | Same, raises on error |
+  | `syncing/1` | Node sync status (`false` or sync-status map) |
+  | `syncing!/1` | Same, raises on error |
   | `get_block_by_number/2` | Fetch block by number or tag |
   | `get_block_by_number!/2` | Same, raises on error |
   | `chain_id/1` | Network chain ID |
@@ -210,6 +212,41 @@ defmodule Onchain.RPC do
     end
   end
 
+  # --- syncing ---
+
+  api(:syncing, "Get the node's sync status (eth_syncing).",
+    params: [
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{
+      type: "{:ok, false | map} | {:error, term}",
+      description:
+        "`false` when the node is fully synced; otherwise a raw sync-status map with hex-encoded fields (`startingBlock`, `currentBlock`, `highestBlock`, sometimes snap-sync fields). Field shape varies by client — caller decodes."
+    }
+  )
+
+  @spec syncing(keyword()) :: {:ok, false | map()} | {:error, term()}
+  def syncing(opts \\ []) do
+    do_rpc("eth_syncing", [], to_rpc_opts(opts))
+  end
+
+  # --- syncing! ---
+
+  api(:syncing!, "Get the node's sync status. Raises on error.",
+    params: [
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{type: "false | map", description: "`false` when synced, sync-status map otherwise"}
+  )
+
+  @spec syncing!(keyword()) :: false | map()
+  def syncing!(opts \\ []) do
+    case syncing(opts) do
+      {:ok, result} -> result
+      {:error, reason} -> raise "syncing failed: #{inspect(reason)}"
+    end
+  end
+
   # --- get_block_by_number ---
 
   api(:get_block_by_number, "Fetch a block by number or tag (eth_getBlockByNumber).",
@@ -231,9 +268,21 @@ defmodule Onchain.RPC do
   @block_tags Onchain.RPC.Helpers.block_tags()
 
   # Canonical log-filter keys accepted by eth_get_logs/2.
-  # Unknown keys (including JSON-RPC-style string keys like "fromBlock") are
-  # rejected loudly rather than silently dropped — see Task 56.
-  @allowed_log_filter_keys [:address, :topics, :from_block, :to_block]
+  # Unknown keys are rejected loudly rather than silently dropped (Task 56).
+  # Canonical JSON-RPC string keys ("fromBlock"/"toBlock"/"address"/"topics"/"blockHash")
+  # are normalized to atoms before validation (Task 60).
+  # `:block_hash` is mutually exclusive with `:from_block`/`:to_block` per EIP-1474 (Task 61).
+  @allowed_log_filter_keys [:address, :topics, :from_block, :to_block, :block_hash]
+
+  # JSON-RPC camelCase string keys → canonical atom keys. Used by
+  # normalize_filter_keys/1 to accept JSON-RPC-style filter shapes (Task 60).
+  @camel_case_filter_aliases %{
+    "fromBlock" => :from_block,
+    "toBlock" => :to_block,
+    "address" => :address,
+    "topics" => :topics,
+    "blockHash" => :block_hash
+  }
 
   @spec get_block_by_number(integer() | String.t(), keyword()) ::
           {:ok, map()} | {:error, term()}
@@ -488,27 +537,42 @@ defmodule Onchain.RPC do
       filter: [
         kind: :value,
         description:
-          "Filter map. Only these atom keys are accepted: :address (hex string), :topics (list), :from_block (integer or tag), :to_block (integer or tag). Unknown keys (including JSON-RPC-style string keys like \"fromBlock\") return {:error, {:invalid_filter_key, key}}."
+          ~s|Filter map. Atom keys: :address (hex string), :topics (list), :from_block (integer or tag), :to_block (integer or tag), :block_hash (32-byte hex). Canonical JSON-RPC camelCase string keys ("fromBlock", "toBlock", "address", "topics", "blockHash") are accepted as aliases. :block_hash is mutually exclusive with :from_block / :to_block per EIP-1474. Unknown keys return {:error, {:invalid_filter_key, key}}.|
       ],
       opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
     ],
     returns: %{
       type: "{:ok, [log_map]} | {:error, term}",
       description:
-        "List of log maps with keys: address, topics, data, block_number, transaction_hash, log_index, transaction_index, removed. Errors: {:invalid_filter_key, key} for unknown filter keys; {:invalid_filter, {field, value}} for bad values."
+        "List of log maps with keys: address, topics, data, block_number, transaction_hash, log_index, transaction_index, removed. Errors: {:invalid_filter_key, key} for unknown filter keys; {:invalid_filter, {field, value}} for bad values; {:invalid_filter, {:block_hash_mutually_exclusive, present}} when :block_hash is combined with :from_block / :to_block."
     }
   )
 
   @spec eth_get_logs(map(), keyword()) :: {:ok, [map()]} | {:error, term()}
   def eth_get_logs(filter, opts \\ []) when is_map(filter) do
-    with :ok <- validate_log_filter_keys(filter),
-         {:ok, rpc_filter} <- build_log_filter(filter) do
+    normalized = normalize_filter_keys(filter)
+
+    with :ok <- validate_log_filter_keys(normalized),
+         {:ok, rpc_filter} <- build_log_filter(normalized) do
       case do_rpc("eth_getLogs", [rpc_filter], to_rpc_opts(opts)) do
         {:ok, logs} when is_list(logs) -> {:ok, Enum.map(logs, &parse_log/1)}
         {:ok, other} -> {:error, {:rpc_error, %{message: "unexpected response: #{inspect(other)}"}}}
         error -> error
       end
     end
+  end
+
+  # Rewrites canonical JSON-RPC camelCase string keys to their atom equivalents.
+  # Other string keys pass through unchanged (and trip validate_log_filter_keys/1).
+  # Atom keys take precedence on conflict (e.g. both :from_block and "fromBlock" set).
+  @spec normalize_filter_keys(map()) :: map()
+  defp normalize_filter_keys(filter) do
+    Enum.reduce(@camel_case_filter_aliases, filter, fn {string_key, atom_key}, acc ->
+      case Map.pop(acc, string_key) do
+        {nil, acc} -> acc
+        {value, acc} -> Map.put_new(acc, atom_key, value)
+      end
+    end)
   end
 
   @spec validate_log_filter_keys(map()) :: :ok | {:error, {:invalid_filter_key, term()}}
@@ -587,12 +651,32 @@ defmodule Onchain.RPC do
 
   @doc false
   # Builds a JSON-RPC filter object from an Elixir map.
+  # Per EIP-1474: when :block_hash is present, :from_block / :to_block are
+  # mutually exclusive — the spec rejects the combination at the JSON-RPC layer.
   @spec build_log_filter(map()) :: {:ok, map()} | {:error, term()}
   defp build_log_filter(filter) do
-    with {:ok, result} <- put_filter_address(%{}, filter),
+    with :ok <- check_block_hash_exclusivity(filter),
+         {:ok, result} <- put_filter_address(%{}, filter),
          {:ok, result} <- put_filter_topics(result, filter),
+         {:ok, result} <- put_filter_block_hash(result, filter),
          {:ok, result} <- put_block_param(result, "fromBlock", :fromBlock, Map.get(filter, :from_block)) do
       put_block_param(result, "toBlock", :toBlock, Map.get(filter, :to_block))
+    end
+  end
+
+  @doc false
+  @spec check_block_hash_exclusivity(map()) ::
+          :ok | {:error, {:invalid_filter, {:block_hash_mutually_exclusive, [atom()]}}}
+  defp check_block_hash_exclusivity(filter) do
+    if Map.has_key?(filter, :block_hash) do
+      conflicts = Enum.filter([:from_block, :to_block], &Map.has_key?(filter, &1))
+
+      case conflicts do
+        [] -> :ok
+        _ -> {:error, {:invalid_filter, {:block_hash_mutually_exclusive, [:block_hash | conflicts]}}}
+      end
+    else
+      :ok
     end
   end
 
@@ -602,6 +686,21 @@ defmodule Onchain.RPC do
     case Map.get(filter, :address) do
       nil -> {:ok, result}
       addr -> with {:ok, hex} <- ensure_hex_address(addr), do: {:ok, Map.put(result, "address", hex)}
+    end
+  end
+
+  @doc false
+  @spec put_filter_block_hash(map(), map()) :: {:ok, map()} | {:error, term()}
+  defp put_filter_block_hash(result, filter) do
+    case Map.get(filter, :block_hash) do
+      nil ->
+        {:ok, result}
+
+      hash ->
+        case ensure_tx_hash(hash) do
+          {:ok, valid_hash} -> {:ok, Map.put(result, "blockHash", valid_hash)}
+          {:error, _} -> {:error, {:invalid_filter, {:blockHash, hash}}}
+        end
     end
   end
 

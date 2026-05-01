@@ -4,6 +4,24 @@ Completed roadmap tasks.
 
 ---
 
+## [Unreleased]
+
+### Added — `Onchain.ABI.decode_types/2` alias (Task 58)
+
+- **`Onchain.ABI.decode_types/2` + `decode_types!/2`** — thin aliases of `decode_response/2` and `decode_response!/2`. Same return shape, same error tags, same upstream behavior; the alias exists so callers decoding non-RPC inputs (mempool calldata, custom ABI payloads) have a name that doesn't suggest "RPC response" semantics. Both names are supported indefinitely.
+- **Tuple-sig footgun documented inline.** `decode_response/2` and `decode_types/2` `@doc` strings now explicitly state that the type signature MUST be wrapped in parentheses (`"(uint256)"`, not `"uint256"`); bare comma-separated types raise an unhelpful upstream error. The moduledoc § "Type Signatures" was tightened with the same warning and a one-liner on when to pick `decode_response` vs `decode_types`.
+
+### Added — `Onchain.RPC.syncing/1` (Task 50)
+
+- **`Onchain.RPC.syncing/1` + `syncing!/1`** — wraps `eth_syncing`. Returns `{:ok, false}` when the node is fully synced, otherwise `{:ok, %{...}}` with raw hex-encoded sync-status fields (`startingBlock`, `currentBlock`, `highestBlock`, plus optional snap-sync fields whose shape varies per client). No decoding — the caller owns interpretation. Connection-failure path returns `{:error, {:rpc_error, _}}` like every other named wrapper. Closes the trivial-RPC surface gap.
+
+### Changed — `eth_get_logs/2` filter ergonomics (Tasks 60, 61)
+
+- **`Onchain.RPC.eth_get_logs/2` accepts canonical JSON-RPC camelCase string keys as aliases** for the atom keys: `"fromBlock"` → `:from_block`, `"toBlock"` → `:to_block`, `"address"` → `:address`, `"topics"` → `:topics`, `"blockHash"` → `:block_hash`. Non-canonical string keys (e.g. `"from_block"`, `"foo"`) still fail the strict whitelist with `{:error, {:invalid_filter_key, key}}` per Task 56. When both an atom and its camelCase alias are present, the atom wins silently — exotic case, not worth a separate error tag. Closes the post-Task-56 ergonomics follow-up: callers passing a JSON-RPC-style filter map (because they're forwarding a request from elsewhere) no longer have to translate keys at the boundary.
+- **`Onchain.RPC.eth_get_logs/2` supports `:block_hash` filtering per EIP-1474.** New `:block_hash` atom key (and `"blockHash"` string alias) accepts a 32-byte 0x-prefixed hex hash; validated via the same `ensure_tx_hash/1` shape check (errors as `{:invalid_filter, {:blockHash, value}}`). Per EIP-1474, `:block_hash` is mutually exclusive with `:from_block` / `:to_block` — passing both returns `{:error, {:invalid_filter, {:block_hash_mutually_exclusive, [present_keys]}}}` before any RPC dispatch. The Task 56 strict whitelist gated this previously-rejected key; it now joins `:address`, `:topics`, `:from_block`, `:to_block` as the fifth canonical filter key.
+
+---
+
 ## v0.5.2 — Subscription hardening (2026-05-01)
 
 ### Added — Pre-registration buffer for subscription notifications (Task 38)

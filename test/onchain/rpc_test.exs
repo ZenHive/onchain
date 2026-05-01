@@ -162,6 +162,20 @@ defmodule Onchain.RPCTest do
     end
   end
 
+  describe "syncing/2 (connection failure)" do
+    test "returns rpc_error tuple when RPC unavailable" do
+      assert {:error, {:rpc_error, %{message: _}}} = RPC.syncing(rpc_url: "http://localhost:1")
+    end
+  end
+
+  describe "syncing!/1" do
+    test "raises when RPC unavailable" do
+      assert_raise RuntimeError, ~r/syncing failed/, fn ->
+        RPC.syncing!(rpc_url: "http://localhost:1")
+      end
+    end
+  end
+
   describe "get_block_by_number/2 input validation" do
     test "rejects negative integer" do
       assert {:error, {:invalid_block_id, -1}} = RPC.get_block_by_number(-1)
@@ -230,14 +244,19 @@ defmodule Onchain.RPCTest do
   end
 
   describe "eth_get_logs/2 filter key validation" do
-    test "rejects JSON-RPC-style string keys (Task 56 silent-drop bug)" do
-      filter = %{"fromBlock" => 100, "toBlock" => 200}
+    test "rejects non-canonical snake_case string keys" do
+      # "from_block"/"to_block" (snake_case strings) are NOT canonical
+      # JSON-RPC names — only the camelCase forms ("fromBlock"/"toBlock") are
+      # accepted aliases per Task 60.
+      filter = %{"from_block" => 100, "to_block" => 200}
       assert {:error, {:invalid_filter_key, unknown}} = RPC.eth_get_logs(filter)
-      assert unknown in ["fromBlock", "toBlock"]
+      assert unknown in ["from_block", "to_block"]
     end
 
-    test "rejects unsupported atom keys like :blockHash" do
-      filter = %{from_block: 100, to_block: 200, blockHash: "0x" <> String.duplicate("ab", 32)}
+    test "rejects unsupported camelCase atom keys like :blockHash" do
+      # The canonical atom is :block_hash (snake_case). :blockHash (camelCase
+      # atom) is not in the allowlist.
+      filter = %{blockHash: "0x" <> String.duplicate("ab", 32)}
       assert {:error, {:invalid_filter_key, :blockHash}} = RPC.eth_get_logs(filter)
     end
 
@@ -256,6 +275,96 @@ defmodule Onchain.RPCTest do
       result = RPC.eth_get_logs(filter)
       refute match?({:error, {:invalid_filter_key, _}}, result)
       refute match?({:error, {:invalid_filter, _}}, result)
+    end
+  end
+
+  describe "eth_get_logs/2 camelCase string-key aliases (Task 60)" do
+    test ~s|accepts "fromBlock" / "toBlock" as aliases for :from_block / :to_block| do
+      filter = %{"fromBlock" => 100, "toBlock" => 200}
+      result = RPC.eth_get_logs(filter)
+      refute match?({:error, {:invalid_filter_key, _}}, result)
+      refute match?({:error, {:invalid_filter, _}}, result)
+    end
+
+    test ~s|accepts "address" string-key alias| do
+      filter = %{"address" => "0x" <> String.duplicate("ab", 20)}
+      result = RPC.eth_get_logs(filter)
+      refute match?({:error, {:invalid_filter_key, _}}, result)
+      refute match?({:error, {:invalid_filter, _}}, result)
+    end
+
+    test ~s|accepts "topics" string-key alias| do
+      filter = %{"topics" => []}
+      result = RPC.eth_get_logs(filter)
+      refute match?({:error, {:invalid_filter_key, _}}, result)
+      refute match?({:error, {:invalid_filter, _}}, result)
+    end
+
+    test "atom key wins when both atom and camelCase string are present" do
+      # Atom takes precedence on conflict — the string-key value is dropped
+      # silently. The rejection below proves the atom value (:bogus) made it
+      # through to validation, not the string-key value (100).
+      filter = %{"fromBlock" => 100, from_block: :bogus}
+      assert {:error, {:invalid_filter, {:fromBlock, :bogus}}} = RPC.eth_get_logs(filter)
+    end
+  end
+
+  describe "eth_get_logs/2 :block_hash filter (Task 61, EIP-1474)" do
+    @valid_hash "0x" <> String.duplicate("ab", 32)
+
+    test "accepts :block_hash as a valid 32-byte hex" do
+      filter = %{block_hash: @valid_hash}
+      result = RPC.eth_get_logs(filter)
+      refute match?({:error, {:invalid_filter_key, _}}, result)
+      refute match?({:error, {:invalid_filter, _}}, result)
+    end
+
+    test ~s|accepts "blockHash" string-key alias| do
+      filter = %{"blockHash" => @valid_hash}
+      result = RPC.eth_get_logs(filter)
+      refute match?({:error, {:invalid_filter_key, _}}, result)
+      refute match?({:error, {:invalid_filter, _}}, result)
+    end
+
+    test "rejects malformed block hash" do
+      filter = %{block_hash: "0xdeadbeef"}
+      assert {:error, {:invalid_filter, {:blockHash, "0xdeadbeef"}}} = RPC.eth_get_logs(filter)
+    end
+
+    test "rejects non-hex block hash" do
+      filter = %{block_hash: :not_a_hash}
+      assert {:error, {:invalid_filter, {:blockHash, :not_a_hash}}} = RPC.eth_get_logs(filter)
+    end
+
+    test ":block_hash mutually exclusive with :from_block (EIP-1474)" do
+      filter = %{block_hash: @valid_hash, from_block: 100}
+
+      assert {:error, {:invalid_filter, {:block_hash_mutually_exclusive, present}}} =
+               RPC.eth_get_logs(filter)
+
+      assert :from_block in present
+      assert :block_hash in present
+    end
+
+    test ":block_hash mutually exclusive with :to_block (EIP-1474)" do
+      filter = %{block_hash: @valid_hash, to_block: 200}
+
+      assert {:error, {:invalid_filter, {:block_hash_mutually_exclusive, present}}} =
+               RPC.eth_get_logs(filter)
+
+      assert :to_block in present
+      assert :block_hash in present
+    end
+
+    test ":block_hash mutually exclusive with both :from_block and :to_block" do
+      filter = %{block_hash: @valid_hash, from_block: 100, to_block: 200}
+
+      assert {:error, {:invalid_filter, {:block_hash_mutually_exclusive, present}}} =
+               RPC.eth_get_logs(filter)
+
+      assert :from_block in present
+      assert :to_block in present
+      assert :block_hash in present
     end
   end
 

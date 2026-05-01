@@ -1,6 +1,7 @@
 defmodule Onchain.ABITest do
   use ExUnit.Case, async: true
 
+  alias Cartouche.Hex.InvalidHex
   alias Onchain.ABI
 
   describe "encode_call/2" do
@@ -89,7 +90,7 @@ defmodule Onchain.ABITest do
     end
 
     test "raises on invalid hex" do
-      assert_raise Cartouche.Hex.InvalidHex, fn ->
+      assert_raise InvalidHex, fn ->
         ABI.decode_response!("(uint256)", "0xzzzz")
       end
     end
@@ -107,6 +108,52 @@ defmodule Onchain.ABITest do
       # Strip 4-byte (8 hex char) selector + "0x" prefix, re-add "0x"
       params_hex = "0x" <> String.slice(calldata, 10..-1//1)
       assert {:ok, [42, true]} = ABI.decode_response("(uint256,bool)", params_hex)
+    end
+  end
+
+  describe "decode_types/2 (alias of decode_response/2)" do
+    test "matches decode_response/2 on success" do
+      hex = "0x" <> String.duplicate("0", 62) <> "0a"
+      assert ABI.decode_types("(uint256)", hex) == ABI.decode_response("(uint256)", hex)
+      assert {:ok, [10]} = ABI.decode_types("(uint256)", hex)
+    end
+
+    test "matches decode_response/2 on multi-value decoding" do
+      hex = "0x" <> String.duplicate("0", 62) <> "0a" <> String.duplicate("0", 62) <> "14"
+      assert ABI.decode_types("(uint256,uint256)", hex) == ABI.decode_response("(uint256,uint256)", hex)
+      assert {:ok, [10, 20]} = ABI.decode_types("(uint256,uint256)", hex)
+    end
+
+    test "matches decode_response/2 on invalid hex" do
+      assert ABI.decode_types("(uint256)", "0xzzzz") == ABI.decode_response("(uint256)", "0xzzzz")
+
+      assert {:error, {:decode_error, {:invalid_hex, "0xzzzz"}}} =
+               ABI.decode_types("(uint256)", "0xzzzz")
+    end
+
+    test "matches decode_response/2 on truncated data" do
+      assert ABI.decode_types("(uint256)", "0x0102") == ABI.decode_response("(uint256)", "0x0102")
+      assert {:error, {:decode_error, _reason}} = ABI.decode_types("(uint256)", "0x0102")
+    end
+  end
+
+  describe "decode_types!/2 (alias of decode_response!/2)" do
+    test "returns decoded list for valid data" do
+      hex = "0x" <> String.duplicate("0", 62) <> "0a"
+      assert [10] = ABI.decode_types!("(uint256)", hex)
+      assert ABI.decode_types!("(uint256)", hex) == ABI.decode_response!("(uint256)", hex)
+    end
+
+    test "raises on invalid hex" do
+      assert_raise InvalidHex, fn ->
+        ABI.decode_types!("(uint256)", "0xzzzz")
+      end
+    end
+
+    test "raises on malformed ABI data" do
+      assert_raise MatchError, fn ->
+        ABI.decode_types!("(uint256)", "0x0102")
+      end
     end
   end
 end

@@ -15,6 +15,8 @@
 
 **Phase 8: Chain Intelligence Primitives ✅** — All tasks complete. Wallet analytics, transfer parsing, ENS resolution, NFT reads, and real-time subscriptions. Phase 9 (JS bridge) extracted to [onchain_js](../onchain_js/ROADMAP.md).
 
+**Up next — v0.5.3:** small surface-area polish patch. Tasks 50, 58, 60, 61 staged 2026-05-01. Non-breaking, ready to tag.
+
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
 >
 > **Doc checklist (every task):** ROADMAP.md ✅ → CHANGELOG.md ✅ → README.md ✅ → CLAUDE.md ✅
@@ -22,6 +24,10 @@
 ### ✅ Recently Completed
 | Task | Description | Notes |
 |------|-------------|-------|
+| 50 | `Onchain.RPC.syncing/1` (+ bang) | Raw passthrough wrapping `eth_syncing`. `{:ok, false}` synced, `{:ok, %{...}}` otherwise. Closes the trivial-RPC surface gap. |
+| 58 | `Onchain.ABI.decode_types/2` alias + tuple-sig docs | Alias of `decode_response/2` for non-RPC callers. Tuple-wrap requirement (parens around the type list) documented inline on both names. |
+| 60 | `eth_get_logs/2` camelCase string-key aliases | Accepts `"fromBlock"`/`"toBlock"`/`"address"`/`"topics"`/`"blockHash"` as aliases. Non-canonical string keys still fail the Task 56 whitelist. Atom wins silently on conflict. |
+| 61 | `eth_get_logs/2` `:block_hash` filter (EIP-1474) | Accepts `:block_hash` (atom) + `"blockHash"` (alias) with `ensure_tx_hash/1` validation. Mutually exclusive with `:from_block`/`:to_block` — emits `{:block_hash_mutually_exclusive, present}` before dispatch. |
 | 38 | Pre-registration subscription buffer | Closes subscribe→Agent.update race silently-dropping notifications. Per-sub_id buffer cap 100, FIFO drain on registration, atomic Agent ops. Coverage 51% → 91% on `Onchain.Subscription`. |
 | 39 | `:pending_transactions` integration test | Live mempool subscription against blockwatch-one; lifecycle test extended to exercise bang variants. Closes the v0.5.2 release plan. |
 | — | **cartouche v0.1.0 published on hex.pm** (2026-04-30) | Fork of signet under `Cartouche.*` namespace, Elixir 1.20-compatible, published ABI dep (`hieroglyph` 1.0.0), cleaned dialyzer baseline. Unblocks Task 43 and triggers Task 67 (signet → cartouche dep migration). |
@@ -60,6 +66,19 @@ Finishes what v0.5.0/0.5.1 started on the subscription path and clears the upstr
 | 38 ✅ | 1.17 | Buffer unknown sub_ids during subscribe race | Shipped 2026-05-01. Per-sub_id pending buffer (cap 100, FIFO drain on register), atomic Agent ops, bang-variant coverage; `Onchain.Subscription` coverage 51% → 91% |
 
 **Acceptance:** all four tasks closed or returned with written rationale; no breaking API changes; CHANGELOG `[Unreleased]` → `v0.5.2` on tag. **Status: ready to tag** — Tasks 38, 39, 42, 43, 55, 56, 59, 62, 67 all shipped under `v0.5.2` in CHANGELOG (2026-05-01).
+
+### 🎯 v0.5.3 — Surface-area polish (next, patch, non-breaking)
+
+Bundle of four small additions to the public API. None breaks existing callers; everything is purely additive.
+
+| Task | Eff | What |
+|------|-----|------|
+| 58 ✅ | 3.50 | `Onchain.ABI.decode_types/2` (+ bang) alias of `decode_response/2`; tuple-sig footgun documented inline |
+| 50 ✅ | 2.50 | `Onchain.RPC.syncing/1` (+ bang) wraps `eth_syncing`; raw passthrough |
+| 60 ✅ | 2.00 | `eth_get_logs/2` accepts canonical camelCase string-key aliases (`"fromBlock"`, `"toBlock"`, `"address"`, `"topics"`, `"blockHash"`) |
+| 61 ✅ | 1.75 | `eth_get_logs/2` accepts `:block_hash` (EIP-1474); mutually exclusive with `:from_block`/`:to_block` before dispatch |
+
+**Acceptance:** all four shipped 2026-05-01; CHANGELOG `[Unreleased]` → `v0.5.3` on tag. Coverage post-mutation: `Onchain.ABI` 91.67%, `Onchain.RPC` 91.84% (both ≥80% standard tier). Dialyzer + Credo clean on touched files.
 
 ### 🚀 v0.6.0 — Package split: `onchain_ws` (minor, breaking)
 
@@ -178,10 +197,10 @@ Add ERC-4337 support: UserOperation construction, signing, and bundler RPC (`eth
 | 48 | Extract `Onchain.Subscription` into `onchain_ws` package so HTTP-only consumers don't pull `zen_websocket` and its transitive WebSocket deps | ⬜ | 4 | 6 | 5 | 1.38 📋 | `onchain_ws` (new package) |
 | 55 | Harden `Onchain.RPC.Helpers` address/data validation — four silent-corruption / contract-violation paths | ✅ | 2 | 9 | 8 | 4.25 🎯 | `Onchain.RPC.Helpers` |
 | 56 | 🐛 `Onchain.RPC.eth_get_logs/2` silently ignores wrong filter-key names (`fromBlock`/`toBlock` vs `:from_block`/`:to_block`) — returns `{:ok, []}` instead of erroring | ✅ | 2 | 6 | 7 | 3.25 🎯 | `Onchain.RPC` |
-| 60 | Log filter ergonomics: accept camelCase `"fromBlock"` / `"toBlock"` aliases (post-Task 56 follow-up — strict whitelist is easy to loosen via a normalization layer) | ⬜ | 2 | 4 | 4 | 2.00 🚀 | `Onchain.RPC` |
-| 61 | `eth_get_logs/2` filter should support `:block_hash` (EIP-1474 — `blockHash` excludes `fromBlock`/`toBlock` when set) — currently rejected by Task 56 whitelist | ⬜ | 2 | 3 | 4 | 1.75 🚀 | `Onchain.RPC` |
+| 60 ✅ | Log filter ergonomics: accept canonical camelCase string-key aliases (`"fromBlock"`, `"toBlock"`, `"address"`, `"topics"`, `"blockHash"`) for the atom-keyed filter; non-canonical string keys still fail the Task 56 whitelist. Atom wins silently on conflict. Shipped 2026-05-01. | ✅ Complete | 2 | 4 | 4 | 2.00 🚀 | `Onchain.RPC` |
+| 61 ✅ | `eth_get_logs/2` filter accepts `:block_hash` (canonical) + `"blockHash"` (alias). Validates via `ensure_tx_hash/1`; errors as `{:invalid_filter, {:blockHash, _}}`. Mutually exclusive with `:from_block`/`:to_block` per EIP-1474 — combination errors as `{:invalid_filter, {:block_hash_mutually_exclusive, present}}` before any RPC dispatch. Shipped 2026-05-01. | ✅ Complete | 2 | 3 | 4 | 1.75 🚀 | `Onchain.RPC` |
 | 57 | Unify RPC return shapes: `get_transaction_by_hash/2` returns decoded atom-keyed struct, `get_block_by_number/2` returns raw string-keyed hex map — pick one | ⬜ | 4 | 6 | 6 | 1.50 🚀 | `Onchain.RPC` |
-| 58 | Alias `Onchain.ABI.decode_types/2` → `decode_response/2` + document tuple-signature requirement | ⬜ | 1 | 3 | 4 | 3.50 🎯 | `Onchain.ABI` |
+| 58 ✅ | `Onchain.ABI.decode_types/2` + `decode_types!/2` ship as thin aliases of `decode_response/2` and `decode_response!/2`. Tuple-sig footgun (parens required around the type list) documented inline on both names + moduledoc. Shipped 2026-05-01. | ✅ Complete | 1 | 3 | 4 | 3.50 🎯 | `Onchain.ABI` |
 | 63 | `defrpc` macro — codegen named JSON-RPC wrappers from declarative specs (refactor of existing 11 `Onchain.RPC.*` wrappers); follows Phoenix.Router shape, gated by Nimble.Options schema | ⬜ | 4 | 6 | 5 | 1.38 📋 | `Onchain.RPC` |
 | 64 | Vendor `openrpc.json` from `ethereum/execution-apis` + emit `Onchain.RPC.Specs` lookup that feeds `defrpc` (93 methods across `eth_*`/`engine_*`/`debug_*`/`txpool_*`/`net_*`/`testing_*`) — gated on Task 63 | ⬜ | 4 | 6 | 5 | 1.38 📋 | `Onchain.RPC.Specs` (new) |
 | 65 | Differential test harness: same RPC method via `Onchain.RPC` vs reference impl (signet first, then Web3.py / viem if needed) — catches protocol-level mistakes unit tests miss | ⬜ | 6 | 5 | 3 | 0.67 ⚠️ | `test/onchain/differential/` |
@@ -363,7 +382,7 @@ Planted 2026-04-30 from a cartouche session that surveyed cross-repo applicabili
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
 | 49 | `Onchain.RPC.get_proof/3` — wrap `eth_getProof` (account + storage-slot Merkle proofs) | ⬜ | 2 | 4 | 4 | 2.00 🚀 | `Onchain.RPC` |
-| 50 | `Onchain.RPC.syncing/1` — wrap `eth_syncing` | ⬜ | 1 | 2 | 3 | 2.50 🎯 | `Onchain.RPC` |
+| 50 ✅ | `Onchain.RPC.syncing/1` + `syncing!/1` wrap `eth_syncing`. Raw passthrough — `{:ok, false}` when synced, `{:ok, %{...}}` with hex-encoded fields otherwise; caller decodes. Shipped 2026-05-01. | ✅ Complete | 1 | 2 | 3 | 2.50 🎯 | `Onchain.RPC` |
 | 51 | `Onchain.RPC.batch/2` — JSON-RPC 2.0 array-batched requests (single round-trip over N method calls) | ⬜ | 4 | 6 | 5 | 1.38 📋 | `Onchain.RPC` |
 | 52 | Telemetry events around `Onchain.RPC` request path (`[:onchain, :rpc, :request]`) | ⬜ | 3 | 5 | 5 | 1.67 🚀 | `Onchain.RPC` |
 | 53 | `Onchain.Fees.suggest_fees/2` — take `Signet.FeeHistory.t()` + percentile, return `{base_fee, max_priority, max_fee}` recommendation | ⬜ | 2 | 5 | 6 | 2.75 🎯 | `Onchain.Fees` (new) |
