@@ -21,33 +21,12 @@
 >
 > **Doc checklist (every task):** ROADMAP.md ✅ → CHANGELOG.md ✅ → README.md ✅ → CLAUDE.md ✅
 
-### ✅ Recently Completed
+### ✅ Recently Completed (3)
 | Task | Description | Notes |
 |------|-------------|-------|
 | 53 | `Onchain.Fees.suggest_fees/2` (+ bang) + `Onchain.RPC.fee_history/2` (+ bang) | Pure EIP-1559 fee math over `Cartouche.FeeHistory.t()` (median priority + buffered base fee, defaults: `:percentile_index 0`, `:buffer 1.2` — matches cartouche `v2_gas_parameters`) bundled with the named `eth_feeHistory` wrapper that produces it. Closes the wrapper gap noted in Task 59. |
 | 50 | `Onchain.RPC.syncing/1` (+ bang) | Raw passthrough wrapping `eth_syncing`. `{:ok, false}` synced, `{:ok, %{...}}` otherwise. Closes the trivial-RPC surface gap. |
 | 58 | `Onchain.ABI.decode_types/2` alias + tuple-sig docs | Alias of `decode_response/2` for non-RPC callers. Tuple-wrap requirement (parens around the type list) documented inline on both names. |
-| 60 | `eth_get_logs/2` camelCase string-key aliases | Accepts `"fromBlock"`/`"toBlock"`/`"address"`/`"topics"`/`"blockHash"` as aliases. Non-canonical string keys still fail the Task 56 whitelist. Atom wins silently on conflict. |
-| 61 | `eth_get_logs/2` `:block_hash` filter (EIP-1474) | Accepts `:block_hash` (atom) + `"blockHash"` (alias) with `ensure_tx_hash/1` validation. Mutually exclusive with `:from_block`/`:to_block` — emits `{:block_hash_mutually_exclusive, present}` before dispatch. |
-| 38 | Pre-registration subscription buffer | Closes subscribe→Agent.update race silently-dropping notifications. Per-sub_id buffer cap 100, FIFO drain on registration, atomic Agent ops. Coverage 51% → 91% on `Onchain.Subscription`. |
-| 39 | `:pending_transactions` integration test | Live mempool subscription against blockwatch-one; lifecycle test extended to exercise bang variants. Closes the v0.5.2 release plan. |
-| — | **cartouche v0.1.0 published on hex.pm** (2026-04-30) | Fork of signet under `Cartouche.*` namespace, Elixir 1.20-compatible, published ABI dep (`hieroglyph` 1.0.0), cleaned dialyzer baseline. Unblocks Task 43 and triggers Task 67 (signet → cartouche dep migration). |
-| — | **v0.4.0 Package Split** | Split into onchain (pure Elixir), onchain_aave, onchain_evm |
-| 31 | Real-time subscriptions (eth_subscribe) | zen_websocket, newHeads/pendingTx/logs |
-| 33 | ERC-721/ERC-1155 read operations | 7 ERC-721 + 4 ERC-1155 reads, checksummed address returns |
-| 34 | ENS resolution (forward + reverse + text records) | Mainnet integration tested |
-| 36 | Extract shared RPC helpers | DRY: 7 functions deduplicated |
-| 44 | Fix CLAUDE.md Module Layout drift | `wallet.ex` + `erc20.ex` bullets now accurate |
-| 45 | `ERC20.total_supply/2` + bang variant | Completes standard ERC-20 read surface |
-| 46 | `Hex.from_integer/1` emits lowercase | Matches `Hex.encode/1` case convention |
-| 37 | zen_websocket `send_message` `:disconnected` return | Resolved upstream in zen_websocket 0.4.1 (R042) |
-| 47 | Hotfix: zen_websocket 0.4.x handler contract | Decoded maps replace raw binaries; dispatch path now unit-tested |
-| 42 | Deliver subscription parse errors to handler | `{:parse_error, sub_id, reason}` events replace silent Logger.debug drop |
-| 55 | Harden RPC address/data input validation | Tightened `ensure_hex_address/1` (rejects ASCII-"0x" 20-byte collision + odd-length bodies) and `ensure_hex_data/1` (rejects odd-length hex) |
-| 56 | `eth_get_logs/2` filter-key whitelist | Unknown keys (including JSON-RPC-style `"fromBlock"`) now return `{:invalid_filter_key, key}` instead of silent `{:ok, []}` |
-| 59 | `Onchain.RPC.call/3` + `call!/3` generic passthrough | Escape-hatch for any JSON-RPC method (`eth_getStorageAt`, `debug_traceTransaction`, `trace_call`, …); no decoding, same opts/error shape as named wrappers |
-| 67 | `:signet` → `:cartouche` dep migration | hex.pm dep swap; every `Signet.*` reference renamed to `Cartouche.*`; `Onchain.*` public API byte-identical for consumers; bundled with Task 43 in v0.5.2 |
-| 43 | Strip upstream-cascade dialyzer suppressions | All eleven `@dialyzer {:no_match, :no_return, :no_contracts}` blocks (`Onchain.ABI/Contract/ENS/Log/Multicall/Sleuth/Transfer/ERC20/ERC721/ERC1155/Hex`) now stale once cartouche 0.1.0 + hieroglyph 1.0.0 corrected the upstream specs; `mix dialyzer.json` clean post-strip. Bundled with Task 67 in v0.5.2. |
 
 ---
 
@@ -76,29 +55,8 @@ Pre-commit code-review **must verify all four** were checked. Reject reviews whe
 
 ### ✅ v0.5.2 — Subscription hardening (patch, shipped 2026-05-01, bundled into v0.5.3 tag)
 
-Finishes what v0.5.0/0.5.1 started on the subscription path and clears the upstream-cascade dialyzer suppressions that the cartouche 0.1.0 fork (Task 67) unblocked — Task 43 stripped them post-migration on 2026-04-30.
-
-| Task | Eff | What | Why in this release |
-|------|-----|------|---------------------|
-| 43 ✅ | 3.00 | Remove `@dialyzer {:no_match, ...}` suppressions | Stripped 2026-04-30 in the commit immediately after Task 67. All eleven module suppressions (`Onchain.ABI/Contract/ENS/Log/Multicall/Sleuth/Transfer/ERC20/ERC721/ERC1155/Hex`) were stale once cartouche 0.1.0 + hieroglyph 1.0.0 landed; `mix dialyzer.json` clean post-strip. `Onchain.Subscription` (zen_websocket cause) and `Onchain.RPC.Helpers.do_rpc/3` (cartouche RPC error-shape — re-probed, still narrow) intentionally retained. |
-| 42 ✅ | 1.75 | Deliver subscription parse errors to handler | Silent drops → `{:parse_error, sub_id, reason}` events |
-| 39 ✅ | 1.50 | `:pending_transactions` integration test | Shipped 2026-05-01. Live mempool broadcast via blockwatch-one; assert hash shape, unsubscribe cleanly |
-| 38 ✅ | 1.17 | Buffer unknown sub_ids during subscribe race | Shipped 2026-05-01. Per-sub_id pending buffer (cap 100, FIFO drain on register), atomic Agent ops, bang-variant coverage; `Onchain.Subscription` coverage 51% → 91% |
-
-**Acceptance:** all four tasks closed or returned with written rationale; no breaking API changes; CHANGELOG `[Unreleased]` → `v0.5.2` on tag. **Status: shipped under v0.5.3 tag** — Tasks 38, 39, 42, 43, 55, 56, 59, 62, 67 all shipped under `v0.5.2` in CHANGELOG (2026-05-01); v0.5.2 was never tagged separately, work flushed under the v0.5.3 tag (2026-05-02).
-
 ### ✅ v0.5.3 — Surface-area polish (patch, shipped 2026-05-02)
 
-Bundle of four small additions to the public API. None breaks existing callers; everything is purely additive.
-
-| Task | Eff | What |
-|------|-----|------|
-| 58 ✅ | 3.50 | `Onchain.ABI.decode_types/2` (+ bang) alias of `decode_response/2`; tuple-sig footgun documented inline |
-| 50 ✅ | 2.50 | `Onchain.RPC.syncing/1` (+ bang) wraps `eth_syncing`; raw passthrough |
-| 60 ✅ | 2.00 | `eth_get_logs/2` accepts canonical camelCase string-key aliases (`"fromBlock"`, `"toBlock"`, `"address"`, `"topics"`, `"blockHash"`) |
-| 61 ✅ | 1.75 | `eth_get_logs/2` accepts `:block_hash` (EIP-1474); mutually exclusive with `:from_block`/`:to_block` before dispatch |
-
-**Acceptance:** all four shipped 2026-05-02 under the v0.5.3 tag. Coverage post-mutation: `Onchain.ABI` 91.67%, `Onchain.RPC` 91.84% (both ≥80% standard tier). Dialyzer + Credo clean on touched files.
 
 ### Future (unscheduled)
 
