@@ -38,6 +38,10 @@ defmodule Onchain.ABI do
   | `decode_response!/2` | Same, raises on error |
   | `decode_types/2` | Alias of `decode_response/2` for non-RPC callers |
   | `decode_types!/2` | Alias of `decode_response!/2`, raises on error |
+  | `decode_call/3` | Selector-prefixed calldata → decoded function args (forwards opts) |
+  | `decode_call!/3` | Same, raises on error |
+  | `decode_error/2` | Solidity 0.8.4+ custom-error revert data → `%{error, args}` |
+  | `decode_error!/2` | Same, raises on error |
   """
 
   use Descripex, namespace: "/abi"
@@ -166,4 +170,137 @@ defmodule Onchain.ABI do
 
   @spec decode_types!(String.t(), String.t()) :: list()
   def decode_types!(type_signature, hex_data), do: decode_response!(type_signature, hex_data)
+
+  # --- decode_call ---
+
+  api(:decode_call, "Decode selector-prefixed calldata to function args.",
+    params: [
+      signature_or_selector: [
+        kind: :value,
+        description:
+          ~s{Function signature like "transfer(address,uint256)" OR a hieroglyph FunctionSelector struct. The 4-byte selector of the signature must match the first 4 bytes of calldata.}
+      ],
+      hex_calldata: [
+        kind: :value,
+        description: "0x-prefixed hex string of selector-prefixed ABI-encoded calldata"
+      ],
+      opts: [
+        kind: :value,
+        default: [],
+        description:
+          ~s{Forwarded to hieroglyph's `ABI.decode_call/3`. Pass `decode_structs: true` for a named-field map instead of a positional list.}
+      ]
+    ],
+    returns: %{
+      type: "{:ok, list | map} | {:error, {:decode_error, reason}}",
+      description:
+        ~s|List of args (or map when `decode_structs: true`). Error reasons: `:calldata_too_short`, `:selector_mismatch`, `:no_function_name`, `{:invalid_hex, _}`, or upstream exception message string.|
+    }
+  )
+
+  @spec decode_call(String.t() | ABI.FunctionSelector.t(), String.t(), keyword()) ::
+          {:ok, list() | map()} | {:error, {:decode_error, term()}}
+  def decode_call(signature_or_selector, hex_calldata, opts \\ []) do
+    with {:ok, binary} <- Onchain.Hex.decode(hex_calldata),
+         {:ok, decoded} <- ABI.decode_call(signature_or_selector, binary, opts) do
+      {:ok, decoded}
+    else
+      {:error, {:invalid_hex, _} = reason} -> {:error, {:decode_error, reason}}
+      {:error, atom} when is_atom(atom) -> {:error, {:decode_error, atom}}
+    end
+  rescue
+    e -> {:error, {:decode_error, Exception.message(e)}}
+  end
+
+  # --- decode_call! ---
+
+  api(:decode_call!, "Decode selector-prefixed calldata. Raises on error.",
+    params: [
+      signature_or_selector: [
+        kind: :value,
+        description: "Function signature string or hieroglyph FunctionSelector struct"
+      ],
+      hex_calldata: [
+        kind: :value,
+        description: "0x-prefixed hex string of selector-prefixed calldata"
+      ],
+      opts: [
+        kind: :value,
+        default: [],
+        description: "Forwarded to hieroglyph's `ABI.decode_call/3` (e.g. `decode_structs: true`)"
+      ]
+    ],
+    returns: %{
+      type: "list | map",
+      description: "List of decoded args (or map when `decode_structs: true`)"
+    }
+  )
+
+  @spec decode_call!(String.t() | ABI.FunctionSelector.t(), String.t(), keyword()) ::
+          list() | map()
+  def decode_call!(signature_or_selector, hex_calldata, opts \\ []) do
+    {:ok, decoded} = ABI.decode_call(signature_or_selector, Onchain.Hex.decode!(hex_calldata), opts)
+    decoded
+  end
+
+  # --- decode_error ---
+
+  api(
+    :decode_error,
+    "Decode Solidity 0.8.4+ custom-error revert data against a list of candidate error signatures.",
+    params: [
+      hex_revert_data: [
+        kind: :value,
+        description: "0x-prefixed hex string of revert data (4-byte error selector + ABI-encoded args)"
+      ],
+      error_definitions: [
+        kind: :value,
+        description:
+          ~s{List of candidate error signatures like ["InsufficientBalance(uint256,uint256)", "Unauthorized()"] (or hieroglyph FunctionSelector structs). The first one whose 4-byte selector matches the prefix of `hex_revert_data` decodes the args.}
+      ]
+    ],
+    returns: %{
+      type: "{:ok, %{error: name, args: list}} | {:error, {:decode_error, reason}}",
+      description:
+        ~s|Map with the matched error name (or `nil`) and decoded args. Error reasons: `:calldata_too_short`, `:no_match`, `{:invalid_hex, _}`, or upstream exception message string.|
+    }
+  )
+
+  @spec decode_error(String.t(), [String.t() | ABI.FunctionSelector.t()]) ::
+          {:ok, %{error: String.t() | nil, args: list()}}
+          | {:error, {:decode_error, term()}}
+  def decode_error(hex_revert_data, error_definitions) do
+    with {:ok, binary} <- Onchain.Hex.decode(hex_revert_data),
+         {:ok, decoded} <- ABI.decode_error(binary, error_definitions) do
+      {:ok, decoded}
+    else
+      {:error, {:invalid_hex, _} = reason} -> {:error, {:decode_error, reason}}
+      {:error, atom} when is_atom(atom) -> {:error, {:decode_error, atom}}
+    end
+  rescue
+    e -> {:error, {:decode_error, Exception.message(e)}}
+  end
+
+  # --- decode_error! ---
+
+  api(:decode_error!, "Decode custom-error revert data. Raises on error.",
+    params: [
+      hex_revert_data: [kind: :value, description: "0x-prefixed hex string of revert data"],
+      error_definitions: [
+        kind: :value,
+        description: "List of candidate error signatures or FunctionSelector structs"
+      ]
+    ],
+    returns: %{
+      type: "%{error: name, args: list}",
+      description: "Map with the matched error name and decoded args"
+    }
+  )
+
+  @spec decode_error!(String.t(), [String.t() | ABI.FunctionSelector.t()]) ::
+          %{error: String.t() | nil, args: list()}
+  def decode_error!(hex_revert_data, error_definitions) do
+    {:ok, decoded} = ABI.decode_error(Onchain.Hex.decode!(hex_revert_data), error_definitions)
+    decoded
+  end
 end

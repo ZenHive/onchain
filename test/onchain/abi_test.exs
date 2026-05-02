@@ -156,4 +156,140 @@ defmodule Onchain.ABITest do
       end
     end
   end
+
+  describe "decode_call/3" do
+    test "round-trip: encode_call then decode_call recovers args" do
+      addr = <<1::160>>
+      {:ok, calldata} = ABI.encode_call("transfer(address,uint256)", [addr, 1000])
+      assert {:ok, [^addr, 1000]} = ABI.decode_call("transfer(address,uint256)", calldata)
+    end
+
+    test "decodes function with empty args" do
+      {:ok, calldata} = ABI.encode_call("totalSupply()", [])
+      assert {:ok, []} = ABI.decode_call("totalSupply()", calldata)
+    end
+
+    test "returns :calldata_too_short for data shorter than 4 bytes" do
+      assert {:error, {:decode_error, :calldata_too_short}} =
+               ABI.decode_call("transfer(address,uint256)", "0x010203")
+    end
+
+    test "returns :selector_mismatch when first 4 bytes don't match" do
+      bogus = "0x" <> String.duplicate("aa", 4) <> String.duplicate("00", 64)
+
+      assert {:error, {:decode_error, :selector_mismatch}} =
+               ABI.decode_call("transfer(address,uint256)", bogus)
+    end
+
+    test "returns {:invalid_hex, _} for non-hex input" do
+      assert {:error, {:decode_error, {:invalid_hex, "0xzzzz"}}} =
+               ABI.decode_call("transfer(address,uint256)", "0xzzzz")
+    end
+
+    test "wraps upstream {:error, atom} as {:decode_error, atom} for malformed payload after matching selector" do
+      {:ok, full} = ABI.encode_call("transfer(address,uint256)", [<<1::160>>, 1000])
+      # Keep "0x" + 4-byte selector + a few bytes of malformed args
+      truncated = String.slice(full, 0, 14)
+
+      assert {:error, {:decode_error, _reason}} =
+               ABI.decode_call("transfer(address,uint256)", truncated)
+    end
+  end
+
+  describe "decode_call!/3" do
+    test "returns decoded args directly on success" do
+      addr = <<1::160>>
+      {:ok, calldata} = ABI.encode_call("transfer(address,uint256)", [addr, 1000])
+      assert [^addr, 1000] = ABI.decode_call!("transfer(address,uint256)", calldata)
+    end
+
+    test "raises InvalidHex on bad hex" do
+      assert_raise InvalidHex, fn ->
+        ABI.decode_call!("transfer(address,uint256)", "0xzzzz")
+      end
+    end
+
+    test "raises MatchError on selector mismatch" do
+      bogus = "0x" <> String.duplicate("aa", 4) <> String.duplicate("00", 64)
+
+      assert_raise MatchError, fn ->
+        ABI.decode_call!("transfer(address,uint256)", bogus)
+      end
+    end
+
+    test "raises on malformed payload after matching selector" do
+      {:ok, full} = ABI.encode_call("transfer(address,uint256)", [<<1::160>>, 1000])
+      truncated = String.slice(full, 0, 14)
+
+      assert_raise MatchError, fn ->
+        ABI.decode_call!("transfer(address,uint256)", truncated)
+      end
+    end
+  end
+
+  describe "decode_error/2" do
+    test "decodes single-error revert" do
+      {:ok, revert_data} = ABI.encode_call("MyError(uint256)", [42])
+
+      assert {:ok, %{error: "MyError", args: [42]}} =
+               ABI.decode_error(revert_data, ["MyError(uint256)"])
+    end
+
+    test "matches second definition when first doesn't" do
+      addr = <<1::160>>
+      {:ok, revert_data} = ABI.encode_call("Second(address,uint256)", [addr, 99])
+
+      assert {:ok, %{error: "Second", args: [^addr, 99]}} =
+               ABI.decode_error(revert_data, ["First()", "Second(address,uint256)"])
+    end
+
+    test "returns :calldata_too_short for data shorter than 4 bytes" do
+      assert {:error, {:decode_error, :calldata_too_short}} =
+               ABI.decode_error("0x010203", ["MyError(uint256)"])
+    end
+
+    test "returns :no_match when no definition matches" do
+      bogus = "0x" <> String.duplicate("aa", 4) <> String.duplicate("00", 64)
+
+      assert {:error, {:decode_error, :no_match}} =
+               ABI.decode_error(bogus, ["MyError(uint256)"])
+    end
+
+    test "returns {:invalid_hex, _} for non-hex input" do
+      assert {:error, {:decode_error, {:invalid_hex, "0xzzzz"}}} =
+               ABI.decode_error("0xzzzz", ["MyError(uint256)"])
+    end
+
+    test "wraps upstream {:error, atom} as {:decode_error, atom} for malformed payload after matching selector" do
+      {:ok, full} = ABI.encode_call("MyError(uint256)", [42])
+      # Keep "0x" + 4-byte selector + a few bytes of malformed args
+      truncated = String.slice(full, 0, 14)
+
+      assert {:error, {:decode_error, _reason}} =
+               ABI.decode_error(truncated, ["MyError(uint256)"])
+    end
+  end
+
+  describe "decode_error!/2" do
+    test "returns decoded map directly on success" do
+      {:ok, revert_data} = ABI.encode_call("MyError(uint256)", [42])
+
+      assert %{error: "MyError", args: [42]} =
+               ABI.decode_error!(revert_data, ["MyError(uint256)"])
+    end
+
+    test "raises InvalidHex on bad hex" do
+      assert_raise InvalidHex, fn ->
+        ABI.decode_error!("0xzzzz", ["MyError(uint256)"])
+      end
+    end
+
+    test "raises MatchError on no-match" do
+      bogus = "0x" <> String.duplicate("aa", 4) <> String.duplicate("00", 64)
+
+      assert_raise MatchError, fn ->
+        ABI.decode_error!(bogus, ["MyError(uint256)"])
+      end
+    end
+  end
 end

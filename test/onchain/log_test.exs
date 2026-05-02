@@ -213,4 +213,57 @@ defmodule Onchain.LogTest do
       assert decoded.ids == ids_hash
     end
   end
+
+  describe "decode_event/2 — indexed reference-type compliance" do
+    # Solidity stores keccak256(value) in the topic for indexed reference types
+    # (string, bytes, all arrays — fixed or dynamic, tuples). The original value
+    # is not recoverable from a log; the raw 32-byte topic hash must be returned.
+    # Spec rule confirmed against hieroglyph 1.0.0 fix to ABI.Event.decode_event/4.
+
+    test "returns raw topic hash for indexed bytes param" do
+      {:ok, topic0} = Log.event_topic("BytesEvent(bytes)")
+      key_hash = "0x1111111111111111111111111111111111111111111111111111111111111111"
+
+      log = %{topics: [topic0, key_hash], data: "0x"}
+
+      assert {:ok, decoded} = Log.decode_event(log, "BytesEvent(bytes indexed key)")
+      assert decoded.key == key_hash
+    end
+
+    test "returns raw topic hash for indexed fixed-size array (uint256[3]) param" do
+      {:ok, topic0} = Log.event_topic("SlotEvent(uint256[3])")
+      slots_hash = "0x2222222222222222222222222222222222222222222222222222222222222222"
+
+      log = %{topics: [topic0, slots_hash], data: "0x"}
+
+      assert {:ok, decoded} = Log.decode_event(log, "SlotEvent(uint256[3] indexed slots)")
+      assert decoded.slots == slots_hash
+    end
+
+    test "returns raw topic hash for indexed dynamic array of static elements (bytes32[])" do
+      {:ok, topic0} = Log.event_topic("HashesEvent(bytes32[])")
+      hashes_hash = "0x3333333333333333333333333333333333333333333333333333333333333333"
+
+      log = %{topics: [topic0, hashes_hash], data: "0x"}
+
+      assert {:ok, decoded} = Log.decode_event(log, "HashesEvent(bytes32[] indexed hashes)")
+      assert decoded.hashes == hashes_hash
+    end
+
+    test "interleaves static-indexed + reference-indexed correctly" do
+      {:ok, topic0} = Log.event_topic("MixedEvent(address,bytes,uint256)")
+      from_topic = "0x000000000000000000000000A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+      key_hash = "0x4444444444444444444444444444444444444444444444444444444444444444"
+
+      data = encode_event_data("f(uint256)", [99])
+
+      log = %{topics: [topic0, from_topic, key_hash], data: data}
+
+      signature = "MixedEvent(address indexed from, bytes indexed key, uint256 amount)"
+      assert {:ok, decoded} = Log.decode_event(log, signature)
+      assert decoded.from == Onchain.Address.checksum!("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
+      assert decoded.key == key_hash
+      assert decoded.amount == 99
+    end
+  end
 end

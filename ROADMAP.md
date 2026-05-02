@@ -15,15 +15,17 @@
 
 **Phase 8: Chain Intelligence Primitives ✅** — All tasks complete. Wallet analytics, transfer parsing, ENS resolution, NFT reads, and real-time subscriptions. Phase 9 (JS bridge) extracted to [onchain_js](../onchain_js/ROADMAP.md).
 
-**Up next:** Code Health backlog — no breaking change pending. Next release will be patch (v0.5.4) or minor (v0.6.0) depending on which Code Health / Phase 10 task lands next. Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code Health rationale.
+**Up next:** Code Health backlog — no breaking change pending. v0.5.4 patch is accumulating (Tasks 53, 71, 72) and ready to ship; future Code Health / Phase 10 tasks will follow. Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code Health rationale.
 
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
 >
 > **Doc checklist (every task):** ROADMAP.md ✅ → CHANGELOG.md ✅ → README.md ✅ → CLAUDE.md ✅
 
-### ✅ Recently Completed (3)
+### ✅ Recently Completed (5)
 | Task | Description | Notes |
 |------|-------------|-------|
+| 72 | `Onchain.ABI.decode_call/3` + `decode_error/2` (+ bang variants) | Thin wrappers over hieroglyph 1.1.0/1.2.0 APIs: selector-prefixed calldata decoding (forwards opts including `decode_structs: true`) and Solidity 0.8.4+ custom-error revert decoding. Same `{:error, {:decode_error, _}}` envelope as `decode_response/2`. |
+| 71 | Hieroglyph 1.0.0 → 1.4.0 bug-fix audit | Confirmed no silent-bug-fix windfall surfaces in onchain: `Onchain.Log.decode_event/2`'s indexed-param branch is independently spec-compliant for `string`/`bytes`/all arrays; no `int<N>` callers in `lib/`; integration suite green against hieroglyph 1.4.0. Lock-in tests added for indexed `bytes`, indexed fixed-size array, indexed dynamic array of static elements, and interleaved static/reference indexed params. |
 | 53 | `Onchain.Fees.suggest_fees/2` (+ bang) + `Onchain.RPC.fee_history/2` (+ bang) | Pure EIP-1559 fee math over `Cartouche.FeeHistory.t()` (median priority + buffered base fee, defaults: `:percentile_index 0`, `:buffer 1.2` — matches cartouche `v2_gas_parameters`) bundled with the named `eth_feeHistory` wrapper that produces it. Closes the wrapper gap noted in Task 59. |
 | 50 | `Onchain.RPC.syncing/1` (+ bang) | Raw passthrough wrapping `eth_syncing`. `{:ok, false}` synced, `{:ok, %{...}}` otherwise. Closes the trivial-RPC surface gap. |
 | 58 | `Onchain.ABI.decode_types/2` alias + tuple-sig docs | Alias of `decode_response/2` for non-RPC callers. Tuple-wrap requirement (parens around the type list) documented inline on both names. |
@@ -178,6 +180,7 @@ Add ERC-4337 support: UserOperation construction, signing, and bundler RPC (`eth
 | 67 | Migrate `:signet` → `:cartouche` dep (renames every `Signet.*` reference, swaps in `{:cartouche, "~> 0.1"}`) — see [CHANGELOG](CHANGELOG.md#changed--signet--cartouche-dep-migration-task-67) | ✅ | 4 | 7 | 8 | 1.88 🚀 | Multiple |
 | 68 | Mine `defi-skills:intent-to-transaction` action surface for `onchain` coverage gaps | ⬜ | 3 | 8 | 7 | 2.50 🎯 | (cross-cutting research) |
 | 70 | Harden `Onchain.Subscription.lookup_or_buffer/3` against unsolicited sub_id keys: `pending` map has per-key cap of 100 but unbounded distinct-keys count. Server emitting notifications for never-`subscribe`-d sub_ids grows key set until connection closes (per-connection Agent dies with the conn, so blast radius is bounded — but worth fixing). Buffer only sub_ids in an in-flight subscribe state, or add a global key cap with eviction. | ⬜ | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
+| 73 | Surface `data` field on `eth_call` revert errors so consumers can feed it to `Onchain.ABI.decode_error/2`. Currently `do_rpc/3` returns `{:error, {:rpc_error, %{code, message}}}` and drops the revert payload that nodes attach for execution-reverted calls (`code: 3`). Discovered 2026-05-02 during Task 72 — without this passthrough, the new `decode_error/2` wrapper has no straightforward consumer. | ⬜ | 3 | 5 | 5 | 1.67 🚀 | `Onchain.RPC` |
 
 **Task 57 — Unify `get_block_*` / `get_transaction_*` return shapes.**
 
@@ -327,9 +330,9 @@ Until then, `Onchain.Subscription` + `.Parser` stay in `onchain`.
 
 ---
 
-## Phase 11: hieroglyph 1.0.0 → 1.4.0 adoption advisory
+## Phase 11: hieroglyph 1.0.0 → 1.4.0 adoption advisory ✅
 
-**Status:** ⬜ pending — planted 2026-05-01 by a hieroglyph session surveying downstream impact.
+**Status:** ✅ complete (2026-05-02) — both tasks landed under v0.5.4 (unreleased). Audit found no silent-bug-fix windfall surfaces in onchain. Discovered Task 73 (RPC revert-data passthrough) added to Code Health as the natural follow-on for `decode_error/2` consumers.
 
 **Context.** `hieroglyph` shipped four minor releases between 2026-04-24 and 2026-05-01: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0. onchain consumes hieroglyph **transitively through cartouche** (cartouche pins `{:hieroglyph, "~> 1.0"}`, which already accepts 1.4.0). Full release notes in `../hieroglyph/CHANGELOG.md`; sibling roadmap at `../hieroglyph/ROADMAP.md` (now in maintenance posture). Cartouche has its own adoption advisory in `../cartouche/ROADMAP.md` (Phase 11) covering the codegen path and the `decode_structs: true` audit — onchain doesn't use `decode_structs: true` directly, so the 1.4.0 BREAKING change is not load-bearing here. Two onchain-specific concerns instead.
 
@@ -337,8 +340,8 @@ Until then, `Onchain.Subscription` + `.Parser` stay in `onchain`.
 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
-| TBD | Bug-fix audit: re-test onchain flows against silently-fixed hieroglyph behaviors | ⬜ | 3 | 5 | 4 | 1.50 📋 | `Onchain.Log` + `Onchain.ABI` |
-| TBD | Optional: extend `Onchain.ABI` wrapper with `decode_call/3` and `decode_error/2` | ⬜ | 2 | 4 | 5 | 2.25 🚀 | `Onchain.ABI` |
+| 71 | Bug-fix audit: re-test onchain flows against silently-fixed hieroglyph behaviors — see [CHANGELOG](CHANGELOG.md) | ✅ (2026-05-02) | 3 | 5 | 4 | 1.50 📋 | `Onchain.Log` + `Onchain.ABI` |
+| 72 | Extend `Onchain.ABI` wrapper with `decode_call/3` and `decode_error/2` — see [CHANGELOG](CHANGELOG.md) | ✅ (2026-05-02) | 2 | 4 | 5 | 2.25 🚀 | `Onchain.ABI` |
 
 ### Audit — silent bug-fix windfall (1.0.0–1.2.0)
 
@@ -455,7 +458,7 @@ lib/
   onchain/
     hex.ex                          # hex↔binary, hex↔integer, 0x prefix
     address.ex                      # validate, checksum (EIP-55), normalize
-    abi.ex                          # encode_call/2, decode_response/2
+    abi.ex                          # encode_call/2, decode_response/2, decode_types/2, decode_call/3, decode_error/2
     decimal.ex                      # to_decimal/2, to_basis_points/1, div_pow10/2
     fees.ex                         # suggest_fees/2 — EIP-1559 fee recommendation over Cartouche.FeeHistory.t()
     block.ex                        # get_by_number, find_by_timestamp (binary search)
