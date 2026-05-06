@@ -247,4 +247,47 @@ defmodule Onchain.RPC.IntegrationTest do
       assert %Cartouche.FeeHistory{} = RPC.fee_history!(3, rpc_opts())
     end
   end
+
+  # --- get_proof (eth_getProof) ---
+
+  describe "get_proof/3" do
+    test "returns account proof with empty storage_keys for an EOA" do
+      assert {:ok, proof} = RPC.get_proof(@eoa_address, [], rpc_opts())
+
+      assert is_integer(proof.balance) and proof.balance >= 0
+      assert is_integer(proof.nonce) and proof.nonce >= 0
+      assert is_binary(proof.code_hash) and String.starts_with?(proof.code_hash, "0x")
+      assert is_binary(proof.storage_hash) and String.starts_with?(proof.storage_hash, "0x")
+      assert match?([_ | _], proof.account_proof)
+      assert Enum.all?(proof.account_proof, &(is_binary(&1) and String.starts_with?(&1, "0x")))
+      assert proof.storage_proof == []
+
+      # Address comes back EIP-55 checksummed (parse_address/1)
+      assert proof.address == @eoa_address
+    end
+
+    test "returns storage_proof entry for a known proxy storage slot" do
+      assert {:ok, proof} =
+               RPC.get_proof(@aave_v3_pool_proxy, [@eip1967_impl_slot], rpc_opts())
+
+      assert match?([_ | _], proof.account_proof)
+      assert [%{key: key, value: value, proof: storage_proof_nodes}] = proof.storage_proof
+      assert key == @eip1967_impl_slot
+      assert is_binary(value) and String.starts_with?(value, "0x")
+      assert is_list(storage_proof_nodes)
+
+      # The Aave V3 Pool proxy is live → its EIP-1967 implementation slot is non-zero
+      <<"0x", padded_value::binary>> = value
+      refute padded_value == String.duplicate("0", String.length(padded_value))
+    end
+  end
+
+  describe "get_proof!/3" do
+    test "returns proof map directly on success" do
+      proof = RPC.get_proof!(@eoa_address, [], rpc_opts())
+      assert is_map(proof)
+      assert is_integer(proof.balance)
+      assert is_list(proof.account_proof)
+    end
+  end
 end

@@ -15,15 +15,16 @@
 
 **Phase 8: Chain Intelligence Primitives ✅** — All tasks complete. Wallet analytics, transfer parsing, ENS resolution, NFT reads, and real-time subscriptions. Phase 9 (JS bridge) extracted to [onchain_js](../onchain_js/ROADMAP.md).
 
-**Up next:** Code Health backlog — no breaking change pending. v0.5.4 patch is accumulating (Tasks 53, 71, 72) and ready to ship; future Code Health / Phase 10 tasks will follow. Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code Health rationale.
+**Up next:** Code Health backlog — no breaking change pending. v0.5.4 patch is accumulating (Tasks 49, 53, 71, 72) and ready to ship; future Code Health / Phase 10 tasks will follow. Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code Health rationale.
 
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
 >
 > **Doc checklist (every task):** ROADMAP.md ✅ → CHANGELOG.md ✅ → README.md ✅ → CLAUDE.md ✅
 
-### ✅ Recently Completed (5)
+### ✅ Recently Completed (6)
 | Task | Description | Notes |
 |------|-------------|-------|
+| 49 | `Onchain.RPC.get_proof/3` (+ bang) wraps `eth_getProof` | Account + storage Merkle proofs for light clients and cross-chain proofs. Validates address (`ensure_hex_address/1`), 32-byte storage keys (new `Helpers.ensure_storage_key/1` re-tagging `ensure_tx_hash/1`), and block tag. Returns atom-keyed map with `balance`/`nonce` decoded to integers and proof byte arrays passed through as 0x hex (caller verifies the Merkle proof). Matches `parse_transaction/1` shape rather than `get_block_by_number`'s raw map; doesn't pre-commit Task 57's unification choice. |
 | 72 | `Onchain.ABI.decode_call/3` + `decode_error/2` (+ bang variants) | Thin wrappers over hieroglyph 1.1.0/1.2.0 APIs: selector-prefixed calldata decoding (forwards opts including `decode_structs: true`) and Solidity 0.8.4+ custom-error revert decoding. Same `{:error, {:decode_error, _}}` envelope as `decode_response/2`. |
 | 71 | Hieroglyph 1.0.0 → 1.4.0 bug-fix audit | Confirmed no silent-bug-fix windfall surfaces in onchain: `Onchain.Log.decode_event/2`'s indexed-param branch is independently spec-compliant for `string`/`bytes`/all arrays; no `int<N>` callers in `lib/`; integration suite green against hieroglyph 1.4.0. Lock-in tests added for indexed `bytes`, indexed fixed-size array, indexed dynamic array of static elements, and interleaved static/reference indexed params. |
 | 53 | `Onchain.Fees.suggest_fees/2` (+ bang) + `Onchain.RPC.fee_history/2` (+ bang) | Pure EIP-1559 fee math over `Cartouche.FeeHistory.t()` (median priority + buffered base fee, defaults: `:percentile_index 0`, `:buffer 1.2` — matches cartouche `v2_gas_parameters`) bundled with the named `eth_feeHistory` wrapper that produces it. Closes the wrapper gap noted in Task 59. |
@@ -307,7 +308,7 @@ Until then, `Onchain.Subscription` + `.Parser` stay in `onchain`.
 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
-| 49 | `Onchain.RPC.get_proof/3` — wrap `eth_getProof` (account + storage-slot Merkle proofs) | ⬜ | 2 | 4 | 4 | 2.00 🚀 | `Onchain.RPC` |
+| 49 | `Onchain.RPC.get_proof/3` (+ bang) wraps `eth_getProof` — see [CHANGELOG](CHANGELOG.md#added--onchainrpcget_proof3-task-49) | ✅ | 2 | 4 | 4 | 2.00 🚀 | `Onchain.RPC` |
 | 50 | `Onchain.RPC.syncing/1` (+ bang) wraps `eth_syncing` — see [CHANGELOG](CHANGELOG.md#added--onchainrpcsyncing1-task-50) | ✅ | 1 | 2 | 3 | 2.50 🎯 | `Onchain.RPC` |
 | 51 | `Onchain.RPC.batch/2` — JSON-RPC 2.0 array-batched requests (single round-trip over N method calls) | ⬜ | 4 | 6 | 5 | 1.38 📋 | `Onchain.RPC` |
 | 52 | Telemetry events around `Onchain.RPC` request path (`[:onchain, :rpc, :request]`) | ⬜ | 3 | 5 | 5 | 1.67 🚀 | `Onchain.RPC` |
@@ -318,7 +319,7 @@ Until then, `Onchain.Subscription` + `.Parser` stay in `onchain`.
 
 **Task descriptions:**
 
-**49 — eth_getProof.** Merkle proof retrieval for account + storage slots. Light clients, cross-chain proofs. `Signet.RPC.send_rpc/3` call with parsed hex response.
+**49 — eth_getProof.** ✅ Shipped 2026-05-02. Merkle proof retrieval for account + storage slots; light clients, cross-chain proofs. Atom-keyed decoded response (balance/nonce as integers; proof bytes as 0x hex).
 
 **51 — Batch RPC.** JSON-RPC 2.0 allows array-batched requests. Currently each `Signet.RPC.send_rpc/3` is a separate HTTP round-trip. For indexers doing N `eth_call`s this is a real latency win. Implemented here because batching is composition over signet's primitive transport.
 

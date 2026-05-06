@@ -4,6 +4,9 @@ Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) a
 
 @~/.claude/includes/across-instances.md
 @~/.claude/includes/critical-rules.md
+
+@~/.claude/includes/delegation.md
+@~/.claude/includes/onchain-workspace.md
 @~/.claude/includes/task-prioritization.md
 @~/.claude/includes/task-writing.md
 @~/.claude/includes/workflow-philosophy.md
@@ -67,7 +70,7 @@ lib/onchain/
   abi.ex            # encode_call/2, decode_response/2, decode_types/2, decode_call/3, decode_error/2
   decimal.ex        # to_decimal/2, to_basis_points/1, div_pow10/2
   fees.ex           # suggest_fees/2 — EIP-1559 fee recommendation over Cartouche.FeeHistory.t()
-  rpc.ex            # eth_call, eth_getLogs, eth_getBalance, receipts, nonces, syncing, fee_history, generic call/3 passthrough
+  rpc.ex            # eth_call, eth_getLogs, eth_getBalance, receipts, nonces, syncing, fee_history, get_proof, generic call/3 passthrough
   rpc/helpers.ex    # shared RPC helper functions
   signer.ex         # key management, transaction signing
   erc20.ex          # reads + writes: balanceOf, allowance, decimals, symbol, totalSupply, approve, transfer
