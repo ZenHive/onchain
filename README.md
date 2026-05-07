@@ -57,9 +57,17 @@ usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
 # All functions have bang variants that raise on error
 balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
 
-# EIP-1559 fee suggestion: fetch history, compute base/priority/max in one go
+# EIP-1559 fee suggestion: fetch history, compute base/priority/max in one go.
+# `:reward_percentiles` is required — non-empty, monotonically non-decreasing list of integers in 0..100.
 {:ok, history} = Onchain.RPC.fee_history(20, reward_percentiles: [50])
 {:ok, {base_fee, max_priority, max_fee}} = Onchain.Fees.suggest_fees(history)
+
+# Decode a Solidity 0.8.4+ custom-error revert against a list of candidate signatures
+{:ok, %{error: "OwnableUnauthorizedAccount", args: [_addr]}} =
+  Onchain.ABI.decode_error(
+    "0x118cdaa7000000000000000000000000d8da6bf26964af9d7eed9e03e53415d37aa96045",
+    ["OwnableUnauthorizedAccount(address)"]
+  )
 ```
 
 ## Modules
@@ -73,7 +81,7 @@ balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
 | `Onchain.Address` | Address validation, EIP-55 checksum, normalization |
 | `Onchain.Decimal` | Decimal precision helpers (to_decimal, div_pow10, to_basis_points) |
 | `Onchain.Fees` | EIP-1559 fee recommendation (`suggest_fees/2`) over `Cartouche.FeeHistory.t()` — pure function, returns `{base_fee, max_priority, max_fee}` |
-| `Onchain.RPC` | Ethereum JSON-RPC wrapper (eth_call, eth_getLogs, receipts, nonces, balances, syncing, fee_history, get_proof; `call/3` for any other method). `eth_get_logs/2` accepts atom keys or canonical camelCase string aliases (`"fromBlock"`, `"toBlock"`, `"blockHash"`, `"address"`, `"topics"`); `:block_hash` is mutually exclusive with `:from_block`/`:to_block` per EIP-1474 |
+| `Onchain.RPC` | Ethereum JSON-RPC wrapper (eth_call, eth_getLogs, receipts, nonces, balances, block_number, chain_id, get_block_by_number, get_transaction_by_hash, eth_get_code, eth_send_raw_transaction, syncing, fee_history, get_proof; `call/3` for any other method). `eth_get_logs/2` accepts atom keys or canonical camelCase string aliases (`"fromBlock"`, `"toBlock"`, `"blockHash"`, `"address"`, `"topics"`); `:block_hash` is mutually exclusive with `:from_block`/`:to_block` per EIP-1474 |
 | `Onchain.RPC.Helpers` | Shared RPC helper functions (hex normalization, block tags, tx hash validation) |
 | `Onchain.Block` | Block fetching with parsed fields, timestamp-based binary search |
 | `Onchain.Contract` | Generic contract call (encode -> eth_call -> decode in one function) |
@@ -137,9 +145,9 @@ Requires a WebSocket-capable endpoint (`wss://` or `ws://`), separate from the H
 All modules use [descripex](https://hex.pm/packages/descripex) for self-describing APIs:
 
 ```elixir
-Onchain.describe()                  # Module overview
-Onchain.describe(:hex)              # Function list
-Onchain.describe(:hex, :decode)     # Full function details
+Onchain.describe()                  # List of all annotated modules (one summary per module)
+Onchain.describe(:hex)              # Function summary list for a module
+Onchain.describe(:hex, :decode)     # Function detail map (params, errors, returns)
 ```
 
 ## Testing

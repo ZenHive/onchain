@@ -6,6 +6,8 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+## v0.5.4 — Cartouche 0.2 + ABI revert decoding + fee history (2026-05-07)
+
 ### Bumped — cartouche 0.2.0 + ex_ast 0.10.1
 
 - **`cartouche` 0.1.2 → 0.2.0** (loosened `mix.exs` pin `~> 0.1.2` → `~> 0.2.0`). 0.x minor under hex semver = breaking, but onchain's consumed surface is unaffected: `Cartouche.Transaction.V2` struct shape is byte-identical (12 fields, same types — verified at `cartouche/lib/cartouche/transaction.ex:233-266`); `Cartouche.{FeeHistory, Hash, Hex, RPC.send_rpc, Signer.{Curvy, sign_direct}}` callsites compile + test clean. The 0.2.0 changes are mostly additive and internal to cartouche: new `Cartouche.Transaction.V3` (EIP-4844 blob) and `V4` (EIP-7702 set-code authorization) typed transactions, new `Cartouche.Transaction.Call` struct that replaces V2-masquerading-as-Call for `eth_call` shapes (onchain doesn't use cartouche-generated bindings, so no callsite collapse), and `Cartouche.RPC.send_rpc/3` now returns `{:error, {:invalid_params, reason}}` instead of raising on non-encodable params (forward-compatible widening of the error union). Full test suite green (686/686 including integration), credo --strict clean, doctor 100%, dialyzer 0 warnings.

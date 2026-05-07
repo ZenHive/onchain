@@ -15,7 +15,9 @@
 
 **Phase 8: Chain Intelligence Primitives ✅** — All tasks complete. Wallet analytics, transfer parsing, ENS resolution, NFT reads, and real-time subscriptions. Phase 9 (JS bridge) extracted to [onchain_js](../onchain_js/ROADMAP.md).
 
-**Up next:** Code Health backlog — no breaking change pending. v0.5.4 patch is accumulating (Tasks 49, 53, 71, 72) and ready to ship; future Code Health / Phase 10 tasks will follow. Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code Health rationale.
+**Last shipped:** v0.5.4 (2026-05-07) — Tasks 49, 53, 71, 72 + cartouche 0.2.0 / ex_ast 0.10.1 dep bumps.
+
+**Up next:** Code Health backlog — no breaking change pending. Future Code Health / Phase 10 tasks will follow. Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code Health rationale.
 
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
 >

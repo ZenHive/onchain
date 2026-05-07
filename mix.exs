@@ -1,7 +1,7 @@
 defmodule Onchain.MixProject do
   use Mix.Project
 
-  @version "0.5.3"
+  @version "0.5.4"
   @source_url "https://github.com/ZenHive/onchain"
 
   def project do
@@ -95,9 +95,13 @@ defmodule Onchain.MixProject do
 
   defp dialyzer do
     [
-      plt_add_apps: [:mix],
-      plt_local_path: "_build/dialyzer",
-      plt_core_path: "_build/dialyzer"
+      # OOM mitigation: skip transitive deps (default is :app_tree).
+      # Tidewave/bandit's HTTP stack (plug, finch, mint, gun, cowlib, etc.)
+      # is not in lib/'s call graph and bloats PLT to ~800 modules.
+      plt_add_deps: :apps_direct,
+      plt_add_apps: [:mix, :hieroglyph],
+      plt_local_path: "priv/plts",
+      plt_core_path: "priv/plts"
     ]
   end
 end
