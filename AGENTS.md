@@ -3172,3 +3172,33 @@ mix credo --strict --format json               # Static analysis (JSON output)
 - **onchain_evm** — Rust NIFs + codegen: `{:onchain_evm, path: "../onchain_evm"}`
 - **onchain_js** — JS bridge (QuickBEAM): `{:onchain_js, path: "../onchain_js"}`
 - **onchain_tempo** — Tempo chain primitives: `{:onchain_tempo, path: "../onchain_tempo"}`
+
+## Cursor Cloud specific instructions
+
+### Environment
+
+- **Erlang/OTP 27** installed via prebuilt `.deb` from [benoitc/erlang-dist](https://github.com/benoitc/erlang-dist) at `/usr/local/bin/erl`.
+- **Elixir 1.18.4** installed at `/usr/local/elixir/bin/`. PATH is set in `~/.bashrc`.
+- This is a **pure Elixir library** — no Phoenix server, no database, no background workers.
+
+### Running the project
+
+This repo is a library, not an application. There is no server to start. Use `iex -S mix` to get an interactive shell with the library loaded.
+
+### Key commands
+
+Commands from `CLAUDE.md` § "Quick Commands":
+
+```bash
+mix test.json --quiet                    # Unit tests (integration excluded by default)
+mix credo --strict                       # Static analysis (exit 2 for TODO tags is expected)
+mix format --check-formatted             # Formatting check
+mix compile --warnings-as-errors         # Compile with strict warnings
+```
+
+### Gotchas
+
+- **No `mix.lock` in repo**: `mix deps.get` must run before anything else. The update script handles this.
+- **Integration tests need RPC**: unit tests run without network. Integration tests (`--include integration`) require `ETHEREUM_API_URL` or `ETH_RPC_URL` env vars pointing to an Ethereum JSON-RPC endpoint.
+- **Credo exit code 2**: `mix credo --strict` exits with code 2 when only TODO/FIXME tags are found. This is expected and not a failure.
+- **`dialyzer_json` version warning**: `dialyzer_json ~> 0.2` declares `elixir: "~> 1.19"` but works on 1.18.4. The warning is cosmetic.
