@@ -19,6 +19,7 @@ Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) a
 @~/.claude/includes/dialyzer-json.md
 @~/.claude/includes/agent-economy.md
 @~/.claude/includes/ethereum-rpc.md
+@~/.claude/includes/reach.md
 
 
 ## Portfolio Context

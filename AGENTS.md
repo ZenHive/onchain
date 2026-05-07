@@ -452,6 +452,15 @@ After `staged-review:commit-review` finishes a PR review, surface the verdict ("
 
 **Override:** the user can authorize a direct push for a specific PR ("just push it"). Authorization is scope-bound to that one PR — same scope rule as commit/merge authorization (`NEVER COMMIT WITHOUT EXPLICIT REQUEST`, `DON'T AUTO-MERGE PRS`). Subsequent PRs revert to push-back default.
 
+**Rebase-only carve-out (merge-train mode):** during `linear-workflow` § "Merge-Train Mode (`flow-review`)" execution, `git rebase origin/<default>` + `git push --force-with-lease` to a cloud-agent branch IS allowed under strict invariants:
+
+- Post-rebase diff vs. pre-rebase diff (against the new merge base) MUST be byte-identical except inside conflict regions. Verify with `git diff <pre-rebase-tip>..HEAD -- <files-not-in-conflict>` returning empty.
+- Conflict resolution MUST be mechanical (deterministic from source — alphabetical re-merge of registry append-only edits like `@descripex_modules` / supervisor children / plug-pipeline lists, append-only test additions, append-only doc blocks).
+- Push MUST use `--force-with-lease` (fails-loud if the agent pushed concurrently — never blind `--force`).
+- Any non-mechanical resolution → `git rebase --abort`, push back via Linear `@cursor` / `@codex` comment with conflict context, agent picks up the rebase.
+
+The carve-out is scoped to merge-train rebases only. Logic edits, function-body changes, and semantic conflict resolution remain forbidden under this rule. The default "fix-locally requires push-back via Linear comment" still governs all non-rebase operations on cloud-agent branches. Why the carve-out is safe: mechanical resolutions are deterministic from the diff; CI re-runs catch any subtle break; `--force-with-lease` prevents silent overwrites; agent's authorship is preserved (rebase rewrites tip SHAs but keeps author metadata).
+
 ## 🚨 POST LINEAR / PR COMMENTS WITHOUT ASKING DURING DELEGATION FLOWS
 
 **During an active `linear-workflow` flow, posting Linear comments and cloud-agent PR comments is DEFAULT-DO, not default-ask.** The Claude Code harness lists "creating/closing/commenting on PRs or issues" alongside `git push` as actions requiring user confirmation. That generic caution is correctly tuned for one-off PR comments on unfamiliar repos; it's wrong-tuned for a delegation queue the user has already authorized work in. This rule explicitly overrides the harness default for the scoped set below.
@@ -575,7 +584,7 @@ Recommended pattern:
 
 > **🚨 Code-mutation delegation suspended (Elixir projects, 2026-05-05).** Codex Cloud has no Elixir runtime — `mix`/`iex`/`elixir` not installed. See `task-prioritization.md` § "Codex Delegation (`[CX]`)" and `cloud-agent-environments.md` § "Codex Cloud → Code-mutation delegation SUSPENDED" for verification details and the path back to eligibility.
 
-**Currently permitted:** review-only Codex delegations (see § "Codex-Reviews-Cursor Pattern" below). The agent reads a PR diff embedded in the issue body and posts a verdict comment — no runtime needed.
+**Currently permitted:** none. Code-mutation `[CX]` is suspended (Elixir runtime missing); Tier-2 review-only `[CX]` (Codex-Reviews-Cursor pattern) is also disabled per the next section's status callout — INE-26 polling-race failure mode. New `[CX]` issues of any flavor should not be created until at least one of the two suspensions lifts.
 
 **When restored:** the flow mirrors the Cursor Delegation Flow below — `team` / `project` / `labels: ["cx-eligible"]` / `delegate: "Codex"` / status `Todo` / body-as-prompt. The implementer/reviewer handoff shape is identical. Until restored, treat any new code-mutation `[CX]` issue as a routing mistake — redirect to `[CSR]` (Cursor).
 
@@ -591,7 +600,7 @@ Same shape as the Codex flow with **broader eligibility**. Cursor's cloud enviro
    - **Body = the prompt** — same template as Codex (Context / Task / Acceptance criteria / Out of scope / File paths / Scoring / Reviewer note).
    - Initial status: `Todo`.
 
-2. **Cursor picks it up.** *Intended* flow: Cursor's Background Agent transitions `Todo` → `In Progress`, opens a PR with body markers (`<!-- CURSOR_AGENT_PR_BODY_BEGIN -->` / `<!-- CURSOR_AGENT_PR_BODY_END -->`), transitions to `In Review`. **Observed** flow: in early Cursor round-trips, the PR auto-opened but status stayed at `In Progress` — same partial-transition failure mode as Codex. Don't rely on `In Review` as the readiness signal. **Canonical fix:** see § "Agent Status-Transition Guidance" — Linear confirmed the status flip is the agent's responsibility, not a built-in Linear behavior, and is enforced via workspace-level "Additional guidance for agents."
+2. **Cursor picks it up.** *Intended* flow: Cursor's Background Agent transitions `Todo` → `In Progress`, opens a PR with body markers (`<!-- CURSOR_AGENT_PR_BODY_BEGIN -->` / `<!-- CURSOR_AGENT_PR_BODY_END -->`), transitions to `In Review`. **Observed** flow: in early Cursor round-trips, the PR auto-opened but status stayed at `In Progress` — same partial-transition failure mode as Codex. Don't rely on `In Review` as the readiness signal. **Canonical fix:** see § "Agent Status-Transition Guidance" — Linear confirmed the status flip is the agent's responsibility, not a built-in Linear behavior, and is enforced via workspace-level "Additional guidance for agents." **Required:** Cursor's `gh pr create` should NOT use `--draft` — Linear's PR-opened-non-draft → In Progress auto-transition (see § "Linear GH Auto-Transitions") only fires for non-draft PRs, and drafts force a manual undraft step on every PR. Set this expectation explicitly in the issue body's `## Reviewer note`.
 
 3. **Cursor self-validates before opening the PR** — verified `mix test.json --quiet`, `mix credo --strict`, `mix format --check-formatted`, targeted `mix test test/...` runs all happen in Cursor's harness. PRs ship with the harness already green from Cursor's side. The local `commit-review` reviewer's job becomes the **5-category audit** + acceptance-criteria cross-reference, not "did the harness pass" (that's expected baseline).
 
@@ -619,7 +628,7 @@ Same shape as the Codex flow with **broader eligibility**. Cursor's cloud enviro
 
 ### Codex-Reviews-Cursor Pattern (Review Delegation)
 
-> **Status (2026-05-05):** review-only Codex delegations remain permitted under the broader `[CX]` code-mutation suspension — Codex reads the PR diff embedded in the issue body and posts a verdict comment, no `mix`/runtime invocation involved. Treat as exception-not-default while the suspension is in force; if review verdicts start arriving with fabricated harness claims (the failure pattern that drove the code-mutation suspension), pause this pattern too and surface to the user.
+> **Status (2026-05-06): DISABLED.** Tier-2 Codex-Reviews-Cursor is paused. Failure mode: the polling task races the review-target PR's lifecycle — INE-26 was canceled because PR #32 closed before Codex picked up the polling task. The bot ensemble (CodeRabbit, Copilot, Codex's own GitHub bot) already covers correctness on every PR; orchestration / project-rule enforcement / triage / deep diagnosis are local Tier 2's role via `staged-review:commit-review` from this Claude Code session. Re-enable when (a) commit-SHA-pinned polling lands so PR closure no longer breaks the delegation, OR (b) a real driver appears for double-review on cloud-agent PRs that bots + commit-review can't cover. Until then, do NOT create Codex-Reviews-Cursor delegation issues. Existing pre-2026-05-06 references retain history but are not active.
 
 A specific composition of the two flows above: Cursor implements, Codex reviews. Activated by `staged-review:commit-review` Step 10b when the polled PR's source Linear issue has `delegate = Cursor` and CI is green.
 
@@ -665,11 +674,13 @@ If you find yourself re-finding what CodeRabbit already flagged, you're duplicat
 3. Only standard-tier files → CI-green check + bot-review check. Merge if both clean. Skim if anything flagged.
 4. Only ceremony-tier files → CI-green check. Merge.
 
-**Asymmetric application by reviewer-type — interaction with Codex-Reviews-Cursor:**
+**Asymmetric application by reviewer-type — interaction with Codex-Reviews-Cursor (legacy / disabled):**
 
-The Codex-Reviews-Cursor pattern (§ above) overlaps with the bot ensemble. With CodeRabbit + Copilot + Codex's own GitHub bot already running on every Cursor PR, the delegation pattern earns its keep only when **all three** hold: the PR is critical-tier AND a bot flagged ambiguity needing a deeper read AND local Tier 2 needs a second perspective on the triage decision. Skip the delegation issue creation on standard- and ceremony-tier PRs entirely; the GitHub-side bots already cover those.
+Historical: the Codex-Reviews-Cursor pattern (§ above) overlapped with the bot ensemble; the prior recommendation was to skip the delegation pattern on standard- and ceremony-tier PRs and only use it on critical-tier-with-bot-ambiguity. **As of 2026-05-06 the pattern is disabled outright** (see § "Codex-Reviews-Cursor Pattern" status callout) — the conditions for using the delegation never need to be evaluated. Tier 2 review goes through `staged-review:commit-review` from this Claude Code session for every cloud-agent PR that warrants it; the bot ensemble (CodeRabbit, Copilot, Codex's GitHub bot) covers correctness; commit-review owns orchestration / project-rule enforcement / triage / deep diagnosis.
 
 The push-back-vs-fix matrix below applies to Tier-2 reviews only. Standard- and ceremony-tier PRs don't engage the calculus — they merge or they fail CI; that's the loop.
+
+For batches of 2+ open cloud-agent PRs, § "Merge-Train Mode (`flow-review`)" applies this tier matrix automatically across the queue and handles inter-PR rebase cascade.
 
 ### Cloud Agent Environments
 
@@ -833,6 +844,8 @@ Group results into:
 
 This is the polling shape `staged-review:commit-review` Step 2 uses. Future skills/sessions matching this pattern (any cloud-agent → Linear → reviewer flow where the agent's status transitions are best-effort) should follow the same shape and be agent-agnostic in the filter.
 
+For batch processing of N≥2 cloud-agent PRs, see § "Merge-Train Mode (`flow-review`)" — same poll filter, extended with `mergeStateStatus` + tier classification + dependency-sorted action queue.
+
 ### Cross-Repo Coordination
 
 When work spans repos:
@@ -842,6 +855,97 @@ When work spans repos:
 - **Don't** pile cross-repo work into one issue. Each repo owns its own PR; one issue per repo keeps PR review surface aligned with repo boundaries.
 
 If cross-repo coordination becomes a regular pattern (3+ linked issues per month), promote to a Linear **Initiative** as a grouping overlay. Skip until load-bearing — Initiatives are a UI flourish, not a workflow requirement.
+
+### Merge-Train Mode (`flow-review`)
+
+> **Retires:** the prior "Don't Push to the Default Branch While Cloud-Agent PRs Are In Flight" rule (don't-push-during-flight hedge). That rule traded "remote ROADMAP lags ✅" to keep the queue merge-clean — a workaround for the rebase-cascade tax. Merge-train owns the cascade explicitly, so the hedge becomes obsolete. If a sister project still imports the prior rule by name, point it here.
+
+**Invocation:** workflow-only — no CLI, no skill wrapper, no slash command. When the trigger condition is met (2+ open cloud-agent PRs in the current repo), this Claude session executes the steps below directly. The name `flow-review` is the workflow's identity, not an artifact path. Trigger is a user request like "run flow-review" or an in-session decision once the queue exceeds N=1.
+
+**The bottleneck the rule fixes.** With N parallel cloud-agent PRs in flight, each merge advances the default branch and invalidates every other PR's base SHA. Per-PR rebase round-trips (Cursor: re-pull, re-resolve, re-validate, re-push) often surface phantom "conflicts" in untouched files. Cartouche audit (PRs 33-41 cluster, 2026-05-06): merge lag 14m–2h36m dominated by reviewer-side rebase churn, not bot-or-CI time. With 3+ PRs queued, rebase tax exceeds review time.
+
+**Empirical caveat:** the merge-train design rests on a single 2026-05-06 cartouche audit cohort (PRs 33-41). If a future cohort exhibits a different bottleneck shape (e.g. CI churn dominates rebase churn), revisit before generalizing further.
+
+**What `flow-review` does.** Single invocation that:
+
+1. **Polls** all open cloud-agent PRs in the current repo (filter shape from § "Polling for 'Ready for Review'", scoped to current repo + extended to include `mergeStateStatus`).
+2. **Classifies** each PR by tier (per § "Review Tiering": critical / standard / ceremony) and by mergeability (CI green | CI red | conflicting | bot-flagged).
+3. **Dependency-sorts** the queue from a directed graph built on file-overlap (parsed from `## Files to modify` of each PR's source issue, same parser as § "Pre-Flight Conflict Detection") + Linear `blockedBy` / `relatedTo` relationships. PRs touching only their own files merge first; PRs touching shared coordination files merge last. Within each layer, sort by PR age (oldest first).
+4. **Surfaces** the ordered queue with per-PR action recommendations (table below).
+5. **Executes** the rebase cascade between merges (see "Rebase cascade" below). User owns merges; reviewer owns rebases.
+
+**Polling shape (extends § "Polling for 'Ready for Review'"):**
+
+```
+filter:
+  project = <current repo>
+  delegate ∈ { Codex, Cursor }
+  status ∈ { In Review, In Progress }
+then:
+  join with open GitHub PR attachments
+  fetch mergeStateStatus + headRefForcePushed events for each PR
+  classify by tier (critical / standard / ceremony per § "Review Tiering")
+  classify by mergeability (CI green | CI red | conflicting | bot-flagged)
+```
+
+**Tier-based action matrix:**
+
+| Tier | CI | Bots | Conflicts | Action |
+|---|---|---|---|---|
+| Ceremony | green | clean | none | Surface as "ready, awaiting user `gh pr merge`" — user merges, rebase cascade fires for next PR in queue |
+| Standard | green | clean | none | Same as ceremony, plus 5-min skim if any bot finding present |
+| Critical | green | clean | none | Hand off to `staged-review:commit-review` (single-PR, full Tier 2), then back to merge-train queue |
+| Any | red | — | — | Surface for human triage; skip in current pass |
+| Any | — | — | conflicting/behind | Trigger rebase cascade (below) |
+| Any | — | flagged | — | Surface bot finding for triage (push-back vs. defer per § "Push-Back-vs-Fix-Locally Matrix") |
+
+**Rebase cascade (the load-bearing mechanism).** After the user runs `gh pr merge` on PR #N:
+
+```
+for each remaining PR in dependency order:
+  if PR.mergeStateStatus ∈ { BEHIND, DIRTY }:
+    git fetch && git checkout <agent-branch>          # cursor/... or codex/...
+    git rebase origin/<default-branch>
+    if conflicts:
+      attempt mechanical resolution (see invariants below)
+      if mechanical resolution succeeds:
+        git push --force-with-lease
+      else:
+        git rebase --abort
+        post Linear @cursor / @codex comment with conflict context
+        skip this PR (agent picks up the rebase)
+    else:
+      git push --force-with-lease
+    wait for CI re-run; loop
+```
+
+**Rebase-only carve-out invariants.** Authorized by `delegation-rules.md` § "NEVER PUSH TO A CLOUD-AGENT'S BRANCH" → "Rebase-only carve-out (merge-train mode)". Strict; do not relax.
+
+- **Allowed:** `git rebase origin/<default>` + `git push --force-with-lease` to the cloud-agent branch.
+- **Mechanical-resolution test:** post-rebase diff vs. pre-rebase diff (against the new merge base) MUST be byte-identical except inside conflict regions. Verify with `git diff <pre-rebase-tip>..HEAD -- <files-not-in-conflict>` returning empty.
+- **Mechanical resolutions allowed:** alphabetical/sorted re-merge of registry append-only edits (`@descripex_modules`, plug-pipeline lists, supervisor children), test-file additions with no overlap, doc append-only blocks. Any case where the resolution is deterministic from the source.
+- **Forbidden:** semantic conflict resolution, any logic edit, any change to a function body during rebase, any push without `--force-with-lease`, any push to a non-cloud-agent branch under this carve-out.
+- **Abort path:** if mechanical resolution doesn't apply cleanly, `git rebase --abort` and post a Linear `@cursor` / `@codex` comment with the conflict file + context. Agent picks up the rebase. The carve-out adds a fast path; it does not replace push-back as the default for non-trivial conflicts.
+
+**User-confirmation gate.** `delegation-rules.md` § "DON'T AUTO-MERGE PRS" stays strict. Merge-train surfaces ordered, rebase-clean PRs and shows the `gh pr merge` command per PR; **user runs the merges**. Reviewer (this Claude session) does the rebase cascade automatically per the carve-out; user owns merges. The asymmetry is deliberate: rebase is mechanical, merge is policy.
+
+**When to use merge-train vs single `commit-review`:**
+
+| Situation | Use |
+|---|---|
+| 1 cloud-agent PR open, critical tier | `staged-review:commit-review` (single-PR, full Tier 2) |
+| 1 cloud-agent PR open, standard or ceremony | `commit-review` or merge-train (either works; merge-train is overhead-equivalent at N=1) |
+| 2+ cloud-agent PRs open, mixed tiers | **Merge-train.** Cascades, sorts by dependency, hands critical-tier PRs off to `commit-review` inline |
+| 2+ cloud-agent PRs open, all ceremony/standard | **Merge-train.** Maximum gain — no per-PR Tier 2 cost, just cascade + user-confirms |
+
+**Bookkeeping commits (replaces the prior "don't push" hedge):** post-merge ROADMAP/CHANGELOG/README updates per `staged-review:commit-review` Step 15 still happen on `main` after each PR merges. Merge-train absorbs the rebase cost the bookkeeping push would have caused — reviewer rebases each remaining PR onto the new default tip immediately, force-with-leases, CI re-runs in parallel with the next PR's review. Net: no batched-bookkeeping delay, no rebase tax on the queue, agent commit history clean. Linear's GH integration auto-transitions issues to `Done` on merge regardless of whether the bookkeeping push has landed — so the local-bookkeeping latency affects human readers (CHANGELOG, README), not the queue's authoritative state. The cascade is safe to interleave with bookkeeping pushes.
+
+**Cross-references:**
+
+- Inbound: § "Polling for 'Ready for Review'" — single-PR poll; merge-train extends for batch.
+- Inbound: § "Review Tiering" — tier matrix is applied automatically across N PRs.
+- Outbound: `delegation-rules.md` § "NEVER PUSH TO A CLOUD-AGENT'S BRANCH" → Rebase-only carve-out (this section's safety contract).
+- Outbound: `delegation-rules.md` § "DON'T AUTO-MERGE PRS" — user still owns each merge.
 
 ### Issue Body = The Prompt
 
@@ -875,17 +979,17 @@ The `Acceptance criteria` and `Reviewer note` sections are what make the issue r
 
 ### Mandatory Acceptance-Criteria Bullets
 
-**Every delegated issue's `## Acceptance criteria` section MUST include explicit bullets for ROADMAP.md and CHANGELOG.md updates** — verbatim, not paraphrased into vague "update docs" wording. Cloud agents (Codex, Cursor, future) do NOT reliably propagate the "task without updated docs is incomplete" rule from `task-prioritization.md` § "Roadmap Maintenance" into their PR scope unless it's a checked acceptance bullet on the specific issue.
+**Every delegated issue's `## Acceptance criteria` section MUST include the harness-green bullet.** ROADMAP.md / CHANGELOG.md / README.md updates are explicitly NOT in the agent's scope — those land in `commit-review`'s post-merge follow-up commit on `main` (see § "Code-Only PRs from Cloud Agents" below). The historical pattern of putting ROADMAP/CHANGELOG bullets in agent acceptance criteria created a per-PR merge-conflict surface (cartouche audit 2026-05-06: 11 of 14 merged PRs touched both files, PR #36 hit `mergeable: CONFLICTING DIRTY` against PR #33's earlier merge of the same files). Flipping to code-only PRs eliminates the conflict class entirely and gives the reviewer a deliberate moment to verify doc updates are consistent with the merged code.
 
-Required bullets, copy-paste shape:
+Required bullet, copy-paste shape:
 
 - **Full harness green at PR open** — `mix format --check-formatted`, `mix compile --warnings-as-errors`, `mix credo --strict` (TODO/FIXME exit-2 carve-out only), `mix sobelow --exit Low`, `mix doctor`, `mix test.json --quiet`, `mix test.json --cover --cover-threshold N` at the repo's coverage tier, and `mix dialyzer` all clean. CI runs the same checks; pre-PR self-validation just shifts the failure round-trip earlier. A red harness on PR open is a blocking acceptance-criterion miss, not a "soft polish" item — see `cloud-agent-environments.md` § "Cursor Cloud → Self-validation expectation" for the per-tool semantics.
-- **ROADMAP.md updated** — task row marked ⬜ → ✅ (or struck through with the new state); Current Focus section refreshed if the completed task affected it; for bundle-entrypoint tasks (e.g. a coverage push that gates downstream tasks), name the entrypoint AND the unblocked dependents in the bullet so the agent updates both
-- **CHANGELOG.md updated** — entry added under `## [Unreleased]` describing what was built and why; no test counts, function counts, or lines-changed tallies (per `task-prioritization.md` § "No counts or stats in entries")
 
-Place these alongside the technical / test acceptance bullets, not as a final note or in `Reviewer note`. They're not optional polish — they're part of the work's done-definition. Without them as explicit acceptance criteria, the `commit-review` reviewer has no grounds to block the PR for stale docs, and ROADMAP drift compounds across multiple delegated PRs (the failure mode that produces ROADMAP rows still showing ⬜ for tasks the corresponding Linear issue closed weeks ago).
+Place this alongside the technical / test acceptance bullets, not as a final note or in `Reviewer note`. The harness gate is part of the work's done-definition.
 
-**Exception:** review-only delegated issues (e.g. a Codex issue whose task is to review another agent's PR and post a verdict comment — see § "Codex-Reviews-Cursor Pattern") produce a verdict, not code. No ROADMAP/CHANGELOG row to update; skip these bullets and add a single bullet for "verdict comment posted on the delegation issue with finding table + acceptance-criteria coverage paragraph."
+**Files agents must NOT modify:** `ROADMAP.md`, `CHANGELOG.md`, `README.md`, `.sobelow-skips`. State this explicitly under § "Out of scope" in the issue body so the agent doesn't include doc updates in the diff. `commit-review` updates these files on `main` after the merge (see § "Code-Only PRs from Cloud Agents" for rationale).
+
+**Exception:** review-only delegated issues (legacy Codex-Reviews-Cursor pattern, currently disabled — see § "Codex-Reviews-Cursor Pattern (Review Delegation)") produce a verdict, not code. No ROADMAP/CHANGELOG row to update; skip the harness bullet and add "verdict comment posted on the delegation issue with finding table + acceptance-criteria coverage paragraph."
 
 ### Workspace-Specific Layout
 
@@ -922,7 +1026,7 @@ Plus ~20 more (milestones, cycles, attachments, documents). Use `ToolSearch` wit
 
 > **🚨 SUSPENDED — code-mutation delegation only (Elixir projects, 2026-05-05).** Codex Cloud's harness has no Elixir/Erlang runtime — `mix`/`iex`/`elixir` not installed, every mix invocation fails with `command not found`. Verified against in-flight cartouche PRs where Codex shipped commits with zero harness evidence. **Do not create new `[CX]` tasks that involve writing or modifying code in an Elixir repo until the Codex Cloud env is restored.** Route all such work to `[CSR]` (Cursor) — Cursor's env has Elixir/OTP and runs the full mix toolchain.
 >
-> **Still permitted:** review-only `[CX]` delegations (e.g. the Codex-Reviews-Cursor pattern in this file). Reading a PR diff and posting a verdict comment doesn't need a runtime. Treat as exception-not-default while the suspension is in force; expect to revisit when the broader env is verified healthy.
+> **No longer permitted:** review-only `[CX]` (Codex-Reviews-Cursor pattern) is also disabled as of 2026-05-06 — see § "Codex-Reviews-Cursor Pattern (Review Delegation)" status callout. Both code-mutation and review-only `[CX]` are paused; do NOT create new `[CX]` issues of either flavor.
 >
 > See `cloud-agent-environments.md` § "Codex Cloud → Code-mutation delegation SUSPENDED" for the verification details and the path back to `[CX]` eligibility once the env is fixed.
 
@@ -948,11 +1052,254 @@ Mark tasks suitable for delegation to Codex with `[CX]`. **Default: tasks meetin
 | Task 81 `[CX]` | 🔄 in-review   | Codex PR open, awaiting review |
 ```
 
+### Code-Only PRs from Cloud Agents
+
+**Cloud-agent PRs touch code + tests only. They do NOT modify `ROADMAP.md`, `CHANGELOG.md`, `README.md`, or `.sobelow-skips`.** These files are owned by `staged-review:commit-review` and updated in a single post-merge follow-up commit on `main`.
+
+**Why:** in the cartouche audit (2026-05-06), 11 of 14 merged PRs touched both `ROADMAP.md` and `CHANGELOG.md`. PR #36 hit `mergeable: CONFLICTING (DIRTY)` against PR #33's earlier merge of the same files — every PR adds a rebase round just to resolve doc conflicts. Centralizing the doc updates in one reviewer-owned commit per PR eliminates the conflict class entirely and gives the reviewer a deliberate moment to verify the updates are consistent with the merged code.
+
+**How to apply (issue body):**
+
+- Under `## Out of scope`, list these files explicitly:
+  > Out of scope: `ROADMAP.md`, `CHANGELOG.md`, `README.md`, `.sobelow-skips`. Reviewer (`staged-review:commit-review`) updates these on `main` after merge — leave them alone.
+- Under `## Acceptance criteria`, do NOT include "ROADMAP.md updated" or "CHANGELOG.md updated" bullets. Only "harness green" + technical acceptance items.
+
+**How to apply (commit-review):** Step 15 of `staged-review:commit-review`'s SKILL.md owns the post-merge follow-up commit. ROADMAP row marked ✅ (preserving the `[CX]` / `[CSR]` marker for history audit); CHANGELOG entry under `## [Unreleased]`; README updated if user-facing functionality changed; one commit, message format `Update docs for PR #M (INE-N)`.
+
+**`.sobelow-skips` exception:** for repos with sobelow line-fingerprint drift (cartouche pattern — see § "Linear GH Auto-Transitions" cross-reference and `staged-review:commit-review` Step 14), the harness fails-loud-with-diff if drift is detected; commit-review applies the regen at merge in the same post-merge commit. Agent never touches the file.
+
+### Bundled Code-Revisions in Bookkeeping Commit (Variant)
+
+The canonical `staged-review:commit-review` Step 14–16 sequence expects the post-merge follow-up commit on `main` to be **doc-only** — ROADMAP / CHANGELOG / README per § "Code-Only PRs from Cloud Agents". This variant uses the same skeleton with **code revisions bundled into that bookkeeping commit**, trading evaluator separation for round-trip-cost savings when push-back is high-cost / low-yield.
+
+**When this variant fires.** All four conditions hold:
+
+- Cloud-agent PR is mostly-good but ships some dead/unwanted code that should NOT block merge.
+- Reviewer's diff to remove the dead code is small enough to land safely without another agent round-trip (rough threshold: same as `task-prioritization.md` § "Ceremony Floor" — ≤ a few small edits, no logic changes, no behavior shift).
+- Pushing back to the agent would cost more than it saves — typically because the verification the agent needs is one **its own harness can't run** (e.g. `mix dialyzer` OOMs in Cursor's cloud VM, no hex.pm in Codex Cloud, no Tidewave anywhere). The agent literally cannot self-validate the fix.
+- The PR contains something **worth keeping** that rejecting the whole PR would drop (a useful spec narrowing, a real fix that landed alongside the noise). If the PR is net-negative, close-without-merging instead.
+
+**The shape.**
+
+1. **Merge the PR as-is** — `gh pr merge --squash --delete-branch` (or repo default policy). Do NOT push back, do NOT close-without-merging.
+2. **One follow-up commit on `main`** that bundles two scopes:
+   - **Code revisions:** drop dead/unwanted code from the merged PR. Standard `Edit`s, no separate branch, no separate PR.
+   - **Standard bookkeeping** (canonical Step 15): ROADMAP row → ✅, CHANGELOG `[Unreleased]` entry, README/cross-ref updates if user-facing.
+   Single commit, single message — frame as `Update docs for PR #N (INE-M) + remove dead X` so the bundled scope is discoverable as an INE-attached follow-up via `git log --grep INE-M`.
+3. **Linear close-out** (canonical Step 16) with one variant-specific addition: the closing comment **explicitly distinguishes what was merged from what was reverted in the bookkeeping commit, and why the agent couldn't have caught it** (env constraint — preserves the no-blame framing). Then flip status → `Done` manually if Linear's auto-transition didn't fire (it only fires on the merge event itself, not on the bookkeeping commit).
+
+**What it preserves vs. canonical.**
+
+- **Evaluator separation:** implementer (Cursor / Codex) ≠ reviewer (this session) ≠ merger-of-truth (this session, but via `git` not via "approve PR + merge"). The reviewer DOES grade the merged work this time — that's the trade — but it's grading against a hard ground truth (dialyzer / hex / live-data) which is harder to fake than self-review.
+- **INE traceability:** the bookkeeping commit's body still names PR #N (INE-M), so `git log --grep INE-M` still surfaces the full story (PR + bundled revisions).
+- **Touched-file scope rule:** the dropped code is on files PR #N already touched — this is `critical-rules.md` § "FIX HOOK-FLAGGED ISSUES ON FILES YOU TOUCH" applied transitively to a merged PR's touched files. Doesn't widen scope to untouched files.
+
+**What it loses vs. canonical.**
+
+- **PR diff drift on GitHub:** anyone reading `gh pr view N` sees the original PR's diff (including the dead code that no longer exists on `main`). Mitigation: the closing comment on Linear documents the divergence explicitly. Cross-readers reach Linear before GitHub for in-flight context.
+- **Revert atomicity:** `git revert <bookkeeping-sha>` reverts both the doc updates AND the code revisions. Acceptable only because the doc updates describe the merged code (and the revisions to it) — they're not independently meaningful. If the doc updates and the code revisions are about genuinely independent things, split into two commits.
+
+**When NOT to use this variant.**
+
+- The dead/unwanted code is large enough that the diff would be reviewable as its own PR → push back via `@cursor` / `@codex` Linear comment instead (see § "Wake-Mention Discipline" + § "Push-Back-vs-Fix-Locally Matrix by Agent").
+- The agent CAN run the necessary verification on its branch (Cursor for hex-API, either agent for stdlib-only). No env constraint → no excuse to skip push-back.
+- The PR is net-negative — useful core but the noise outweighs it. Close-without-merging and ask the agent to retry with tighter scope.
+- The user has explicitly said "always push back" in this session.
+
+**Cross-references:**
+
+- Inbound: § "Code-Only PRs from Cloud Agents" — establishes the doc-only post-merge baseline this variant extends.
+- Inbound: `staged-review:commit-review` Step 14–16 — canonical sequence; variant uses the same skeleton with bundled code revisions.
+- Outbound: `delegation-rules.md` § "NEVER PUSH TO A CLOUD-AGENT'S BRANCH" — the variant explicitly avoids amending the agent's branch; revisions land on `main` only.
+- Outbound: § "Push-Back-vs-Fix-Locally Matrix by Agent" — the worth-it heuristic for choosing this variant vs. push-back lives there.
+- Outbound: `task-prioritization.md` § "Ceremony Floor" — the size threshold ("small enough to bundle") is the same shape as the floor's correctness × size axis.
+
+### Plan-Shaped Linear Task Specs
+
+**Linear specs handed to cloud agents are plan-shaped, not roadmap-shaped.** Same distinction as `task-writing.md`'s prompt-vs-plan split: ROADMAP rows are durable cross-instance prompts (vague enough to survive codebase changes); a Linear task delegated to a cloud agent is a single-instance, single-shot consumer — same shape as a `/plan` file.
+
+Cloud agents do NOT carry context across sessions. Each pickup is a fresh session that reads the issue body once, implements once, and stops. Roadmap-shaped vagueness — "add X to the auth module" — burns round-trips because the agent has to rediscover paths, contracts, and conventions each round. INE-19's 7 round-trips on cartouche are partly an artifact of this — TODO-marker stripping, panic-table mislabel, doctest flake, and spec-nil-handling were all caused by missing context the spec didn't pin.
+
+**Template (paste into the Linear issue body alongside the existing `## Context` / `## Task` / `## Acceptance criteria` structure):**
+
+```markdown
+## Files to modify
+- `lib/foo/bar.ex` — add function `do_thing/2` with spec `(integer(), Keyword.t()) :: {:ok, term()} | {:error, atom()}`
+- `test/foo/bar_test.exs` — assert success path + 2 error paths (`:invalid_input`, `:not_found`)
+
+## Files to NOT modify
+- `ROADMAP.md`, `CHANGELOG.md`, `README.md` (commit-review handles post-merge)
+- `.sobelow-skips` (auto-regenerated; commit-review applies regen at merge)
+
+## Env constraints
+- Codex Cloud: no hex.pm, no Tidewave, no internet. Use stdlib + already-installed deps.
+- Cursor Cloud: hex.pm + internet OK; mix tasks OK. Tidewave NOT reachable.
+
+## Success criteria
+- `mix test.json --quiet --failed` returns 0 failures on touched files
+- `mix credo --strict` shows 0 issues
+- `mix dialyzer` 0 warnings
+- Full harness green per § "Mandatory Acceptance-Criteria Bullets"
+- PR title includes `(INE-N)`; PR opened non-draft (see § "Linear GH Auto-Transitions")
+```
+
+The four sections (`Files to modify`, `Files to NOT modify`, `Env constraints`, `Success criteria`) are load-bearing. Skip any of them and the agent fills the gap with assumptions — usually wrong assumptions that cost a round-trip.
+
+**Cross-reference:** `task-writing.md` § "Plan mode files include / exclude" — the rules that apply to local `/plan` files apply identically to Linear task bodies for cloud agents. Same shape of artifact, same single-instance consumption pattern, same need for concrete paths + contracts + reuse pointers.
+
+Before submitting a batch of N≥2 plan-shaped issues, run the check in § "Pre-Flight Conflict Detection (Batch Delegation)" below — the `## Files to modify` block IS the input to that check. Plan-shape is the prerequisite; pre-flight is the gate.
+
+### Pre-Flight Conflict Detection (Batch Delegation)
+
+**The bottleneck this fixes.** Cartouche batch (PRs 42-51, 9 Descripex annotation issues opened within 19 min, 2026-05-06): 4 of 9 PRs touched `lib/cartouche.ex` (the Descripex-modules registry) → 3 already conflicting, 4-hour merge lag on PR #42 with no logic change shipped, queue serialized into rebase churn. Per-task local effort was ~10 min. The delegation cost more than the work.
+
+**Empirical caveat:** the `<30 min`, `<90 min batch`, `≥4 batch` thresholds rest on the same 2026-05-06 cohort (PRs 42-51, n=9 isomorphic Descripex annotation issues). Heuristic, not measured across diverse projects — treat as a starting calibration to revisit after the next batch with different task shape.
+
+**The check.** Before any `mcp__linear-server__save_issue` call that would create a delegated issue, scan the existing open queue + the candidate set for file-overlap on coordination-tier files. Specifically:
+
+- Trigger 1: a batch of N≥2 candidate `delegate ∈ { Codex, Cursor }` issues being created in this session.
+- Trigger 2: a single new delegated issue when ≥2 open delegated issues already exist in `Todo` / `Backlog` for this project.
+
+The check consumes the `## Files to modify` block defined in § "Plan-Shaped Linear Task Specs" — which is why plan-shape is load-bearing for batch delegation, not just "a nice-to-have."
+
+**Mechanism:**
+
+```
+filter (existing queue):
+  project = <current>
+  status ∈ { Todo, Backlog }
+  delegate ∈ { Codex, Cursor }
+
+then:
+  parse `## Files to modify` from each issue body (existing + candidates)
+  build a touch matrix: file → [issues touching it]
+  classify each shared-file overlap:
+    coordination-tier  if file ∈ project's coordination set
+    ordinary           otherwise
+```
+
+**Coordination-tier signals** (project-overridable; default heuristic):
+
+- `lib/<app>.ex` — top-level public API / registry module
+- `mix.exs` — deps, version, aliases
+- `config/config.exs`, `config/runtime.exs` — config registry
+- `lib/<app>_web/router.ex` — Phoenix route registry
+- `lib/<app>/application.ex` — supervisor children list
+- Any file that appears in 3+ historical merged PRs in this project (run `flow-stats.sh` — see § Tooling — or `git log --pretty=format: --name-only` to identify)
+
+**Decision tree on overlap (priority order):**
+
+1. **(a) Isomorphic tasks + shared coordination file** → recommend **bundle into 1 issue** ("annotate all N modules in one PR"). Cursor opens 1 PR, registry edited once, no fan-out, no rebase cascade. *Cartouche example: 9 Descripex annotation issues → 1 "Annotate all 9 modules with Descripex" issue.*
+2. **(b) Real overlap, non-isomorphic, coordination cost <30% of total task effort** → recommend **extract a serializer issue**. Peer issues touch only their own files; the serializer issue (final in chain) does the registry edit and is `blockedBy` all peers. Cursor produces N peer PRs in parallel + 1 serializer PR after they all merge.
+3. **(c) Small per-task effort (<30 min) AND batch size ≥4 AND any shared file** → recommend **do locally**. Local sequential beats parallel-cloud-agent under these conditions; the delegation overhead exceeds the work.
+4. **(d) No conflict, OR overlap only on non-coordination files** → proceed with N parallel issues.
+
+**Worth-it heuristic — when delegation pays vs. when local Claude Code wins:**
+
+Delegation pays when:
+- Per-task effort ≥ 30 min, OR batch local-effort ≥ 90 min total
+- AND tasks are independent (no shared coordination file) OR can be restructured (bundle / serializer extract)
+- AND reviewer attention isn't already saturated by other in-flight queues
+
+Local Claude Code wins when:
+- Per-task effort < 30 min AND batch ≥ 4 AND any shared coordination file in the matrix
+- OR total batch local-effort < 90 min regardless of overlap (sub-90min batches don't recoup delegation overhead — Cursor average startup + first-push round is ~10 min, so a 60-min batch barely breaks even, and conflict cascade pushes it underwater)
+- OR the user has explicitly capped reviewer-attention budget for the day
+
+Output of the check is **always a recommendation + a decision request**. Workflow surfaces the touch matrix and the recommended action; user chooses bundle / serializer / local / proceed-anyway. Never silently refuses (too paternalistic), never silently proceeds (defeats the rule).
+
+**Surfacing format (one-line per shared file + recommendation):**
+
+```
+Pre-flight check (4 candidate issues, 2 already in Todo):
+
+Shared coordination files:
+  lib/cartouche.ex            6 issues touch this (registry append)
+                              [coordination-tier — registry pattern]
+
+Recommendation: BUNDLE
+  Tasks are isomorphic (Descripex annotation, append to @descripex_modules).
+  Estimated per-task effort: ~10 min. Estimated total: ~60 min.
+  Suggested bundle: "Annotate Cartouche.Foo, Bar, Baz, Qux, V1, V2 with Descripex"
+  Alternative: do locally (~60 min in this session) → no Linear, no Cursor, no rebase cascade.
+
+Proceed how? [bundle / serializer / local / parallel-anyway / cancel]
+```
+
+**Cross-references:**
+
+- Inbound: § "Plan-Shaped Linear Task Specs" — `## Files to modify` is the input format.
+- Outbound: § "Merge-Train Mode (`flow-review`)" — when (d) applies and N parallel issues genuinely warrant parallel implementation, merge-train handles the review-side cost.
+- Outbound: `task-prioritization.md` § "Ceremony Floor" — similar shape: cost-benefit gate; the ceremony floor governs review-time tracking, this gate governs delegation-time creation.
+
+### Linear GH Auto-Transitions (workspace-level config)
+
+**Linear's GitHub integration can auto-transition issues based on PR events, but the auto-transitions are workspace-config, not on by default.** Without configured rules, agents transition status manually — observed in cartouche INE-19 where the 3-second offset between PR #36 merge and issue completion was the agent reacting to user instruction, not the integration firing.
+
+Configured auto-transitions eliminate two per-PR friction points the cartouche audit confirmed are universal:
+
+- Manual `Todo` → `In Progress` flip when PR opens
+- Manual `In Review` → `Done` flip when PR merges + manual close-out comment posted by an agent on user instruction
+
+**One-time setup (workspace admin):**
+
+1. Linear → **Workspace settings → Integrations → GitHub** → confirm the org is connected (e.g. `ZenHive`).
+2. Linear → **Workspace settings → Workflow** (or Team-scoped if narrower) → enable auto-transitions:
+   - **PR opened (non-draft)** on a branch tied to an issue → status `In Progress`
+   - **PR merged to default branch** on a branch tied to an issue → status `Done`
+3. Verify with a test PR: open a tiny PR on a branch named `INE-N-…` (substitute a real issue ID), confirm Linear flips to `In Progress` within ~10 sec; merge, confirm `Done` within ~10 sec.
+
+**Why drafts matter:** the integration's "PR opened (non-draft) → In Progress" rule explicitly excludes drafts. If agents open PRs with `gh pr create --draft`, the transition doesn't fire until the PR is undrafted — and the cartouche audit (PR #36) showed drafts sat for ~31 minutes before manual flip. Two complementary fixes:
+
+- **Agents stop opening drafts.** Set this in the issue body's `## Reviewer note` and in the per-flow guidance above (Cursor Delegation Flow Step 2 already updated). Cursor's `gh pr create` should not pass `--draft`.
+- **`commit-review` Step 4 auto-undrafts** via `gh pr ready` when CI is green AND the PR is still draft. Conservative — never flip a still-running or failing PR.
+
+Both gates protect against partial fixes — if one doesn't take effect (agent template drift, CI not yet green), the other still narrows the manual surface.
+
+### ROADMAP-Fallback Flow (projects without Linear)
+
+**ROADMAP.md is source of truth in all delegation flows; Linear is a queue *view* on top of it, not a replacement.** Projects that don't use Linear — or temporarily can't reach the Linear MCP — still run the same delegation pattern via `[CX]` / `[CSR]` markers in ROADMAP.md rows directly.
+
+**Pickup signal without Linear:**
+
+- Cloud agents poll ROADMAP.md for rows with `[CX]` / `[CSR]` markers and `⬜` status (or matching their delegate field).
+- Reviewer (this Claude Code session via `staged-review:commit-review`) discovers PRs via `gh pr list --state open` filtered to cloud-agent branch prefixes (`codex/`, `cursor/`).
+- Status updates are ROADMAP edits in the post-merge commit (Step 15 of commit-review): `🔄` → `✅` plus the marker preserved.
+
+**What changes vs the Linear-backed flow:**
+
+- No `mcp__linear-server__*` calls anywhere. Skip Step 16 (Linear close-out) of commit-review entirely.
+- No Linear `@cursor` / `@codex` push-back channel — push-back goes on the GitHub PR review (line-level findings + scope paragraph in one PR comment), per the wake-mention discipline rules adapted to PR-only.
+- No issue body — the ROADMAP row's prompt + the project's CLAUDE.md is the agent's full context. This pushes more weight onto ROADMAP rows being plan-shaped (see § "Plan-Shaped Linear Task Specs" — the same template applies, just lives in ROADMAP).
+
+**What stays identical:**
+
+- Code-only PRs (agent never touches ROADMAP/CHANGELOG/README).
+- Plan-shaped task specs.
+- Post-merge bookkeeping commit on `main` (Step 15) — ROADMAP + CHANGELOG + README updates.
+- Draft-PR handling (commit-review Step 4 still auto-undrafts; agents still asked to skip `--draft`).
+- Bot ensemble (CodeRabbit, Copilot, Codex GitHub bot) integration in commit-review Step 8.4.
+
+Use this fallback when the project hasn't onboarded Linear, when Linear is intentionally out-of-scope (e.g. a one-off public-repo contribution), or as a safety net during Linear MCP outages. The reviewer skill works either way — Linear is an upgrade-path, not a hard dependency.
+
+### Tooling
+
+**`~/.claude/scripts/flow-stats.sh`** — reconstruct cloud-agent PR delegation-flow stats from GitHub timeline events. Quantifies the dimensions this workflow optimizes (round count via `head_ref_force_pushed`, draft time via `convert_to_draft`/`ready_for_review`, time-to-first-review, merge lag, reviewer breakdown).
+
+```bash
+~/.claude/scripts/flow-stats.sh <PR#> [--repo OWNER/REPO] [--json]
+~/.claude/scripts/flow-stats.sh https://github.com/OWNER/REPO/pull/<PR#>
+```
+
+Auto-detects `--repo` from current git dir. Use after a cloud-agent PR merges to verify the workflow is actually reducing round-trips (target: 1-2 force-pushes, draft time → 0, merge lag low). Linear-side augmentation (issue create→done timestamps, comment turnaround) is intentionally not in the script — MCP isn't bash-callable; invoke from a Claude session and ask Claude to layer `mcp__linear-server__list_comments` + `get_issue` data when needed.
+
 ### Cross-References
 
-- `task-writing.md` — body-as-prompt principle (issue bodies follow the same rule as ROADMAP rows)
-- `critical-rules.md` § "DON'T AUTO-MERGE PRS" — `In Review` → user-merge boundary
+- `task-writing.md` — body-as-prompt principle (issue bodies follow the same rule as ROADMAP rows); plan-shape vs roadmap-shape distinction
+- `task-prioritization.md` § "Ceremony Floor" — review-time cost-benefit gate; § "Pre-Flight Conflict Detection" is the delegation-time analogue
+- `critical-rules.md` § "DON'T AUTO-MERGE PRS" — `In Review` → user-merge boundary; commit-review's user-confirmed merge step preserves this; merge-train mode preserves it identically (cascade is reviewer-side, merge stays user-side)
 - `critical-rules.md` § "NEVER COMMIT WITHOUT EXPLICIT REQUEST" — local review verdict is informational, not merge authorization
+- `delegation-rules.md` § "NEVER PUSH TO A CLOUD-AGENT'S BRANCH" — push-back is the default; merge-train mode's "Rebase-only carve-out" is the only authorized exception, scoped to mechanical conflict resolution
 - `workflow-philosophy.md` § "Implementer / Reviewer Handoff" — the handoff shape Linear+cloud-agent implements
 
 <!-- @-import: ~/.claude/includes/cloud-agent-environments.md -->
@@ -2271,6 +2618,447 @@ mix test.json --quiet --include integration
 ```
 
 No manual setup needed — env vars are already set in the shell profile. Tests that need Sepolia (e.g., MPP EVM integration tests) read these automatically.
+
+<!-- @-import: ~/.claude/includes/reach.md -->
+## Reach: Program Dependence Graph for Elixir
+
+Builds PDG/SDG from Elixir, Erlang, Gleam, or compiled BEAM. Backward/forward slicing, taint analysis, independence checks, dead-code detection, OTP state-machine analysis, `mix reach` HTML viz.
+
+**Min version: `{:reach, "~> 2.2"}`** (pin floor `~> 2.0.1` — `2.0.0` is uninstallable from Hex due to `ex_ast` dep-scope bug fixed in 2.0.1; use `~> 2.2` for the latest smell surface).
+
+**2.0 (breaking) — Canonical CLI.** Five commands replace the 16 legacy tasks: `mix reach.map`, `reach.inspect TARGET`, `reach.trace`, `reach.check`, `reach.otp`. Legacy task names fail fast with migration hints (no analysis runs). New `.reach.exs` architecture policy file (`layers`, `deps[:forbidden]`, `source[:forbidden_modules]`/`forbidden_files`, `calls[:forbidden]`, `effects[:allowed]`, `boundaries[:public]`/`internal`/`internal_callers`, `risk[:changed]`, `candidates`, `smells`, `tests`) drives `mix reach.check --arch`/`--changed`/`--candidates`. Advisory refactoring candidates: `introduce_boundary`, `isolate_effects`, `extract_pure_region`, `break_cycle` — each with `confidence`, `actionability`, `proof`, and (for cycles) `representative_calls`. Large new smell-check surface: collection/idiom (`Enum.reverse |> hd`, `Enum.reverse ++ tail`, chained `String.replace`, `Map.keys |> Enum.map`, `List.to_tuple |> elem`, redundant `Enum.join("")`, anon-fn `.()` in pipes, …); pipeline waste (`Enum.reverse |> Enum.reverse`, `filter |> count`, `map |> count`, `filter |> filter`, `sort |> take/reverse/at`, `drop |> take`, …); loop antipatterns (`++`/`<>` inside loop O(n²), manual reduce min/max/sum/frequency); idiom mismatch (guard equality where pattern-match suffices, `Map.update` then `Map.get` on same var); repeated map shape detection; behaviour candidates; compile-time vs runtime config (`Application.get_env`/`fetch_env` in module attrs, `compile_env` inside runtime fns); ExAST-backed pattern smell DSL (`use Reach.Smell.PatternCheck`, `smell ~p[...]`, guarded via `from(~p[...]) |> where(...)`). Umbrella source scanning includes `apps/*/lib/**/*.ex`. Optional `:boxart` bumped to `~> 0.3.3` for Unicode-safe syntax highlighting. Taint-tracing dropped from ~130s → ~3s on Plausible (per-source reachability instead of per-pair recomputation). The **programmatic API** (`Reach.file_to_graph!`, `string_to_graph`, `module_to_graph`, `ast_to_graph`, `backward_slice`, `forward_slice`, `chop`, `taint_analysis`, `dead_code`, `Reach.Plugin` behaviour, `Reach.Project`, `Reach.Frontend.JavaScript`, `Reach.Plugins.QuickBEAM`) is **unchanged in 2.x** — only the CLI surface broke.
+
+**2.0.1 — critical hotfix.** `ex_ast` was declared `only: [:dev, :test]`, which made Reach uninstallable from Hex (pattern smell checks `import ExAST` at compile time). Pin `~> 2.0.0` literally fails. Pin must be `~> 2.0.1`+; recommend `~> 2.2`. Also tightened the smell surface: 63% fewer findings on a 19-package Hex sample, all remaining verified true positives.
+
+**2.1 — new smells.** `Enum.at`/`List.delete_at` inside loops (O(n²)); `Enum.count/1` (no predicate) → `length/1` (avoids protocol dispatch); `Map.put` with variable key + boolean value → `MapSet` (membership tracking); `Map.values |> Enum.all?/any?/find/filter/map` → iterate `{key, value}` pairs; `Enum.map → Enum.max/min/sum` (allocates intermediate list); `List.foldl/3` → `Enum.reduce/3`; `String.graphemes |> Enum.reverse |> Enum.join` → `String.reverse/1`; redundant negated guard (`when x != y` immediately after `when x == y`); destructure-then-reconstruct (`[a, b, c]` rebuilt as same list). Frontend crash fixes: `import Mod, only: :macros` (atom values), bare atoms in `with` clause lists, non-list `else`/handler clauses.
+
+**2.2 — polish.** `length(list) == 0`/`0 == length(list)`/`length(list) > 0` → list pattern matching, `== []`, or `!= []`; identity `Enum.uniq_by(coll, fn x -> x end)` → `Enum.uniq/1`; identity `Enum.sort_by(coll, fn x -> x end)` → `Enum.sort/1`; small-literal `length/1` comparisons in guards. Regression coverage for bare literal `with` clauses (e.g. `true`).
+
+**1.8 — OTP-aware analyzer.** `mix reach.otp` (now `mix reach.otp` in 2.x — name unchanged) gained: gen_statem support (both `:state_functions` and `:handle_event_function` modes, with initial states, transition graph, event types per state); dead GenServer reply detection (`GenServer.call` where the reply is discarded — candidates for `cast`); cross-process coupling (flags `GenServer.call`/`cast` where caller and callee share ETS tables or process-dictionary keys, conflict type `callee_writes` or `callee_reads_caller_write`); supervision tree extraction (resolves `Supervisor.start_link(children, opts)` child references). ~1000× speedup on the OTP analysis. Smell-detection false-positive fixes (cons `|`, string-interp `to_string`, unrelated `Enum.map`/`List.first` pairs).
+
+**1.7 — JavaScript frontend + cross-language plugin.** `Reach.Frontend.JavaScript` parses JS/TS via QuickBEAM bytecode disasm into Reach IR. `Reach.Plugins.QuickBEAM` stitches Elixir ↔ JS through `QuickBEAM.eval`/`QuickBEAM.call` sites with edges `:js_eval`, `{:js_call, name}`, `:beam_call`. New `analyze_embedded/2` plugin callback. File I/O effects split (`File.read`/`stat`/`exists?` → `:read`; `File.write`/`cp`/`rm`/`mkdir` → `:write`). Dead-code false positives near-zero (fixed pre-existing `with do ... end` body translation bug).
+
+**1.6 — unified target format.** `reach.slice`/`impact`/`deps`/`graph` (now `reach.trace`/`reach.inspect --impact`/`--deps`/`--graph` in 2.x) all accept both `Module.function/arity` and `file:line`. 100–500× faster function resolution.
+
+**1.5 — codebase-scope analyses.** Seven project-level commands added (`coupling`, `hotspots`, `depth`, `effects`, `xref`, `boundaries`, `concurrency`) — all subcommands of `mix reach.map` in 2.x.
+
+**Caveat:** `dead_code` false positives are near-zero in 1.7+ but not zero — treat output as hint material, not a worklist.
+
+**Does NOT cover:** runtime execution (static only), type inference (→ Dialyzer), dep security audit (→ Sobelow, npm_ex audit).
+
+### Two Frontends
+
+Both capture dynamic dispatch. Remaining differences:
+
+| | Source (`file_to_graph!`, `string_to_graph`) | BEAM (`module_to_graph`) |
+|---|---|---|
+| Dynamic dispatch (`fn_var.(args)`, `state.handler.(args)`) | Captured as `kind: :dynamic` (since 1.3) | Captured as `kind: :dynamic` |
+| Macro-expanded code | Invisible | Visible |
+| `use GenServer` generated callbacks | Invisible | Visible |
+| Source spans | Always available | Always available (normalized in 1.3) |
+| `Reach.Project` cross-module SDG | **Supported** | **Not supported** — `Reach.Project` is source-only |
+| Scope | Single file or project glob | Single module |
+
+**Use BEAM when:** you need macro expansion or `use GenServer`-generated callbacks. Otherwise source is faster, supports project-wide SDG, and handles dynamic dispatch correctly.
+
+### Building a Graph
+
+```elixir
+graph = Reach.file_to_graph!("lib/my_module.ex")
+{:ok, graph} = Reach.string_to_graph("def foo(x), do: x + 1")
+{:ok, graph} = Reach.file_to_graph("src/my_module.erl")    # Erlang
+{:ok, graph} = Reach.file_to_graph("src/app.gleam")        # Gleam (needs glance)
+{:ok, graph} = Reach.ast_to_graph(ast)                     # pre-parsed
+{:ok, graph} = Reach.module_to_graph(MyApp.Accounts)       # BEAM — macros + generated callbacks
+
+# Whole project (source frontend only)
+project = Reach.Project.from_mix_project()
+project = Reach.Project.from_glob("lib/**/*.ex")
+
+# 1.7+: JavaScript — returns IR nodes (NOT a graph), consumed by Reach.Plugins.QuickBEAM
+{:ok, js_nodes} = Reach.Frontend.JavaScript.parse("function f(x) { return x + 1 }")
+{:ok, js_nodes} = Reach.Frontend.JavaScript.parse_file("priv/handler.js")
+```
+
+### Structural Queries
+
+```elixir
+Reach.nodes(graph)
+Reach.nodes(graph, type: :call, module: :gun, function: :ws_send)
+Reach.nodes(graph, type: :call, kind: :dynamic)
+Reach.nodes(graph, type: :function_def, name: :handle_info)
+
+# node.type         :call | :function_def | :var | :match | :case | ...
+# node.meta         %{module:, function:, arity:, kind: :remote | :local | :dynamic}
+# node.source_span  %{file:, start_line:, ...}
+# node.id           opaque handle for slice/taint
+```
+
+### Slicing
+
+```elixir
+Reach.backward_slice(graph, node.id)              # what affects this node?
+Reach.forward_slice(graph, node.id)               # what does this node affect?
+Reach.chop(graph, source_id, sink_id)             # all paths A→B
+Reach.context_sensitive_slice(graph, node.id)     # Horwitz-Reps-Binkley interprocedural
+Reach.Project.taint_analysis(project, ...)        # project-level (source)
+```
+
+### Taint Analysis
+
+```elixir
+# Single-graph — result: %{source:, sink:, path: [node_id], sanitized: bool}
+results = Reach.taint_analysis(graph,
+  sources: [type: :call, function: :params],
+  sinks: [type: :call, module: System, function: :cmd],
+  sanitizers: [type: :call, function: :sanitize]
+)
+
+# Cross-module (source frontend; dynamic-dispatch sinks reachable)
+Reach.Project.taint_analysis(project,
+  sources: [type: :call, function: :params],
+  sinks: &(&1.type == :call and &1.meta[:kind] == :dynamic)
+)
+```
+
+Source/sink/sanitizer specs: keyword list (matched against `node.type` + `node.meta`) or predicate `(node -> boolean)`.
+
+### Independence / Reordering
+
+```elixir
+Reach.independent?(graph, a.id, b.id)                    # safe to reorder?
+Reach.depends?(graph, id_a, id_b)
+Reach.data_flows?(graph, source_id, sink_id)
+Reach.passes_through?(graph, source_id, mid_id, sink_id)
+Reach.controls?(graph, control_id, controlled_id)
+Reach.canonical_order(graph, node_ids)                   # topo-sort
+```
+
+Two public GenServer client functions on the same PID correctly report `independent?: false` (they mutate shared server state).
+
+### Effects
+
+```elixir
+Reach.pure?(node)
+Reach.classify_effect(node)       # :pure | {:io, ...} | {:send, ...} | ...
+Reach.Effects.classify(node)
+Reach.Effects.effectful?(node, kind)
+Reach.Effects.conflicting?(a, b)
+```
+
+Built-in classification covers Enum, Map, String, Process, :ets, :code, Node, System, 30+ more. **1.5** reclassifies many stdlib calls correctly (`Enum.each` → `:io`, `Application.get_env` → `:read`, `:atomics`/`:counters`/`:persistent_term` → `:read`/`:write`), adds Access/Calendar/Date/Time as pure, and infers effects of local functions via fixed-point iteration. On Elixir 1.19+ it reads the `ExCk` BEAM chunk for compiler-inferred type signatures (gracefully disabled on older Elixir).
+
+**Plugin `classify_effect/1` callback (1.5):** plugins teach the classifier about framework calls. All 8 built-ins implement it — Phoenix assigns/route helpers → `:pure`, Ecto queries → `:pure`, Repo reads → `:read`, writes → `:write`, Oban `insert` → `:write`, GenStage/Jido signal dispatch → `:send`, OpenTelemetry spans → `:io`, Jason → `:pure`.
+
+**Alias/import/field access (1.5):** `alias Plausible.Ingestion.Event; Event.build()` now resolves correctly (incl. `:as`, multi-alias `{}`). `import Ecto.Query` then bare `from(...)` resolves to `Ecto.Query.from` (honours `:only`/`:except`). `socket.assigns`, `conn.params`, `state.count` are tagged `kind: :field_access` (pure) instead of fake remote calls. Compile-time noise (`@doc`, `use`, `::`, `__aliases__`) is classified `:pure` instead of `:unknown`.
+
+### Dead Code
+
+```elixir
+for node <- Reach.dead_code(graph) do
+  IO.warn("#{node.source_span.start_line}: unused #{node.type}")
+end
+```
+
+1.3 cut false positives ~91% on real codebases (Phoenix 628→58) via fixed-point alive expansion, branch-tail return tracing, guard exclusion, comprehension generator/filter exclusion, impure-module blocklist (Process, :code, :ets, Node, System, …), typespec exclusion, impure-call descendant marking. Still a hint source — verify before deleting.
+
+### Canonical CLI (`mix reach.*`, 2.0+)
+
+Five commands replace the 16 legacy tasks. `--format text` (default, colored), `json`, or `oneline`. ANSI auto-disables when piped. Analysis commands accept a positional path filter where applicable (e.g. `mix reach.map lib/my_app/`).
+
+**`mix reach.map`** — project bird's-eye view.
+
+```bash
+mix reach.map                                # default: modules summary
+mix reach.map --modules                      # inventory, OTP/LiveView detection
+mix reach.map --coupling --sort instability  # afferent/efferent, Martin's instability, cycles
+mix reach.map --coupling --orphans           # unreferenced modules
+mix reach.map --hotspots                     # complexity × caller count (with clause breakdown)
+mix reach.map --depth --top 20               # dominator-tree depth (control-flow nesting)
+mix reach.map --effects                      # effect distribution + top unclassified calls
+mix reach.map --boundaries --min 2           # functions with multiple distinct side effects
+mix reach.map --data                         # cross-function data flow via SDG
+```
+
+**`mix reach.inspect TARGET`** — target-local view. `TARGET` accepts `Module.function/arity` or `file:line`.
+
+```bash
+mix reach.inspect MyApp.Accounts.register/2 --context
+mix reach.inspect MyApp.Accounts.register/2 --deps        # direct callers, callee tree, shared writers
+mix reach.inspect MyApp.Accounts.register/2 --impact      # transitive callers, risk
+mix reach.inspect MyApp.Accounts.register/2 --data --variable user
+mix reach.inspect MyApp.Accounts.register/2 --why MyApp.Auth.login/1
+mix reach.inspect MyApp.Accounts.register/2 --candidates  # advisory refactoring (see below)
+mix reach.inspect lib/my_app/accounts.ex:45 --graph
+```
+
+**`mix reach.trace`** — taint flow + slicing.
+
+```bash
+mix reach.trace --from conn.params --to Repo                        # taint
+mix reach.trace --from conn.params --to System.cmd --all
+mix reach.trace --variable token --in MyApp.Auth.login/2            # variable trace
+mix reach.trace MyApp.Accounts.register/2                           # backward slice (default)
+mix reach.trace lib/my_app/accounts.ex:45 --forward                 # forward slice
+```
+
+**`mix reach.check`** — CI / release-safety gates.
+
+```bash
+mix reach.check --arch                       # validate against .reach.exs policy
+mix reach.check --changed --base main        # changed-risk report (callers, public-API touches, suggested tests)
+mix reach.check --dead-code                  # unused pure expressions
+mix reach.check --smells                     # the full smell surface (see below)
+mix reach.check --candidates                 # advisory refactoring candidates
+```
+
+**`mix reach.otp`** — OTP / process analysis.
+
+```bash
+mix reach.otp                                # GenServer + gen_statem state machines, supervision trees,
+                                             # ETS/process-dict coupling, dead replies, missing handlers
+mix reach.otp MyApp.Worker                   # scope to one module
+mix reach.otp --concurrency                  # Task.async/await, monitors, spawn/link, supervisor topology
+mix reach.otp --format json
+```
+
+**Terminal rendering (`--graph`, requires `{:boxart, "~> 0.3.3"}`):**
+
+```bash
+mix reach.inspect MyApp.Server.handle_call/3 --graph        # CFG with highlighted source
+mix reach.inspect MyApp.Server.handle_call/3 --graph --call-graph
+mix reach.map --coupling --graph                            # module dependency graph
+mix reach.map --depth --graph                               # CFG of deepest function
+mix reach.map --effects --graph                             # effect distribution
+mix reach.otp --graph                                       # GenServer state diagrams
+```
+
+Without boxart, `--graph` exits cleanly with a message asking you to add it. 0.3.3 is required for Unicode-safe syntax highlighting.
+
+### Migration from 1.x
+
+Legacy tasks fail fast in 2.x with the migration hint — they don't run analysis.
+
+| 1.x                              | 2.x                                       |
+|----------------------------------|-------------------------------------------|
+| `mix reach.modules`              | `mix reach.map --modules`                 |
+| `mix reach.coupling`             | `mix reach.map --coupling`                |
+| `mix reach.hotspots`             | `mix reach.map --hotspots`                |
+| `mix reach.depth`                | `mix reach.map --depth`                   |
+| `mix reach.effects`              | `mix reach.map --effects`                 |
+| `mix reach.boundaries`           | `mix reach.map --boundaries`              |
+| `mix reach.xref`                 | `mix reach.map --data`                    |
+| `mix reach.deps TARGET`          | `mix reach.inspect TARGET --deps`         |
+| `mix reach.impact TARGET`        | `mix reach.inspect TARGET --impact`       |
+| `mix reach.slice TARGET`         | `mix reach.trace TARGET`                  |
+| `mix reach.flow ...`             | `mix reach.trace ...`                     |
+| `mix reach.dead_code`            | `mix reach.check --dead-code`             |
+| `mix reach.smell`                | `mix reach.check --smells`                |
+| `mix reach.graph TARGET`         | `mix reach.inspect TARGET --graph`        |
+| `mix reach.concurrency`          | `mix reach.otp --concurrency`             |
+
+### `.reach.exs` Architecture Policy (2.0+)
+
+Drives `mix reach.check --arch`/`--changed`/`--candidates`/`--smells`. The file evaluates to a keyword list. Patterns are module-name strings with `*` wildcards.
+
+```elixir
+# .reach.exs
+[
+  layers: [
+    web: "MyAppWeb.*",
+    domain: "MyApp.*",
+    data: ["MyApp.Repo", "MyApp.Schemas.*"]
+  ],
+  deps: [forbidden: [{:domain, :web}, {:data, :web}]],
+  source: [
+    forbidden_modules: ["MyApp.Legacy.*"],
+    forbidden_files: ["lib/my_app/legacy/**"]
+  ],
+  calls: [
+    forbidden: [
+      {"MyApp.Domain.*", ["IO.puts", "Jason.encode!"]},
+      {"MyApp.Workers.*", ["System.cmd"], except: ["MyApp.Workers.Cleanup"]}
+    ]
+  ],
+  effects: [allowed: [{"MyApp.Pure.*", [:pure, :unknown]}]],
+  boundaries: [
+    public: ["MyApp.Accounts"],
+    internal: ["MyApp.Accounts.Internal.*"],
+    internal_callers: [
+      {"MyApp.Accounts.Internal.*", ["MyApp.Accounts", "MyApp.Accounts.*"]}
+    ]
+  ],
+  risk: [
+    changed: [
+      many_direct_callers: 5,
+      wide_transitive_callers: 10,
+      branch_heavy: 8,
+      high_risk_reason_count: 3
+    ]
+  ],
+  candidates: [
+    thresholds: [mixed_effect_count: 2, branchy_function_branches: 8, high_risk_direct_callers: 4],
+    limits: [per_kind: 20, representative_calls: 10, representative_calls_per_edge: 3]
+  ],
+  clone_analysis: [provider: :ex_dna, min_mass: 30, min_similarity: 1.0, max_clones: 50],
+  smells: [
+    fixed_shape_map: [min_keys: 3, min_occurrences: 3, evidence_limit: 10],
+    behaviour_candidate: [min_modules: 3, min_callbacks: 3, module_display_limit: 8, callback_display_limit: 8]
+  ],
+  tests: [hints: [{"lib/my_app/accounts/**", ["test/my_app/accounts_test.exs"]}]]
+]
+```
+
+Start from `examples/reach.exs` in the Reach repo. Reach itself ships a root `.reach.exs` and gates CI on `mix reach.check --arch`.
+
+### Smell Checks (cumulative through 2.2)
+
+`mix reach.check --smells` covers (non-exhaustive):
+
+- **Loop antipatterns** — `Enum.at`/`List.delete_at` in loops (O(n²)); `++`/`<>` inside loops; manual `Enum.reduce` min/max/sum/frequency
+- **Pipeline waste** — `Enum.reverse |> Enum.reverse`, `filter |> count`, `map |> count`, `filter |> filter`, `sort |> take`/`reverse`/`at`, `drop |> take`, `take_while |> count`/`length`, `map |> Enum.join`
+- **Collection idioms** — `Enum.reverse |> hd`, `Enum.reverse ++ tail`, `inspect |> String.starts_with?`, chained `String.replace`, `Map.keys |> Enum.map`, `List.to_tuple |> elem`, redundant `Enum.join("")`, negative `Enum.take`, `String.graphemes |> length`, `String.length == 1`, `Integer.to_string |> String.to_charlist`, anon-fn `.()` in pipes
+- **Idiom mismatch** — `Enum.count/1` (no predicate) → `length/1`; `Map.values |> Enum.all?/any?/find/filter/map` → iterate `{k, v}`; `Enum.map → Enum.max/min/sum`; `List.foldl/3` → `Enum.reduce/3`; `String.graphemes |> Enum.reverse |> Enum.join` → `String.reverse/1`; guard equality where pattern match suffices; `Map.update` then `Map.get/fetch` on same var; `Map.put` w/ variable boolean key → `MapSet`
+- **Length comparisons (2.2)** — `length(list) == 0`/`0 == length(list)`/`length(list) > 0` → pattern match or `== []`/`!= []`; small-literal `length/1` comparisons in guards
+- **Identity callbacks (2.2)** — `Enum.uniq_by(coll, fn x -> x end)` → `Enum.uniq/1`; `Enum.sort_by(coll, fn x -> x end)` → `Enum.sort/1`
+- **Map contracts** — same-variable atom/string fallback (`metadata["id"] || metadata[:id]`); repeated atom-key map literals with same shape (struct/contract candidate); fixed-shape map detection
+- **Structural drift (clone-backed)** — return-contract drift, side-effect ordering drift, validation drift across similar code
+- **Other** — redundant negated guards (`when x != y` after `when x == y`); destructure-then-reconstruct (`[a, b, c]` rebuilt as same list); behaviour-candidate detection (modules exposing the same public callback set); compile-time vs runtime config (`Application.get_env`/`fetch_env` in module attrs, `compile_env` inside runtime fns)
+
+Custom pattern checks via the ExAST-backed DSL: `use Reach.Smell.PatternCheck`, `smell ~p[<source pattern>]`. Guarded patterns: `from(~p[...]) |> where(...)`. Pipes, operators, function calls, and module attributes all work with the `~p` sigil; pattern checks share a zipper cache across modules.
+
+### Advisory Refactoring Candidates (2.0+)
+
+`mix reach.check --candidates` and `mix reach.inspect TARGET --candidates` surface graph-backed suggestions:
+
+- **`introduce_boundary`** — split a function with mixed effects into pure core + effectful shell
+- **`isolate_effects`** — group side-effecting calls
+- **`extract_pure_region`** — move a pure subexpression out of an effectful function
+- **`break_cycle`** — suggest where to cut a module dependency cycle, with `representative_calls` evidence
+
+Each candidate carries `confidence`, `actionability`, `proof`, and (for cycles) `representative_calls` — agents should treat them as suggestions, not automatic edits.
+
+### HTML Visualization
+
+```bash
+mix reach lib/my_app/accounts.ex lib/my_app/auth.ex
+# → reach_report/index.html (self-contained, offline)
+```
+
+Three tabs: Control Flow (CFG), Call Graph (cross-module), Data Flow (def→use chains). Graph data embedded as `window.graphData = {call_graph, control_flow, data_flow}`. `data_flow.taint_paths` slot exists but the CLI doesn't expose source/sink flags — use `mix reach.trace` for taint. Optional deps: `:jason`, `:makeup`, `:makeup_elixir`.
+
+### Recipes
+
+**Call sites of a remote function:**
+```elixir
+Reach.nodes(graph, type: :call, module: :gun, function: :ws_send)
+|> Enum.map(&{&1.source_span.start_line, &1.meta.arity})
+```
+
+**What data flows into this call?**
+```elixir
+[target] = Reach.nodes(graph, type: :call, module: Repo, function: :insert)
+Reach.backward_slice(graph, target.id) |> Enum.map(&Reach.node(graph, &1))
+```
+
+**Is the inbound-frame → handler path sanitized?**
+```elixir
+Reach.taint_analysis(graph,
+  sources: [type: :call, module: MyApp.MessageHandler, function: :decode],
+  sinks: &(&1.type == :call and &1.meta[:kind] == :dynamic),
+  sanitizers: [[type: :call, module: Jason, function: :decode]]
+) |> Enum.filter(&(not &1.sanitized))
+# Use module_to_graph/2 if the handler is generated by `use GenServer`.
+```
+
+**Reorder two side-effecting calls?**
+```elixir
+Reach.independent?(graph, call_a.id, call_b.id)
+```
+
+### Tidewave Exploration
+
+Graphs don't persist between `project_eval` calls — rebuild each query:
+```elixir
+graph = Reach.file_to_graph!("lib/my_module.ex")
+Reach.nodes(graph, type: :function_def) |> length()
+```
+
+For many related queries in one IEx session, build once and persist via process dictionary or an Agent.
+
+### Plugins (1.4+)
+
+`Reach.Plugin` adds domain-specific edges (framework dispatch, message routing, pipeline topology) not visible to language-level analysis.
+
+Built-ins auto-detect via `Code.ensure_loaded?/1`: `Reach.Plugins.Phoenix`, `Ecto`, `Oban`, `GenStage`, `Jido`, `OpenTelemetry`, and **`QuickBEAM`** (1.7+). They run when the host package is in the dep tree.
+
+```elixir
+Reach.string_to_graph!(source, plugins: [Reach.Plugins.Phoenix])
+Reach.Project.from_mix_project(plugins: [Reach.Plugins.Ecto])
+Reach.string_to_graph!(source, plugins: [])            # disable all
+```
+
+Custom skeleton:
+```elixir
+defmodule MyPlugin do
+  @behaviour Reach.Plugin
+  @impl true
+  def analyze(all_nodes, _opts), do: []                 # [{from_id, to_id, label}, ...]
+  @impl true
+  def analyze_project(_modules_map, _all_nodes, _opts), do: []   # optional, cross-module
+
+  # 1.7+: for plugins that splice additional nodes (e.g. embedded JS) into the host graph.
+  # Return {new_nodes, new_edges} — nodes get merged into the IR before analysis queries.
+  @impl true
+  def analyze_embedded(_all_nodes, _opts), do: {[], []}
+
+  # 1.5+: teach the effect classifier about framework calls
+  @impl true
+  def classify_effect(_node), do: nil                    # :pure | :read | :write | :io | :send | nil
+end
+```
+
+### Reach.Plugins.QuickBEAM — Cross-Language Analysis (1.7+)
+
+Stitches Elixir and JavaScript into one graph. Scans for `QuickBEAM.eval/2,3` and `QuickBEAM.call/3,4` callsites where the JS source is a **string literal**, parses it via `Reach.Frontend.JavaScript`, and adds cross-language edges:
+
+| Edge label | From | To | Meaning |
+|---|---|---|---|
+| `:js_eval` | Elixir runtime-run callsite | JS function_def in the literal source | Defines a JS fn in the runtime |
+| `{:js_call, name}` | Elixir `QuickBEAM.call(rt, name, ...)` | JS function_def with matching name | Invokes a previously-defined JS fn |
+| `:beam_call` | JS `Beam.call("handler", ...)` site | Elixir fn registered in `QuickBEAM.start(handlers: %{...})` | JS calling back into Elixir |
+
+Also classifies effects on `QuickBEAM.*`: the JS-runtime entrypoints (`eval`, `call`, `load_module`, `load_bytecode`, `send_message`, `start`, `stop`, `reset`) → `:io`; `set_global` → `:write`; `compile`/`disasm`/`globals`/`get_global`/`info`/`memory_usage`/`coverage` → `:read`. OXC AST ops (`parse`, `postwalk`, `patch_string`, `imports`, `format`, `rewrite_specifiers`) → `:pure`; other OXC → `:io`.
+
+```elixir
+# Auto-enabled if QuickBEAM is in deps
+graph = Reach.file_to_graph!("lib/my_runner.ex")
+Reach.nodes(graph) |> Enum.filter(&(&1.meta[:language] == :javascript))
+```
+
+Limitation: cross-language edges only form when the JS source is a **literal** at the callsite. Runtime-computed JS (e.g. sourced from a variable or `File.read!/1`) won't be stitched, since the plugin works by peeking at the literal AST node.
+
+### Other 1.4 Public API
+
+- `Reach.compiled_to_graph/2` — graph from `:beam_lib` chunks (alt to `module_to_graph/2`)
+- `Reach.call_graph/1`, `function_graph/2` — derive subgraphs
+- `Reach.control_deps/2`, `data_deps/2`, `neighbors/3` — direct dep queries
+- `Reach.has_dependents?/2` — quick existence check
+- `Reach.string_to_graph!/2` — bang variant
+- `Reach.to_dot/1`, `to_graph/1` — export to GraphViz / `:digraph`
+- `Reach.Project.from_sources/2` — build from `{path, source}` pairs (fixtures, piped code)
+- `Reach.Project.summarize_dependency/1` — text summary of an edge
+
+### Dependencies
+
+```elixir
+{:reach, "~> 2.2", only: [:dev, :test], runtime: false},
+{:boxart, "~> 0.3.3", only: [:dev, :test], runtime: false}   # terminal --graph (2.0+ requires 0.3.3 for Unicode-safe rendering)
+```
+
+**Pin floor:** `~> 2.0.1`. Reach `2.0.0` is uninstallable from Hex (`ex_ast` was declared `only: [:dev, :test]` but pattern smell checks `import ExAST` at compile time — fixed in 2.0.1). Pin `~> 2.2` for the latest smell surface.
+
+Pulls in `libgraph`. Optional: `jason`, `makeup`, `makeup_elixir`, `makeup_js` (HTML viz), `boxart` (terminal). For the JS frontend + cross-language plugin (1.7+), add `{:quickbeam, "~> 0.10.4"}` — the plugin activates automatically when QuickBEAM is in the dep tree.
 
 
 
