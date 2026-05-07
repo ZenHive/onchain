@@ -18,12 +18,43 @@ defmodule Onchain.RPC do
   responses from the node include `:code`; network/transport errors are wrapped
   with `inspect/1` as the message.
 
-  Execution reverted (`eth_call`, etc.): when the node returns JSON-RPC `code: 3`
-  with a `data` payload, cartouche attaches `:revert` (raw bytes). Onchain mirrors
-  that payload as `:data` — a lowercase `0x`-prefixed hex string suitable for
-  `Onchain.ABI.decode_error/2`. The map may still include `:code`, `:message`,
-  and `:revert`. Optional `:error_abi` / `:error_params` appear when generic
-  `call/3` is used with cartouche's `:errors` opt for server-side decoding hints.
+  ### Revert errors (`code: 3`)
+
+  When `eth_call` reverts, the node returns a JSON-RPC error with `code: 3`. The
+  inner map is widened with extra fields populated by cartouche
+  (see `t:Cartouche.RPC.rpc_error/0`) plus `:data` mirrored by Onchain
+  (see `Onchain.RPC.Helpers.maybe_put_revert_data_hex/1`):
+
+  - `:revert` — the raw revert-data binary (present on `code: 3` when the node
+    returned a `data` field; absent if the node omitted it). Use this for
+    selector inspection or pass to ABI libraries that accept binaries.
+  - `:data` — the same payload as a lowercase `0x`-prefixed hex string. Mirrored
+    from `:revert` whenever the latter is set so callers can pipe it straight
+    into `Onchain.ABI.decode_error/2` (which expects 0x hex, not raw bytes).
+  - `:error_abi` — the matching custom-error signature `String.t()` from the
+    `:errors` opt (e.g. `"InsufficientBalance(uint256,uint256)"`). Only present
+    when the caller passed `errors:` AND the revert payload's selector matches
+    one of those signatures (or a Solidity 0.8.x `Panic` variant — those decode
+    to a human-readable string like `"arithmetic error: overflow or underflow"`).
+  - `:error_params` — the decoded argument list for `:error_abi` (e.g.
+    `[1_000, 500]` for `InsufficientBalance(1000, 500)`). Empty list `[]` for
+    nullary errors. Same population rule as `:error_abi`.
+
+  Pattern matches:
+
+      # Revert without :errors opt — decode out-of-band via the hex :data mirror
+      {:error, {:rpc_error, %{code: 3, data: hex_data}}} = result
+      {:ok, %{error: signature, args: args}} =
+        Onchain.ABI.decode_error(hex_data, ["InsufficientBalance(uint256,uint256)"])
+
+      # Revert with matching :errors opt — already decoded inline
+      {:error,
+       {:rpc_error,
+        %{code: 3, error_abi: "InsufficientBalance(uint256,uint256)", error_params: [1000, 500]}}} =
+        result
+
+  Existing `{:error, {:rpc_error, %{code:, message:}}}` matches still work — the
+  revert fields are additive on the inner map.
 
   ## Functions
 
@@ -71,7 +102,12 @@ defmodule Onchain.RPC do
     params: [
       address: [kind: :value, description: "Contract address as 0x hex string or 20-byte binary"],
       data: [kind: :value, description: "0x-prefixed hex-encoded calldata (from ABI.encode_call)"],
-      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout, :block"]
+      opts: [
+        kind: :value,
+        default: [],
+        description:
+          ~s|Options: :rpc_url, :timeout, :block, :errors. :errors is a list of Solidity custom-error signatures (e.g. ["InsufficientBalance(uint256,uint256)"]). When the call reverts with matching revert data, the error map carries decoded :error_abi + :error_params alongside the always-present :revert binary. See @moduledoc "Error Format" for the full shape and pattern-match examples.|
+      ]
     ],
     returns: %{
       type: "{:ok, hex_string} | {:error, term}",
@@ -80,6 +116,43 @@ defmodule Onchain.RPC do
     }
   )
 
+  @doc """
+  Execute a read-only contract call (`eth_call`).
+
+  ## Options
+
+  - `:rpc_url` — node URL (overrides `Application.get_env(:cartouche, :ethereum_node)`)
+  - `:timeout` — request timeout in ms (default 30_000)
+  - `:block` — block number / tag / 0x hex (default `"latest"`)
+  - `:errors` — list of Solidity custom-error signatures, e.g.
+    `["InsufficientBalance(uint256,uint256)", "Unauthorized()"]`. When the call
+    reverts with matching revert data, the error map carries decoded
+    `:error_abi` + `:error_params` alongside the raw `:revert` binary and its
+    hex mirror `:data`.
+
+  ## Revert handling
+
+  On `code: 3` reverts the inner map widens — see the module's "Error Format"
+  section. Quick pattern-match shape:
+
+      case Onchain.RPC.eth_call(token, calldata, errors: ["InsufficientBalance(uint256,uint256)"]) do
+        {:ok, hex_result} ->
+          # Decode hex_result with Onchain.ABI.decode_response/2
+          :ok
+
+        {:error, {:rpc_error, %{code: 3, error_abi: "InsufficientBalance(uint256,uint256)", error_params: [requested, available]}}} ->
+          {:insufficient, requested, available}
+
+        {:error, {:rpc_error, %{code: 3, data: hex_data}}} ->
+          # Custom error not in :errors list (or :errors omitted) — fall back
+          # to the hex-mirrored revert payload and decode out-of-band.
+          # `Onchain.ABI.decode_error/2` expects 0x hex, which is exactly :data.
+          Onchain.ABI.decode_error(hex_data, ["MyError(uint256)"])
+
+        {:error, {:rpc_error, %{message: msg}}} ->
+          {:rpc, msg}
+      end
+  """
   @spec eth_call(String.t() | binary(), String.t(), keyword()) ::
           {:ok, String.t()} | {:error, term()}
   def eth_call(address, data, opts \\ []) do

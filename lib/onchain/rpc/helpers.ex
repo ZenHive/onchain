@@ -154,10 +154,17 @@ defmodule Onchain.RPC.Helpers do
 
   @doc false
   # Maps our option names to the underlying RPC client's expected keys.
+  #
+  # `:errors` is forwarded verbatim to cartouche. When the node returns a
+  # JSON-RPC `code: 3` revert and the revert payload's selector matches one of
+  # the supplied custom-error signatures (e.g. `"InsufficientBalance(uint256)"`),
+  # cartouche populates `:error_abi` and `:error_params` on the inner error map
+  # in addition to the always-present `:revert` binary. See `Onchain.RPC`
+  # `@moduledoc`'s "Error Format" for the full shape.
   @spec to_rpc_opts(keyword()) :: keyword()
   def to_rpc_opts(opts) do
     opts
-    |> Keyword.take([:rpc_url, :timeout])
+    |> Keyword.take([:rpc_url, :timeout, :errors])
     |> Keyword.put_new(:timeout, @default_timeout_ms)
     |> rename_key(:rpc_url, :ethereum_node)
   end
