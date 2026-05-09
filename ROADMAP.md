@@ -17,11 +17,19 @@
 
 **Last shipped:** v0.5.4 (2026-05-07) — Tasks 49, 53, 71, 72 + cartouche 0.2.0 / ex_ast 0.10.1 dep bumps.
 
-**Up next:** Code Health backlog — no breaking change pending. Future Code Health / Phase 10 tasks will follow. **Task 68** (defi-skills mining) complete — see [Proposed additions from defi-skills mining](#proposed-additions-from-defi-skills-mining). Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code Health rationale.
+**Pending decision:** Promote P1/P2/P3 from [Proposed additions from defi-skills mining](#proposed-additions-from-defi-skills-mining) (Effs 2.50 / 2.17 / 2.17 — all outrank existing Code Health work) or discard. Task 68 (defi-skills mining) complete; the proposals are awaiting accept/reject before being scored into Code Health.
+
+**Up next** (after that decision): **Task 73** — surface revert `data` field on `eth_call` errors so consumers can feed it to the just-shipped `Onchain.ABI.decode_error/2` (Task 72). Eff 1.67 🚀, and without it the new wrapper has no straightforward consumer. **Task 57** (unify RPC return shapes, Eff 1.50 🚀) is the next-best pick if 73 stalls.
+
+Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code Health rationale.
 
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
 >
 > **Doc checklist (every task):** ROADMAP.md ✅ → CHANGELOG.md ✅ → README.md ✅ → CLAUDE.md ✅
+>
+> **Parallel work (`[P]`):** Tasks tagged `[P]` are dependency-independent and parallel-safe—before starting, flip status to 🔄 with branch name, commit to main, and create a worktree under `~/_DATA/worktrees/onchain/<id>/` (`task-<n>`, Linear ID, or branch slug; see portfolio worktree workflow).
+>
+> **RPC-layer serialization:** Tasks **51**, **52**, **54**, **57**, **63**, and **73** omit `[P]`—they converge on `lib/onchain/rpc.ex` and RPC helpers; avoid parallel sessions on those rows. **64** and **66** omit `[P]` because they are gated on **63** / **64**.
 
 ### ✅ Recently Completed (7)
 | Task | Description | Notes |
@@ -38,7 +46,9 @@
 
 ## Release Plan
 
-Last shipped: **v0.5.3** (2026-05-02) — Bundled subscription hardening (v0.5.2 task set: 38, 39, 42, 43, 55, 56, 59, 62, 67) + surface-area polish (v0.5.3 task set: 50, 58, 60, 61) under a single tag covering `v0.5.1..HEAD`. v0.5.2 work was committed but never tagged separately — folded into the v0.5.3 tag rather than retroactively labeling.
+Last shipped: **v0.5.4** (2026-05-07) — Tasks 49, 53, 71, 72 + cartouche 0.2.0 / ex_ast 0.10.1 dep bumps.
+
+Prior: **v0.5.3** (2026-05-02) — Bundled subscription hardening (v0.5.2 task set: 38, 39, 42, 43, 55, 56, 59, 62, 67) + surface-area polish (v0.5.3 task set: 50, 58, 60, 61) under a single tag covering `v0.5.1..HEAD`. v0.5.2 work was committed but never tagged separately — folded into the v0.5.3 tag rather than retroactively labeling.
 
 ### Release Discipline
 
@@ -110,8 +120,8 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
-| 28 | DEX swap routing (optimal path across pools) | ⬜ | 7 | 8 | 7 | 1.07 📋 | `Onchain.DEX.Router` |
-| 29 | MEV protection (private transaction submission) | ⬜ | 6 | 8 | 7 | 1.25 📋 | `Onchain.MEV` |
+| 28 `[P]` | DEX swap routing (optimal path across pools) | ⬜ | 7 | 8 | 7 | 1.07 📋 | `Onchain.DEX.Router` |
+| 29 `[P]` | MEV protection (private transaction submission) | ⬜ | 6 | 8 | 7 | 1.25 📋 | `Onchain.MEV` |
 
 **Task descriptions:**
 
@@ -125,7 +135,7 @@ On-chain DEX trading support. Swap routing across liquidity pools and MEV protec
 
 | # | Task | Status | D | B | U | Eff | Module |
 |---|------|--------|---|---|---|-----|--------|
-| 69 | ERC-4337 UserOperation construction, signing, and bundler RPC | ⬜ | 7 | 8 | 7 | 1.07 📋 | `Onchain.AA` (new) |
+| 69 `[P]` | ERC-4337 UserOperation construction, signing, and bundler RPC | ⬜ | 7 | 8 | 7 | 1.07 📋 | `Onchain.AA` (new) |
 
 **Task 69 — ERC-4337 account abstraction.** [D:7/B:8/U:7 → Eff:1.07 📋]
 
@@ -163,7 +173,7 @@ Add ERC-4337 support: UserOperation construction, signing, and bundler RPC (`eth
 | 38 | Subscription: buffer unknown sub_ids to close subscribe→Agent.update race — see [CHANGELOG](CHANGELOG.md#added--pre-registration-buffer-for-subscription-notifications-task-38) | ✅ | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
 | 39 | Subscription: `:pending_transactions` integration test — see [CHANGELOG](CHANGELOG.md#added--pending-transactions-integration-test-task-39) | ✅ | 2 | 3 | 3 | 1.50 📋 | `test/onchain/subscription_integration_test.exs` |
 | 40 | Switch Credo from `release/1.7` git branch to Hex release `{:credo, "~> 1.7"}` (1.7.18) — see [CHANGELOG](CHANGELOG.md#v050--chain-intelligence-subscriptions-nft-reads) | ✅ | 1 | 4 | 3 | 3.50 🎯 | `mix.exs` |
-| 41 | ENS enhancements: CCIP-Read / EIP-3668 off-chain lookups, ENSIP-10 wildcard resolution, full UTS-46 / ENSIP-15 Unicode normalization, multi-coin address resolution (currently ETH-only via `addr(bytes32)`) | ⬜ | 6 | 6 | 5 | 0.92 ⚠️ | `Onchain.ENS` |
+| 41 `[P]` | ENS enhancements: CCIP-Read / EIP-3668 off-chain lookups, ENSIP-10 wildcard resolution, full UTS-46 / ENSIP-15 Unicode normalization, multi-coin address resolution (currently ETH-only via `addr(bytes32)`) | ⬜ | 6 | 6 | 5 | 0.92 ⚠️ | `Onchain.ENS` |
 | 42 | Subscription: deliver parse errors to handler as `{:parse_error, sub_id, reason}` events — see [CHANGELOG](CHANGELOG.md#v052--subscription-hardening-2026-05-01) | ✅ | 2 | 4 | 3 | 1.75 🚀 | `Onchain.Subscription` |
 | 43 | Strip upstream-cascade `@dialyzer {:no_match, ...}` suppressions — see [CHANGELOG](CHANGELOG.md#maintenance--strip-upstream-cascade-dialyzer-suppressions-task-43) | ✅ | 1 | 3 | 3 | 3.00 🎯 | Multiple |
 | 44 | Fix CLAUDE.md Module Layout drift (`wallet.ex` + `erc20.ex` bullets) — see [CHANGELOG](CHANGELOG.md#task-44-claudemd-module-layout-drift-fix) | ✅ | 1 | 3 | 4 | 3.50 🎯 | `CLAUDE.md` |
@@ -179,11 +189,11 @@ Add ERC-4337 support: UserOperation construction, signing, and bundler RPC (`eth
 | 61 | `eth_get_logs/2` accepts `:block_hash` (EIP-1474) — see [CHANGELOG](CHANGELOG.md#changed--eth_get_logs2-filter-ergonomics-tasks-60-61) | ✅ | 2 | 3 | 4 | 1.75 🚀 | `Onchain.RPC` |
 | 63 | `defrpc` macro — codegen named JSON-RPC wrappers from declarative specs (refactor of existing 11 `Onchain.RPC.*` wrappers); follows Phoenix.Router shape, gated by Nimble.Options schema | ⬜ | 4 | 6 | 5 | 1.38 📋 | `Onchain.RPC` |
 | 64 | Vendor `openrpc.json` from `ethereum/execution-apis` + emit `Onchain.RPC.Specs` lookup that feeds `defrpc` (93 methods across `eth_*`/`engine_*`/`debug_*`/`txpool_*`/`net_*`/`testing_*`) — gated on Task 63 | ⬜ | 4 | 6 | 5 | 1.38 📋 | `Onchain.RPC.Specs` (new) |
-| 65 | Differential test harness: same RPC method via `Onchain.RPC` vs reference impl (signet first, then Web3.py / viem if needed) — catches protocol-level mistakes unit tests miss | ⬜ | 6 | 5 | 3 | 0.67 ⚠️ | `test/onchain/differential/` |
+| 65 `[P]` | Differential test harness: same RPC method via `Onchain.RPC` vs reference impl (signet first, then Web3.py / viem if needed) — catches protocol-level mistakes unit tests miss | ⬜ | 6 | 5 | 3 | 0.67 ⚠️ | `test/onchain/differential/` |
 | 66 | Tree-sitter scrape of Erigon Go source for `trace_*` / `ots_*` method enumeration (~30 methods OpenRPC doesn't cover) — gated on Task 64 + actual consumer demand | ⬜ | 5 | 4 | 3 | 0.70 ⚠️ | dev-only `Mix.Task` |
 | 67 | Migrate `:signet` → `:cartouche` dep (renames every `Signet.*` reference, swaps in `{:cartouche, "~> 0.1"}`) — see [CHANGELOG](CHANGELOG.md#changed--signet--cartouche-dep-migration-task-67) | ✅ | 4 | 7 | 8 | 1.88 🚀 | Multiple |
 | 68 | Mine `defi-skills:intent-to-transaction` action surface for `onchain` coverage gaps | ✅ | 3 | 8 | 7 | 2.50 🎯 | (cross-cutting research) |
-| 70 | Harden `Onchain.Subscription.lookup_or_buffer/3` against unsolicited sub_id keys: `pending` map has per-key cap of 100 but unbounded distinct-keys count. Server emitting notifications for never-`subscribe`-d sub_ids grows key set until connection closes (per-connection Agent dies with the conn, so blast radius is bounded — but worth fixing). Buffer only sub_ids in an in-flight subscribe state, or add a global key cap with eviction. | ⬜ | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
+| 70 `[P]` | Harden `Onchain.Subscription.lookup_or_buffer/3` against unsolicited sub_id keys: `pending` map has per-key cap of 100 but unbounded distinct-keys count. Server emitting notifications for never-`subscribe`-d sub_ids grows key set until connection closes (per-connection Agent dies with the conn, so blast radius is bounded — but worth fixing). Buffer only sub_ids in an in-flight subscribe state, or add a global key cap with eviction. | ⬜ | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
 | 73 | Surface `data` field on `eth_call` revert errors so consumers can feed it to `Onchain.ABI.decode_error/2`. Currently `do_rpc/3` returns `{:error, {:rpc_error, %{code, message}}}` and drops the revert payload that nodes attach for execution-reverted calls (`code: 3`). Discovered 2026-05-02 during Task 72 — without this passthrough, the new `decode_error/2` wrapper has no straightforward consumer. | ⬜ | 3 | 5 | 5 | 1.67 🚀 | `Onchain.RPC` |
 
 **Task 57 — Unify `get_block_*` / `get_transaction_*` return shapes.**
