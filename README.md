@@ -68,6 +68,9 @@ balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
     "0x118cdaa7000000000000000000000000d8da6bf26964af9d7eed9e03e53415d37aa96045",
     ["OwnableUnauthorizedAccount(address)"]
   )
+
+# After an eth_call that reverts with a custom error, use :data from the rpc_error map:
+# {:error, {:rpc_error, %{data: revert_hex}}} -> Onchain.ABI.decode_error(revert_hex, [...])
 ```
 
 ## Modules
@@ -82,7 +85,7 @@ balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
 | `Onchain.Decimal` | Decimal precision helpers (to_decimal, div_pow10, to_basis_points) |
 | `Onchain.Fees` | EIP-1559 fee recommendation (`suggest_fees/2`) over `Cartouche.FeeHistory.t()` — pure function, returns `{base_fee, max_priority, max_fee}` |
 | `Onchain.RPC` | Ethereum JSON-RPC wrapper (eth_call, eth_getLogs, receipts, nonces, balances, block_number, chain_id, get_block_by_number, get_transaction_by_hash, eth_get_code, eth_send_raw_transaction, syncing, fee_history, get_proof; `call/3` for any other method). `eth_get_logs/2` accepts atom keys or canonical camelCase string aliases (`"fromBlock"`, `"toBlock"`, `"blockHash"`, `"address"`, `"topics"`); `:block_hash` is mutually exclusive with `:from_block`/`:to_block` per EIP-1474 |
-| `Onchain.RPC.Helpers` | Shared RPC helper functions (hex normalization, block tags, tx hash validation) |
+| `Onchain.RPC.Helpers` | Shared RPC helper functions (hex normalization, block tags, tx hash validation; execution-revert maps get `:data` hex for `decode_error/2`) |
 | `Onchain.Block` | Block fetching with parsed fields, timestamp-based binary search |
 | `Onchain.Contract` | Generic contract call (encode -> eth_call -> decode in one function) |
 | `Onchain.Multicall` | Batch multiple eth_call via Multicall3 |

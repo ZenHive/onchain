@@ -19,7 +19,7 @@
 
 **Pending decision:** Promote P1/P2/P3 from [Proposed additions from defi-skills mining](#proposed-additions-from-defi-skills-mining) (Effs 2.50 / 2.17 / 2.17 — all outrank existing Code Health work) or discard. Task 68 (defi-skills mining) complete; the proposals are awaiting accept/reject before being scored into Code Health.
 
-**Up next** (after that decision): **Task 73** — surface revert `data` field on `eth_call` errors so consumers can feed it to the just-shipped `Onchain.ABI.decode_error/2` (Task 72). Eff 1.67 🚀, and without it the new wrapper has no straightforward consumer. **Task 57** (unify RPC return shapes, Eff 1.50 🚀) is the next-best pick if 73 stalls.
+**Up next:** **Task 57** — unify `get_block_*` / `get_transaction_*` RPC return shapes (Eff 1.50 🚀). **Task 73** (revert `data` for `decode_error/2`) is complete; see [CHANGELOG](CHANGELOG.md).
 
 Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code Health rationale.
 
@@ -29,11 +29,12 @@ Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code
 >
 > **Parallel work (`[P]`):** Tasks tagged `[P]` are dependency-independent and parallel-safe—before starting, flip status to 🔄 with branch name, commit to main, and create a worktree under `~/_DATA/worktrees/onchain/<id>/` (`task-<n>`, Linear ID, or branch slug; see portfolio worktree workflow).
 >
-> **RPC-layer serialization:** Tasks **51**, **52**, **54**, **57**, **63**, and **73** omit `[P]`—they converge on `lib/onchain/rpc.ex` and RPC helpers; avoid parallel sessions on those rows. **64** and **66** omit `[P]` because they are gated on **63** / **64**.
+> **RPC-layer serialization:** Tasks **51**, **52**, **54**, **57**, and **63** omit `[P]`—they converge on `lib/onchain/rpc.ex` and RPC helpers; avoid parallel sessions on those rows. **64** and **66** omit `[P]` because they are gated on **63** / **64**.
 
-### ✅ Recently Completed (7)
+### ✅ Recently Completed (8)
 | Task | Description | Notes |
 |------|-------------|-------|
+| 73 | Surface revert `data` on execution-reverted RPC errors for `Onchain.ABI.decode_error/2` | `Onchain.RPC.Helpers.do_rpc/3` enriches cartouche's `:revert` binary with `:data` as lowercase 0x hex when absent. Docs: `Onchain.RPC`, `Onchain.Contract`, README. |
 | 68 | Mine `defi-skills` action surface for onchain coverage gaps | Discovery-only: `defi-skills actions --json` on mainnet (53 actions / 12 protocol groups) vs Arbitrum (25 actions / 6 groups). Cross-protocol gaps proposed under [Proposed additions from defi-skills mining](#proposed-additions-from-defi-skills-mining); protocol-specific surfaces delegated to sibling repos in that section. |
 | 49 | `Onchain.RPC.get_proof/3` (+ bang) wraps `eth_getProof` | Account + storage Merkle proofs for light clients and cross-chain proofs. Validates address (`ensure_hex_address/1`), 32-byte storage keys (new `Helpers.ensure_storage_key/1` re-tagging `ensure_tx_hash/1`), and block tag. Returns atom-keyed map with `balance`/`nonce` decoded to integers and proof byte arrays passed through as 0x hex (caller verifies the Merkle proof). Matches `parse_transaction/1` shape rather than `get_block_by_number`'s raw map; doesn't pre-commit Task 57's unification choice. |
 | 72 | `Onchain.ABI.decode_call/3` + `decode_error/2` (+ bang variants) | Thin wrappers over hieroglyph 1.1.0/1.2.0 APIs: selector-prefixed calldata decoding (forwards opts including `decode_structs: true`) and Solidity 0.8.4+ custom-error revert decoding. Same `{:error, {:decode_error, _}}` envelope as `decode_response/2`. |
@@ -194,7 +195,7 @@ Add ERC-4337 support: UserOperation construction, signing, and bundler RPC (`eth
 | 67 | Migrate `:signet` → `:cartouche` dep (renames every `Signet.*` reference, swaps in `{:cartouche, "~> 0.1"}`) — see [CHANGELOG](CHANGELOG.md#changed--signet--cartouche-dep-migration-task-67) | ✅ | 4 | 7 | 8 | 1.88 🚀 | Multiple |
 | 68 | Mine `defi-skills:intent-to-transaction` action surface for `onchain` coverage gaps | ✅ | 3 | 8 | 7 | 2.50 🎯 | (cross-cutting research) |
 | 70 `[P]` | Harden `Onchain.Subscription.lookup_or_buffer/3` against unsolicited sub_id keys: `pending` map has per-key cap of 100 but unbounded distinct-keys count. Server emitting notifications for never-`subscribe`-d sub_ids grows key set until connection closes (per-connection Agent dies with the conn, so blast radius is bounded — but worth fixing). Buffer only sub_ids in an in-flight subscribe state, or add a global key cap with eviction. | ⬜ | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
-| 73 | Surface `data` field on `eth_call` revert errors so consumers can feed it to `Onchain.ABI.decode_error/2`. Currently `do_rpc/3` returns `{:error, {:rpc_error, %{code, message}}}` and drops the revert payload that nodes attach for execution-reverted calls (`code: 3`). Discovered 2026-05-02 during Task 72 — without this passthrough, the new `decode_error/2` wrapper has no straightforward consumer. | ⬜ | 3 | 5 | 5 | 1.67 🚀 | `Onchain.RPC` |
+| 73 | Surface `data` field on `eth_call` revert errors so consumers can feed it to `Onchain.ABI.decode_error/2`. Cartouche attaches `:revert` bytes for JSON-RPC `code: 3` + `data`; onchain mirrors them as `:data` (0x hex) in `do_rpc/3` unless already present. See [CHANGELOG](CHANGELOG.md#unreleased). | ✅ | 3 | 5 | 5 | 1.67 🚀 | `Onchain.RPC` + `Onchain.RPC.Helpers` |
 
 **Task 57 — Unify `get_block_*` / `get_transaction_*` return shapes.**
 

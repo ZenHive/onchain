@@ -28,10 +28,20 @@ defmodule Onchain.RPC.Helpers do
   def do_rpc(method, params, opts) do
     case Cartouche.RPC.send_rpc(method, params, opts) do
       {:ok, result} -> {:ok, result}
-      {:error, %{} = map} -> {:error, {:rpc_error, map}}
+      {:error, %{} = map} -> {:error, {:rpc_error, maybe_put_revert_data_hex(map)}}
       {:error, other} -> {:error, {:rpc_error, %{message: inspect(other)}}}
     end
   end
+
+  # When Cartouche attaches execution-revert bytes as `:revert`, mirror them as
+  # `:data` (0x hex) so callers can pass the map straight to `Onchain.ABI.decode_error/2`.
+  @doc false
+  @spec maybe_put_revert_data_hex(map()) :: map()
+  def maybe_put_revert_data_hex(%{revert: revert} = map) when is_binary(revert) do
+    Map.put_new(map, :data, Onchain.Hex.encode(revert))
+  end
+
+  def maybe_put_revert_data_hex(map), do: map
 
   @doc false
   # Validates an address at the RPC-helper boundary and normalizes to lowercase hex.

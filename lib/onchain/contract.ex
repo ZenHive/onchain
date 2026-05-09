@@ -14,7 +14,7 @@ defmodule Onchain.Contract do
   |--------|-------------|
   | `Onchain.Address.validate/1` | `{:error, {:invalid_address, input}}` |
   | `Onchain.ABI.encode_call/2` | `{:error, {:encode_error, reason}}` |
-  | `Onchain.RPC.eth_call/3` | `{:error, {:rpc_error, map}}` |
+  | `Onchain.RPC.eth_call/3` | `{:error, {:rpc_error, map}}` — on execution revert, `map` may include `:data` (0x hex) and `:revert` (bytes) for `Onchain.ABI.decode_error/2` |
   | `Onchain.ABI.decode_response/2` | `{:error, {:decode_error, reason}}` |
 
   ## Functions

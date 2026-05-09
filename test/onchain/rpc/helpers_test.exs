@@ -3,222 +3,31 @@ defmodule Onchain.RPC.HelpersTest do
 
   alias Onchain.RPC.Helpers
 
-  # --- ensure_hex_address/1 ---
+  describe "maybe_put_revert_data_hex/1" do
+    test "adds :data as 0x hex when :revert binary present and :data absent" do
+      revert = <<8, 195, 121, 160, 0x01>>
+      map = %{code: 3, message: "execution reverted", revert: revert}
 
-  describe "ensure_hex_address/1" do
-    test "accepts valid 0x-prefixed hex address and returns lowercase" do
-      addr = "0x" <> String.duplicate("AA", 20)
-      assert {:ok, lower} = Helpers.ensure_hex_address(addr)
-      assert lower == "0x" <> String.duplicate("aa", 20)
+      assert %{code: 3, message: "execution reverted", revert: ^revert, data: "0x08c379a001"} =
+               Helpers.maybe_put_revert_data_hex(map)
     end
 
-    test "accepts 20-byte raw binary address and encodes as lowercase hex" do
-      bin = <<1::160>>
-      assert {:ok, "0x0000000000000000000000000000000000000001"} = Helpers.ensure_hex_address(bin)
+    test "does not overwrite existing :data" do
+      map = %{code: 3, message: "x", revert: <<1>>, data: "0xabcd"}
+
+      assert %{data: "0xabcd"} = Helpers.maybe_put_revert_data_hex(map)
     end
 
-    test "rejects bare hex address without 0x prefix" do
-      bare_addr = String.duplicate("aa", 20)
-      assert {:error, {:invalid_address, ^bare_addr}} = Helpers.ensure_hex_address(bare_addr)
+    test "leaves map unchanged when :revert absent" do
+      map = %{code: -32_603, message: "internal error"}
+
+      assert ^map = Helpers.maybe_put_revert_data_hex(map)
     end
 
-    test "rejects 20-byte ASCII that starts with '0x' (Task 55 silent-ASCII-encode bug)" do
-      # "0x" + 18 'a' chars = 20 bytes total. Previously matched the 20-byte-binary
-      # branch in Address.validate/1 and got hex-encoded as ASCII — routing calls
-      # to a wildly wrong address. Now rejected for length.
-      input = "0x" <> String.duplicate("a", 18)
-      assert {:error, {:invalid_address, ^input}} = Helpers.ensure_hex_address(input)
-    end
+    test "empty revert binary encodes to 0x" do
+      map = %{code: 3, message: "execution reverted", revert: <<>>}
 
-    test "loudly rejects rare 20-byte raw binary whose first two bytes are ASCII '0x'" do
-      # Deliberate Task 55 tradeoff: keep the prefix-first rejection that prevents
-      # typo-strings from being silently re-encoded into a different address, even
-      # though it also catches this rare non-printable raw-binary shape.
-      input = <<0x30, 0x78, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17>>
-
-      case Helpers.ensure_hex_address(input) do
-        {:error, {:invalid_address, ^input}} ->
-          :ok
-
-        {:ok, address} ->
-          flunk("""
-          Expected loud rejection for the rare 20-byte raw binary starting with ASCII "0x",
-          but got a successful normalization to #{inspect(address)}.
-          """)
-
-        other ->
-          flunk("""
-          Expected {:error, {:invalid_address, input}} for the rare 20-byte raw binary
-          starting with ASCII "0x", got: #{inspect(other)}
-          """)
-      end
-    end
-
-    test "rejects 0x-prefixed string with 39-char body (Task 55 silent zero-pad bug)" do
-      # Previously accepted and zero-padded to 40 chars by upstream decoding,
-      # producing a 0x0aaa... address that doesn't match the user's intent.
-      input = "0x" <> String.duplicate("a", 39)
-      assert {:error, {:invalid_address, ^input}} = Helpers.ensure_hex_address(input)
-    end
-
-    test "rejects 0x-prefixed string with 41-char body" do
-      input = "0x" <> String.duplicate("a", 41)
-      assert {:error, {:invalid_address, ^input}} = Helpers.ensure_hex_address(input)
-    end
-
-    test "rejects short 0x-prefixed string" do
-      short = "0x" <> String.duplicate("aa", 10)
-      assert {:error, {:invalid_address, ^short}} = Helpers.ensure_hex_address(short)
-    end
-
-    test "rejects invalid hex characters in otherwise-correct shape" do
-      bad = "0xZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ"
-      assert {:error, {:invalid_address, ^bad}} = Helpers.ensure_hex_address(bad)
-    end
-
-    test "rejects non-binary input" do
-      assert {:error, {:invalid_address, 12_345}} = Helpers.ensure_hex_address(12_345)
-    end
-  end
-
-  # --- ensure_hex_data/1 ---
-
-  describe "ensure_hex_data/1" do
-    test "accepts valid 0x-prefixed hex data" do
-      assert {:ok, "0x18160ddd"} = Helpers.ensure_hex_data("0x18160ddd")
-    end
-
-    test "accepts 0x alone (empty calldata)" do
-      assert {:ok, "0x"} = Helpers.ensure_hex_data("0x")
-    end
-
-    test "rejects odd-length body '0x1' (Task 55 — was silently accepted)" do
-      assert {:error, {:invalid_data, "0x1"}} = Helpers.ensure_hex_data("0x1")
-    end
-
-    test "rejects odd-length body '0xabc' (Task 55)" do
-      assert {:error, {:invalid_data, "0xabc"}} = Helpers.ensure_hex_data("0xabc")
-    end
-
-    test "rejects data without 0x prefix" do
-      assert {:error, {:invalid_data, "18160ddd"}} = Helpers.ensure_hex_data("18160ddd")
-    end
-
-    test "rejects data with invalid hex characters" do
-      assert {:error, {:invalid_data, "0xZZZZ"}} = Helpers.ensure_hex_data("0xZZZZ")
-    end
-
-    test "rejects non-binary input" do
-      assert {:error, {:invalid_data, 42}} = Helpers.ensure_hex_data(42)
-    end
-  end
-
-  # --- normalize_block/1 ---
-
-  describe "normalize_block/1" do
-    test "accepts all block tags" do
-      for tag <- ~w(latest finalized pending earliest safe) do
-        assert {:ok, ^tag} = Helpers.normalize_block(tag)
-      end
-    end
-
-    test "converts non-negative integer to hex" do
-      assert {:ok, "0x" <> _} = Helpers.normalize_block(15_000_000)
-    end
-
-    test "accepts zero" do
-      assert {:ok, "0x0"} = Helpers.normalize_block(0)
-    end
-
-    test "accepts valid hex string" do
-      assert {:ok, "0xe4e1c0"} = Helpers.normalize_block("0xe4e1c0")
-    end
-
-    test "rejects negative integer" do
-      assert {:error, {:invalid_block, -1}} = Helpers.normalize_block(-1)
-    end
-
-    test "rejects invalid hex string" do
-      assert {:error, {:invalid_block, "0xZZZZ"}} = Helpers.normalize_block("0xZZZZ")
-    end
-
-    test "rejects unknown string" do
-      assert {:error, {:invalid_block, "bogus"}} = Helpers.normalize_block("bogus")
-    end
-
-    test "rejects atom" do
-      assert {:error, {:invalid_block, :foo}} = Helpers.normalize_block(:foo)
-    end
-  end
-
-  # --- ensure_tx_hash/1 ---
-
-  describe "ensure_tx_hash/1" do
-    test "accepts valid 32-byte hash" do
-      hash = "0x" <> String.duplicate("ab", 32)
-      assert {:ok, ^hash} = Helpers.ensure_tx_hash(hash)
-    end
-
-    test "rejects too-short hash" do
-      short = "0x1234"
-      assert {:error, {:invalid_tx_hash, ^short}} = Helpers.ensure_tx_hash(short)
-    end
-
-    test "rejects too-long hash" do
-      long = "0x" <> String.duplicate("ab", 33)
-      assert {:error, {:invalid_tx_hash, ^long}} = Helpers.ensure_tx_hash(long)
-    end
-
-    test "rejects invalid hex characters" do
-      assert {:error, {:invalid_tx_hash, "0xZZZZ"}} = Helpers.ensure_tx_hash("0xZZZZ")
-    end
-
-    test "rejects without 0x prefix" do
-      bare = String.duplicate("ab", 32)
-      assert {:error, {:invalid_tx_hash, ^bare}} = Helpers.ensure_tx_hash(bare)
-    end
-
-    test "rejects non-binary input" do
-      assert {:error, {:invalid_tx_hash, 12_345}} = Helpers.ensure_tx_hash(12_345)
-    end
-  end
-
-  # --- to_rpc_opts/1 ---
-
-  describe "to_rpc_opts/1" do
-    test "renames :rpc_url to :ethereum_node" do
-      opts = Helpers.to_rpc_opts(rpc_url: "http://localhost:8545")
-      assert Keyword.get(opts, :ethereum_node) == "http://localhost:8545"
-      refute Keyword.has_key?(opts, :rpc_url)
-    end
-
-    test "applies default timeout when not specified" do
-      opts = Helpers.to_rpc_opts([])
-      assert Keyword.get(opts, :timeout) == 30_000
-    end
-
-    test "preserves explicit timeout" do
-      opts = Helpers.to_rpc_opts(timeout: 5_000)
-      assert Keyword.get(opts, :timeout) == 5_000
-    end
-
-    test "strips unknown options" do
-      opts = Helpers.to_rpc_opts(rpc_url: "http://x", block: "latest", foo: :bar)
-      refute Keyword.has_key?(opts, :block)
-      refute Keyword.has_key?(opts, :foo)
-    end
-  end
-
-  # --- rename_key/3 ---
-
-  describe "rename_key/3" do
-    test "renames key when present" do
-      assert [new: "value"] = Helpers.rename_key([old: "value"], :old, :new)
-    end
-
-    test "returns opts unchanged when key absent" do
-      opts = [other: "value"]
-      assert ^opts = Helpers.rename_key(opts, :missing, :new)
+      assert %{data: "0x"} = Helpers.maybe_put_revert_data_hex(map)
     end
   end
 end

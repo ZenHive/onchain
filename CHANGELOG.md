@@ -6,6 +6,11 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Changed — RPC execution-revert `data` for `decode_error/2` (Task 73)
+
+- **`Onchain.RPC.Helpers.do_rpc/3`** — when cartouche returns an RPC error map that includes execution-revert bytes as `:revert`, the map is enriched with `:data` as a lowercase `0x` hex string (via `Onchain.Hex.encode/1`) unless `:data` is already present. Callers can pass `data` into `Onchain.ABI.decode_error/2` without manual encoding. Documented on `Onchain.RPC`, `Onchain.Contract`, and README.
+- **`Onchain.RPC.Helpers.maybe_put_revert_data_hex/1`** — `@doc false` helper applying the enrichment; covered by unit tests.
+
 ### Documentation — Task 68 (defi-skills mining)
 
 - Enumerated the `defi-skills` CLI action surface (`defi-skills actions --json`) and mapped it to **onchain** scope versus sibling repos. Mainnet lists 53 actions across twelve protocol groups; Arbitrum samples smaller coverage (25 actions, six groups). Added **Proposed additions from defi-skills mining** to `ROADMAP.md` with three scored proposals (ERC-721 writes, WETH helpers, allowance-gap pure helpers) plus cross-references to existing Tasks 51, 57, and 73. No library code changes.
@@ -33,7 +38,7 @@ Completed roadmap tasks.
 - **`Onchain.ABI.decode_call/3` + `decode_call!/3`** — thin wrappers over hieroglyph 1.1.0's `ABI.decode_call/3`. Decodes selector-prefixed calldata to function args after verifying the leading 4-byte selector matches `signature_or_selector`. Forwards `opts` to hieroglyph (e.g. `decode_structs: true` for a named-field map instead of a positional list). Same `{:error, {:decode_error, reason}}` envelope as `decode_response/2`; reason is one of `:calldata_too_short`, `:selector_mismatch`, `:no_function_name`, `{:invalid_hex, _}`, or upstream exception message string. Bang variant raises `Cartouche.Hex.InvalidHex` on bad hex and `MatchError` on selector mismatch / malformed payload after match.
 - **`Onchain.ABI.decode_error/2` + `decode_error!/2`** — thin wrappers over hieroglyph 1.2.0's `ABI.decode_error/2`. Decodes Solidity 0.8.4+ custom-error revert data against a list of candidate error signatures; the first definition whose 4-byte selector matches the prefix decodes the args. Returns `{:ok, %{error: name | nil, args: list}}` or the standard `{:decode_error, _}` envelope (`:calldata_too_short`, `:no_match`, `{:invalid_hex, _}`, exception string). Sibling repos consuming hieroglyph through `Onchain.ABI.*` (`onchain_aave`, `onchain_evm`, `onchain_js`, `onchain_tempo`) get the new functionality for free without rewriting their integration code.
 - **No public API change to existing functions** — `encode_call/2`, `decode_response/2`, `decode_types/2` (and bangs) keep byte-identical behavior. Purely additive.
-- **Discovered follow-on (Task 73).** `Onchain.RPC` does not currently surface the `data` field that nodes attach to execution-reverted `eth_call` errors (`code: 3`), so consumers can't yet feed revert payloads into `decode_error/2` from `eth_call` errors directly. Tracked as a separate Code Health task — non-blocking; callers handling revert data from other sources (mempool, batch RPC raw bodies, log inspection) can use `decode_error/2` today.
+- **Follow-on Task 73** (RPC revert `data` passthrough) shipped under `[Unreleased]` — see Changed section above.
 
 ### Audit — Hieroglyph 1.0.0 → 1.4.0 silent bug-fix exposure (Task 71)
 

@@ -12,11 +12,18 @@ defmodule Onchain.RPC do
   - Data validation: `{:error, {:invalid_data, input}}`
   - Block validation: `{:error, {:invalid_block, input}}`
   - Tx hash validation: `{:error, {:invalid_tx_hash, input}}` (must be 32 bytes)
-  - RPC/network errors: `{:error, {:rpc_error, %{code: integer, message: string}}}`
+  - RPC/network errors: `{:error, {:rpc_error, map}}`
 
   For RPC errors, the map always has at least a `:message` key. JSON-RPC error
   responses from the node include `:code`; network/transport errors are wrapped
   with `inspect/1` as the message.
+
+  Execution reverted (`eth_call`, etc.): when the node returns JSON-RPC `code: 3`
+  with a `data` payload, cartouche attaches `:revert` (raw bytes). Onchain mirrors
+  that payload as `:data` — a lowercase `0x`-prefixed hex string suitable for
+  `Onchain.ABI.decode_error/2`. The map may still include `:code`, `:message`,
+  and `:revert`. Optional `:error_abi` / `:error_params` appear when generic
+  `call/3` is used with cartouche's `:errors` opt for server-side decoding hints.
 
   ## Functions
 
