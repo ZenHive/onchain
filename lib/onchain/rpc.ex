@@ -39,7 +39,7 @@ defmodule Onchain.RPC do
   | `block_number!/1` | Same, raises on error |
   | `syncing/1` | Node sync status (`false` or sync-status map) |
   | `syncing!/1` | Same, raises on error |
-  | `get_block_by_number/2` | Fetch block by number or tag |
+  | `get_block_by_number/2` | Fetch block by number or tag → atom-keyed decoded map (same conventions as `get_transaction_by_hash`) |
   | `get_block_by_number!/2` | Same, raises on error |
   | `chain_id/1` | Network chain ID |
   | `chain_id!/1` | Same, raises on error |
@@ -270,9 +270,11 @@ defmodule Onchain.RPC do
       opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
     ],
     returns: %{
-      type: "{:ok, map} | {:error, term}",
-      description: "Raw block map with hex-encoded fields from the node",
-      example: ~s(%{"number" => "0x1312d00", "timestamp" => "0x665ba27f", ...})
+      type: "{:ok, map | nil} | {:error, term}",
+      description:
+        "Decoded block map (atom keys): quantities as integers, miner checksummed, " <>
+          "blooms/hashes/roots/extra_data as 0x hex; transactions are tx hashes or decoded maps if full txs requested",
+      example: ~s(%{number: 20_000_000, timestamp: 1_717_281_407, hash: "0x...", transactions: ["0x...", ...]})
     }
   )
 
@@ -296,21 +298,28 @@ defmodule Onchain.RPC do
   }
 
   @spec get_block_by_number(integer() | String.t(), keyword()) ::
-          {:ok, map()} | {:error, term()}
+          {:ok, map() | nil} | {:error, term()}
   def get_block_by_number(block_id, opts \\ [])
 
   def get_block_by_number(block_id, opts) when is_integer(block_id) and block_id >= 0 do
     hex = Onchain.Hex.from_integer(block_id)
-    do_rpc("eth_getBlockByNumber", [hex, false], to_rpc_opts(opts))
+
+    "eth_getBlockByNumber"
+    |> do_rpc([hex, false], to_rpc_opts(opts))
+    |> decode_get_block_result()
   end
 
   def get_block_by_number(tag, opts) when tag in @block_tags do
-    do_rpc("eth_getBlockByNumber", [tag, false], to_rpc_opts(opts))
+    "eth_getBlockByNumber"
+    |> do_rpc([tag, false], to_rpc_opts(opts))
+    |> decode_get_block_result()
   end
 
   def get_block_by_number("0x" <> _ = hex_num, opts) do
     if Onchain.Hex.valid?(hex_num) do
-      do_rpc("eth_getBlockByNumber", [hex_num, false], to_rpc_opts(opts))
+      "eth_getBlockByNumber"
+      |> do_rpc([hex_num, false], to_rpc_opts(opts))
+      |> decode_get_block_result()
     else
       {:error, {:invalid_block_id, hex_num}}
     end
@@ -328,10 +337,10 @@ defmodule Onchain.RPC do
       ],
       opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
     ],
-    returns: %{type: :map, description: "Raw block map with hex-encoded fields"}
+    returns: %{type: "map | nil", description: "Decoded atom-keyed block map"}
   )
 
-  @spec get_block_by_number!(integer() | String.t(), keyword()) :: map()
+  @spec get_block_by_number!(integer() | String.t(), keyword()) :: map() | nil
   def get_block_by_number!(block_id, opts \\ []) do
     case get_block_by_number(block_id, opts) do
       {:ok, result} -> result
@@ -517,7 +526,7 @@ defmodule Onchain.RPC do
     with {:ok, _hex} <- ensure_tx_hash(tx_hash) do
       case do_rpc("eth_getTransactionByHash", [tx_hash], to_rpc_opts(opts)) do
         {:ok, nil} -> {:ok, nil}
-        {:ok, tx} when is_map(tx) -> {:ok, parse_transaction(tx)}
+        {:ok, tx} when is_map(tx) -> {:ok, parse_transaction_map(tx)}
         error -> error
       end
     end
@@ -874,27 +883,11 @@ defmodule Onchain.RPC do
   end
 
   @doc false
-  # Parses a raw transaction map from the RPC response into atom-keyed map.
-  @spec parse_transaction(map()) :: map()
-  defp parse_transaction(tx) when is_map(tx) do
-    %{
-      hash: tx["hash"],
-      nonce: parse_hex_integer(tx["nonce"]),
-      block_hash: tx["blockHash"],
-      block_number: parse_hex_integer(tx["blockNumber"]),
-      transaction_index: parse_hex_integer(tx["transactionIndex"]),
-      from: parse_address(tx["from"]),
-      to: parse_address(tx["to"]),
-      value: parse_hex_integer(tx["value"]),
-      gas: parse_hex_integer(tx["gas"]),
-      gas_price: parse_hex_integer(tx["gasPrice"]),
-      max_fee_per_gas: parse_hex_integer(tx["maxFeePerGas"]),
-      max_priority_fee_per_gas: parse_hex_integer(tx["maxPriorityFeePerGas"]),
-      input: tx["input"],
-      type: parse_hex_integer(tx["type"]),
-      chain_id: parse_hex_integer(tx["chainId"])
-    }
-  end
+  defp decode_get_block_result({:ok, nil}), do: {:ok, nil}
+
+  defp decode_get_block_result({:ok, block}) when is_map(block), do: {:ok, parse_block_response(block)}
+
+  defp decode_get_block_result(other), do: other
 
   @doc false
   # Validates that storage_keys is a list of 32-byte 0x-hex strings, normalizing each.

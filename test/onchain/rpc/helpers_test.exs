@@ -30,4 +30,65 @@ defmodule Onchain.RPC.HelpersTest do
       assert %{data: "0x"} = Helpers.maybe_put_revert_data_hex(map)
     end
   end
+
+  describe "parse_block_response/1" do
+    test "decodes quantities and keeps tx hashes as binaries" do
+      raw = %{
+        "number" => "0x1312d00",
+        "timestamp" => "0x665ba27f",
+        "hash" => "0xd24fd97aa00ee83dad68403760f798f91f76f38007ec11516bf38993af9fee45",
+        "miner" => "0x95222290dd7278aa3ddd389cc1e1d165cc4bafe5",
+        "transactions" => [
+          "0xaaa43bbbfc910f02df998749665040163cd840fcfe358bfaa226662e03bf091b",
+          "0xbbb43bbbfc910f02df998749665040163cd840fcfe358bfaa226662e03bf091b"
+        ],
+        "gasLimit" => "0x1c9c380",
+        "gasUsed" => "0x123456",
+        "baseFeePerGas" => "0x3b9aca00"
+      }
+
+      assert %{
+               number: 20_000_000,
+               timestamp: 1_717_281_407,
+               gas_limit: 30_000_000,
+               gas_used: 1_193_046,
+               base_fee_per_gas: 1_000_000_000,
+               transactions: [_, _],
+               miner: miner
+             } = Helpers.parse_block_response(raw)
+
+      assert String.starts_with?(miner, "0x")
+      assert byte_size(miner) == 42
+    end
+
+    test "decodes full transaction objects when present in transactions list" do
+      raw = %{
+        "number" => "0x1",
+        "timestamp" => "0x2",
+        "hash" => "0xcc",
+        "transactions" => [
+          %{
+            "hash" => "0x" <> String.duplicate("ab", 32),
+            "nonce" => "0x0",
+            "blockHash" => "0xdd",
+            "blockNumber" => "0x1",
+            "transactionIndex" => "0x0",
+            "from" => "0x1111111111111111111111111111111111111111",
+            "to" => nil,
+            "value" => "0x0",
+            "gas" => "0x5208",
+            "gasPrice" => "0x3b9aca00",
+            "input" => "0x",
+            "type" => "0x0",
+            "chainId" => "0x1"
+          }
+        ]
+      }
+
+      assert %{transactions: [tx]} = Helpers.parse_block_response(raw)
+      assert tx.hash =~ ~r/^0x/
+      assert tx.nonce == 0
+      assert tx.type == 0
+    end
+  end
 end

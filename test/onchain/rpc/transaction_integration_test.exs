@@ -13,7 +13,7 @@ defmodule Onchain.RPC.TransactionIntegrationTest do
   describe "get_transaction_by_hash/2" do
     test "fetches transaction from a known block's first transaction" do
       {:ok, block} = RPC.get_block_by_number(@test_block, rpc_opts())
-      tx_hashes = block["transactions"]
+      tx_hashes = block.transactions
 
       assert tx_hashes != [],
              "Expected block #{@test_block} to have transactions"
@@ -48,7 +48,7 @@ defmodule Onchain.RPC.TransactionIntegrationTest do
 
     test "gas price fields vary by transaction type" do
       {:ok, block} = RPC.get_block_by_number(@test_block, rpc_opts())
-      tx_hash = hd(block["transactions"])
+      tx_hash = hd(block.transactions)
       {:ok, tx} = RPC.get_transaction_by_hash(tx_hash, rpc_opts())
 
       # At least one gas price mechanism must be present
@@ -66,7 +66,7 @@ defmodule Onchain.RPC.TransactionIntegrationTest do
   describe "get_transaction_by_hash!/2" do
     test "returns transaction directly" do
       {:ok, block} = RPC.get_block_by_number(@test_block, rpc_opts())
-      tx_hash = hd(block["transactions"])
+      tx_hash = hd(block.transactions)
 
       tx = RPC.get_transaction_by_hash!(tx_hash, rpc_opts())
       assert is_map(tx)

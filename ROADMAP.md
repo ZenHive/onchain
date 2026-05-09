@@ -15,11 +15,11 @@
 
 **Phase 8: Chain Intelligence Primitives ✅** — All tasks complete. Wallet analytics, transfer parsing, ENS resolution, NFT reads, and real-time subscriptions. Phase 9 (JS bridge) extracted to [onchain_js](../onchain_js/ROADMAP.md).
 
-**Last shipped:** v0.5.4 (2026-05-07) — Tasks 49, 53, 71, 72 + cartouche 0.2.0 / ex_ast 0.10.1 dep bumps.
+**Last shipped:** v0.6.0 (2026-05-09) — Task 57 (`get_block_by_number` decoded atom-keyed map). Prior: v0.5.4 (2026-05-07) — Tasks 49, 53, 71, 72 + cartouche 0.2.0 / ex_ast 0.10.1 dep bumps.
 
 **Pending decision:** Promote P1/P2/P3 from [Proposed additions from defi-skills mining](#proposed-additions-from-defi-skills-mining) (Effs 2.50 / 2.17 / 2.17 — all outrank existing Code Health work) or discard. Task 68 (defi-skills mining) complete; the proposals are awaiting accept/reject before being scored into Code Health.
 
-**Up next:** **Task 57** — unify `get_block_*` / `get_transaction_*` RPC return shapes (Eff 1.50 🚀). **Task 73** (revert `data` for `decode_error/2`) is complete; see [CHANGELOG](CHANGELOG.md).
+**Up next:** **Task 51** — `Onchain.RPC.batch/2` (Phase 10). **Task 73** (revert `data` for `decode_error/2`) is complete; see [CHANGELOG](CHANGELOG.md).
 
 Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code Health rationale.
 
@@ -31,9 +31,10 @@ Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code
 >
 > **RPC-layer serialization:** Tasks **51**, **52**, **54**, **57**, and **63** omit `[P]`—they converge on `lib/onchain/rpc.ex` and RPC helpers; avoid parallel sessions on those rows. **64** and **66** omit `[P]` because they are gated on **63** / **64**.
 
-### ✅ Recently Completed (8)
+### ✅ Recently Completed (9)
 | Task | Description | Notes |
 |------|-------------|-------|
+| 57 | Unify RPC return shapes: `get_block_by_number/2` decoded atom-keyed map (matches `get_transaction_by_hash/2`) | `Onchain.RPC.Helpers.parse_block_response/1`, `parse_transaction_map/1`; `Onchain.Block` summary from decoded map; breaking — minor v0.6.0. CHANGELOG migration note. |
 | 73 | Surface revert `data` on execution-reverted RPC errors for `Onchain.ABI.decode_error/2` | `Onchain.RPC.Helpers.do_rpc/3` enriches cartouche's `:revert` binary with `:data` as lowercase 0x hex when absent. Docs: `Onchain.RPC`, `Onchain.Contract`, README. |
 | 68 | Mine `defi-skills` action surface for onchain coverage gaps | Discovery-only: `defi-skills actions --json` on mainnet (53 actions / 12 protocol groups) vs Arbitrum (25 actions / 6 groups). Cross-protocol gaps proposed under [Proposed additions from defi-skills mining](#proposed-additions-from-defi-skills-mining); protocol-specific surfaces delegated to sibling repos in that section. |
 | 49 | `Onchain.RPC.get_proof/3` (+ bang) wraps `eth_getProof` | Account + storage Merkle proofs for light clients and cross-chain proofs. Validates address (`ensure_hex_address/1`), 32-byte storage keys (new `Helpers.ensure_storage_key/1` re-tagging `ensure_tx_hash/1`), and block tag. Returns atom-keyed map with `balance`/`nonce` decoded to integers and proof byte arrays passed through as 0x hex (caller verifies the Merkle proof). Matches `parse_transaction/1` shape rather than `get_block_by_number`'s raw map; doesn't pre-commit Task 57's unification choice. |
@@ -47,7 +48,7 @@ Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code
 
 ## Release Plan
 
-Last shipped: **v0.5.4** (2026-05-07) — Tasks 49, 53, 71, 72 + cartouche 0.2.0 / ex_ast 0.10.1 dep bumps.
+Last shipped: **v0.6.0** (2026-05-09) — Task 57 (`get_block_by_number` decoded map). Prior: **v0.5.4** (2026-05-07) — Tasks 49, 53, 71, 72 + cartouche 0.2.0 / ex_ast 0.10.1 dep bumps.
 
 Prior: **v0.5.3** (2026-05-02) — Bundled subscription hardening (v0.5.2 task set: 38, 39, 42, 43, 55, 56, 59, 62, 67) + surface-area polish (v0.5.3 task set: 50, 58, 60, 61) under a single tag covering `v0.5.1..HEAD`. v0.5.2 work was committed but never tagged separately — folded into the v0.5.3 tag rather than retroactively labeling.
 
@@ -184,7 +185,7 @@ Add ERC-4337 support: UserOperation construction, signing, and bundler RPC (`eth
 | 48 | Extract `Onchain.Subscription` into `onchain_ws` package — see won't-fix rationale below | 🔶 Won't fix (2026-05-02) | — | — | — | — | `onchain_ws` (new package) |
 | 55 | Harden `Onchain.RPC.Helpers` address/data validation (four silent-corruption paths) — see [CHANGELOG](CHANGELOG.md#changed--rpc-input-hardening-tasks-55-56) | ✅ | 2 | 9 | 8 | 4.25 🎯 | `Onchain.RPC.Helpers` |
 | 56 | 🐛 `eth_get_logs/2` silently dropped wrong filter keys — see [CHANGELOG](CHANGELOG.md#changed--rpc-input-hardening-tasks-55-56) | ✅ | 2 | 6 | 7 | 3.25 🎯 | `Onchain.RPC` |
-| 57 | Unify RPC return shapes: `get_transaction_by_hash/2` returns decoded atom-keyed struct, `get_block_by_number/2` returns raw string-keyed hex map — pick one | ⬜ | 4 | 6 | 6 | 1.50 🚀 | `Onchain.RPC` |
+| 57 | Unify RPC return shapes: `get_transaction_by_hash/2` returns decoded atom-keyed struct, `get_block_by_number/2` returns raw string-keyed hex map — pick one | ✅ | 4 | 6 | 6 | 1.50 🚀 | `Onchain.RPC` |
 | 58 | `Onchain.ABI.decode_types/2` + bang variant alias of `decode_response/2`; tuple-sig footgun documented — see [CHANGELOG](CHANGELOG.md#added--onchainabidecode_types2-alias-task-58) | ✅ | 1 | 3 | 4 | 3.50 🎯 | `Onchain.ABI` |
 | 60 | `eth_get_logs/2` accepts canonical camelCase string-key aliases — see [CHANGELOG](CHANGELOG.md#changed--eth_get_logs2-filter-ergonomics-tasks-60-61) | ✅ | 2 | 4 | 4 | 2.00 🚀 | `Onchain.RPC` |
 | 61 | `eth_get_logs/2` accepts `:block_hash` (EIP-1474) — see [CHANGELOG](CHANGELOG.md#changed--eth_get_logs2-filter-ergonomics-tasks-60-61) | ✅ | 2 | 3 | 4 | 1.75 🚀 | `Onchain.RPC` |
@@ -197,13 +198,7 @@ Add ERC-4337 support: UserOperation construction, signing, and bundler RPC (`eth
 | 70 `[P]` | Harden `Onchain.Subscription.lookup_or_buffer/3` against unsolicited sub_id keys: `pending` map has per-key cap of 100 but unbounded distinct-keys count. Server emitting notifications for never-`subscribe`-d sub_ids grows key set until connection closes (per-connection Agent dies with the conn, so blast radius is bounded — but worth fixing). Buffer only sub_ids in an in-flight subscribe state, or add a global key cap with eviction. | ⬜ | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
 | 73 | Surface `data` field on `eth_call` revert errors so consumers can feed it to `Onchain.ABI.decode_error/2`. Cartouche attaches `:revert` bytes for JSON-RPC `code: 3` + `data`; onchain mirrors them as `:data` (0x hex) in `do_rpc/3` unless already present. See [CHANGELOG](CHANGELOG.md#unreleased). | ✅ | 3 | 5 | 5 | 1.67 🚀 | `Onchain.RPC` + `Onchain.RPC.Helpers` |
 
-**Task 57 — Unify `get_block_*` / `get_transaction_*` return shapes.**
-
-`get_transaction_by_hash/2` returns an atom-keyed struct with integers decoded (`%{value: 0, block_number: 24933341, …}`). `get_block_by_number/2` returns a raw string-keyed map with hex-string values (`%{"baseFeePerGas" => "0x7e479377", …}`). Callers have to remember which returns which, and the second shape forces manual `String.to_integer/2`.
-
-Pick one: either both decode to atom-keyed structs (`Onchain.Block.t()`, `Onchain.Transaction.t()`), or both surface raw string-keyed maps (caller-decodes). Leaning toward decoded structs — matches the Phase 8 transfer-parser direction and the `Onchain.Transfer` pattern.
-
-Breaking change for consumers of `get_block_by_number/2`; justify with a minor-version bump and a brief migration note in CHANGELOG.
+**Task 57 — Unify `get_block_*` / `get_transaction_*` return shapes.** ✅ Shipped v0.6.0 — `get_block_by_number/2` returns an atom-keyed map decoded via `Onchain.RPC.Helpers.parse_block_response/1` (same conventions as `get_transaction_by_hash/2` / `parse_transaction_map/1`). Migration: CHANGELOG **v0.6.0** section.
 
 ---
 
@@ -526,7 +521,7 @@ lib/
     contract.ex                     # generic call/4 (encode → eth_call → decode)
     rpc.ex                          # eth_call, eth_getLogs, get_transaction_receipt, fee_history, etc.
     rpc/
-      helpers.ex                    # shared RPC helper functions
+      helpers.ex                    # shared RPC helpers; parse_block_response/1, parse_transaction_map/1; do_rpc revert :data
     log.ex                          # event log parsing against ABI signatures
     multicall.ex                    # Multicall3 batched reads
     signer.ex                       # key management, transaction signing

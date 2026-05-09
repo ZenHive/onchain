@@ -49,8 +49,8 @@ defmodule Onchain.Block do
 
   @spec get_by_number(integer() | String.t(), keyword()) :: {:ok, map()} | {:error, term()}
   def get_by_number(block_id, opts \\ []) do
-    with {:ok, raw} <- Onchain.RPC.get_block_by_number(block_id, opts) do
-      parse_block(raw)
+    with {:ok, block} <- Onchain.RPC.get_block_by_number(block_id, opts) do
+      summarize_block(block)
     end
   end
 
@@ -204,15 +204,15 @@ defmodule Onchain.Block do
   end
 
   @doc false
-  # Parses a raw RPC block map into native types.
-  # Pending blocks have nil for number/timestamp — return a clear error instead of crashing.
-  @spec parse_block(map()) :: {:ok, map()} | {:error, term()}
-  defp parse_block(%{"number" => nil}), do: {:error, :pending_block}
+  # RPC blocks are decoded in Onchain.RPC; pending blocks have number: nil.
+  @spec summarize_block(map() | nil) :: {:ok, map()} | {:error, term()}
+  defp summarize_block(nil), do: {:error, :block_not_found}
 
-  defp parse_block(raw) do
-    with {:ok, number} <- Onchain.Hex.to_integer(raw["number"]),
-         {:ok, timestamp} <- Onchain.Hex.to_integer(raw["timestamp"]) do
-      {:ok, %{number: number, timestamp: timestamp, hash: raw["hash"]}}
-    end
+  defp summarize_block(%{number: nil}), do: {:error, :pending_block}
+
+  defp summarize_block(%{number: n, timestamp: ts, hash: h}) when is_integer(n) and is_integer(ts) do
+    {:ok, %{number: n, timestamp: ts, hash: h}}
   end
+
+  defp summarize_block(_), do: {:error, :invalid_block}
 end

@@ -13,7 +13,7 @@ defmodule Onchain.RPC.ReceiptIntegrationTest do
   describe "get_transaction_receipt/2" do
     test "fetches receipt from a known block's first transaction" do
       {:ok, block} = RPC.get_block_by_number(@test_block, rpc_opts())
-      tx_hashes = block["transactions"]
+      tx_hashes = block.transactions
 
       assert tx_hashes != [],
              "Expected block #{@test_block} to have transactions"
@@ -50,7 +50,7 @@ defmodule Onchain.RPC.ReceiptIntegrationTest do
 
     test "receipt logs match eth_get_logs structure" do
       {:ok, block} = RPC.get_block_by_number(@test_block, rpc_opts())
-      tx_hash = hd(block["transactions"])
+      tx_hash = hd(block.transactions)
       {:ok, receipt} = RPC.get_transaction_receipt(tx_hash, rpc_opts())
 
       # If there are logs, verify they have the same structure as eth_get_logs
@@ -76,7 +76,7 @@ defmodule Onchain.RPC.ReceiptIntegrationTest do
   describe "get_transaction_receipt!/2" do
     test "returns receipt directly" do
       {:ok, block} = RPC.get_block_by_number(@test_block, rpc_opts())
-      tx_hash = hd(block["transactions"])
+      tx_hash = hd(block.transactions)
 
       receipt = RPC.get_transaction_receipt!(tx_hash, rpc_opts())
       assert is_map(receipt)

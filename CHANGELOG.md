@@ -15,6 +15,15 @@ Completed roadmap tasks.
 
 - Enumerated the `defi-skills` CLI action surface (`defi-skills actions --json`) and mapped it to **onchain** scope versus sibling repos. Mainnet lists 53 actions across twelve protocol groups; Arbitrum samples smaller coverage (25 actions, six groups). Added **Proposed additions from defi-skills mining** to `ROADMAP.md` with three scored proposals (ERC-721 writes, WETH helpers, allowance-gap pure helpers) plus cross-references to existing Tasks 51, 57, and 73. No library code changes.
 
+## v0.6.0 — RPC block decode unification (2026-05-09)
+
+### Changed — `Onchain.RPC.get_block_by_number/2` decoded shape (Task 57, **breaking**)
+
+- **`get_block_by_number/2` + `!`** — responses from `eth_getBlockByNumber` are decoded like `get_transaction_by_hash/2`: **atom keys** (`:number`, `:timestamp`, `:transactions`, …), quantity fields as integers, `miner` checksummed, hashes/bloom/roots/`extra_data`/PoW header `nonce` left as 0x hex. **`transactions`** remains a list of tx hashes when `full_transactions` is `false` (current default); if the node returns full tx objects, each entry is passed through `parse_transaction_map/1`.
+- **`Onchain.RPC.Helpers`** — `parse_block_response/1` and `parse_transaction_map/1` (`@doc false`) centralize decoding; `Onchain.RPC` delegates via existing `import`.
+- **`Onchain.Block.get_by_number/2`** — builds its summary from the decoded RPC map; `{:ok, nil}` from RPC becomes `{:error, :block_not_found}` (previously would have crashed in the old raw-map parser). Pending blocks (`number: nil`) still surface as `{:error, :pending_block}`.
+- **Migration:** replace string keys and hex quantities — e.g. `block["number"]` → `block.number`, `String.to_integer(..., 16)` no longer needed for standard quantities.
+
 ## v0.5.4 — Cartouche 0.2 + ABI revert decoding + fee history (2026-05-07)
 
 ### Bumped — cartouche 0.2.0 + ex_ast 0.10.1
@@ -30,7 +39,7 @@ Completed roadmap tasks.
 - **Validators:** `ensure_hex_address/1` for the address; new `validate_storage_keys/1` (private in `rpc.ex`) walks the list calling `Helpers.ensure_storage_key/1` per element with `Enum.reduce_while`, returning `{:ok, [normalized]}` or the first `{:error, {:invalid_storage_key, input}}`; `normalize_block/1` for the block tag. Empty `storage_keys` list is valid (account-only proof). Non-list `storage_keys` returns `{:error, {:invalid_storage_keys, input}}`. `:block` lives in opts (default `"latest"`).
 - **Return shape:** atom-keyed map produced by a private `parse_proof/1` mirroring `parse_transaction/1`. `balance` and `nonce` decode to integers via `parse_hex_integer/1`; `address` returns checksummed via `parse_address/1`; `code_hash`, `storage_hash`, and the proof byte arrays pass through as raw 0x-hex strings (callers verifying the proof want them byte-shaped, not decoded). Each `storage_proof` entry is also atom-keyed: `%{key, value, proof}`. Storage `value` is **not** decoded — slots can hold anything (addresses, hashes, packed integers); the caller knows the schema.
 - **New helper in `Onchain.RPC.Helpers`:** `ensure_storage_key/1` — delegates to `ensure_tx_hash/1` (same 32-byte shape) but re-tags the error as `{:invalid_storage_key, input}`. Reusing `ensure_tx_hash` directly would lie at the boundary, tagging storage-slot errors as "tx hash" errors; the thin re-tag wrapper keeps the boundary honest without duplicating validation code.
-- **Doesn't pre-commit Task 57.** This wrapper lands in the decoded-atom-keyed-map camp (matching `get_transaction_by_hash/2`) rather than the raw-string-keyed-map camp (`get_block_by_number/2`). When Task 57 unifies the return shapes, both `parse_proof/1` and any future struct can produce the same atom-keyed shape — no breaking change locked in here.
+- **Aligned with Task 57** — `get_block_by_number/2` now returns the same decoded-atom-keyed convention as this proof map and `get_transaction_by_hash/2` (v0.6.0).
 - **Coverage:** `Onchain.RPC` 91.84% → 92.18%; `Onchain.RPC.Helpers` → 94.12%. Both above the 80% standard tier.
 
 ### Added — `Onchain.ABI.decode_call/3` + `decode_error/2` (Task 72)

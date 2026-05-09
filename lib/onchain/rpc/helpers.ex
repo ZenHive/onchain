@@ -219,4 +219,89 @@ defmodule Onchain.RPC.Helpers do
         nil
     end
   end
+
+  @doc false
+  # Decodes eth_getTransactionByHash JSON object (camelCase keys) to atom-keyed map.
+  @spec parse_transaction_map(map()) :: map()
+  def parse_transaction_map(tx) when is_map(tx) do
+    %{
+      hash: tx["hash"],
+      nonce: parse_hex_integer(tx["nonce"]),
+      block_hash: tx["blockHash"],
+      block_number: parse_hex_integer(tx["blockNumber"]),
+      transaction_index: parse_hex_integer(tx["transactionIndex"]),
+      from: parse_address(tx["from"]),
+      to: parse_address(tx["to"]),
+      value: parse_hex_integer(tx["value"]),
+      gas: parse_hex_integer(tx["gas"]),
+      gas_price: parse_hex_integer(tx["gasPrice"]),
+      max_fee_per_gas: parse_hex_integer(tx["maxFeePerGas"]),
+      max_priority_fee_per_gas: parse_hex_integer(tx["maxPriorityFeePerGas"]),
+      input: tx["input"],
+      type: parse_hex_integer(tx["type"]),
+      chain_id: parse_hex_integer(tx["chainId"])
+    }
+  end
+
+  @doc false
+  # Decodes eth_getBlockByNumber JSON object when full_transactions is false (hashes only)
+  # or true (full tx maps). Aligns with parse_transaction_map/1 field conventions.
+  @spec parse_block_response(map()) :: map()
+  def parse_block_response(raw) when is_map(raw) do
+    %{
+      number: parse_hex_integer(raw["number"]),
+      hash: raw["hash"],
+      parent_hash: raw["parentHash"],
+      sha3_uncles: raw["sha3Uncles"],
+      logs_bloom: raw["logsBloom"],
+      transactions_root: raw["transactionsRoot"],
+      state_root: raw["stateRoot"],
+      receipts_root: raw["receiptsRoot"],
+      miner: parse_address(raw["miner"]),
+      difficulty: parse_hex_integer(raw["difficulty"]),
+      total_difficulty: parse_hex_integer(raw["totalDifficulty"]),
+      extra_data: raw["extraData"],
+      size: parse_hex_integer(raw["size"]),
+      gas_limit: parse_hex_integer(raw["gasLimit"]),
+      gas_used: parse_hex_integer(raw["gasUsed"]),
+      timestamp: parse_hex_integer(raw["timestamp"]),
+      transactions: parse_block_transactions(raw["transactions"]),
+      uncles: raw["uncles"] || [],
+      mix_hash: raw["mixHash"],
+      nonce: raw["nonce"],
+      base_fee_per_gas: parse_hex_integer(raw["baseFeePerGas"]),
+      withdrawals_root: raw["withdrawalsRoot"],
+      withdrawals: parse_withdrawals(raw["withdrawals"]),
+      blob_gas_used: parse_hex_integer(raw["blobGasUsed"]),
+      excess_blob_gas: parse_hex_integer(raw["excessBlobGas"]),
+      parent_beacon_block_root: raw["parentBeaconBlockRoot"],
+      requests_hash: raw["requestsHash"]
+    }
+  end
+
+  defp parse_block_transactions(nil), do: []
+
+  defp parse_block_transactions(list) when is_list(list) do
+    Enum.map(list, fn
+      %{} = tx -> parse_transaction_map(tx)
+      other when is_binary(other) -> other
+    end)
+  end
+
+  defp parse_block_transactions(_), do: []
+
+  defp parse_withdrawals(nil), do: nil
+
+  defp parse_withdrawals(list) when is_list(list) do
+    Enum.map(list, fn w when is_map(w) ->
+      %{
+        index: parse_hex_integer(w["index"]),
+        validator_index: parse_hex_integer(w["validatorIndex"]),
+        address: parse_address(w["address"]),
+        amount: parse_hex_integer(w["amount"])
+      }
+    end)
+  end
+
+  defp parse_withdrawals(_), do: nil
 end
