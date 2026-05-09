@@ -4,9 +4,8 @@ Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) a
 
 @~/.claude/includes/across-instances.md
 @~/.claude/includes/critical-rules.md
+@~/.claude/includes/worktree-workflow.md
 
-@~/.claude/includes/delegation.md
-@~/.claude/includes/onchain-workspace.md
 @~/.claude/includes/task-prioritization.md
 @~/.claude/includes/task-writing.md
 @~/.claude/includes/workflow-philosophy.md

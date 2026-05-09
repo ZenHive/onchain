@@ -6,6 +6,10 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Documentation — Task 68 (defi-skills mining)
+
+- Enumerated the `defi-skills` CLI action surface (`defi-skills actions --json`) and mapped it to **onchain** scope versus sibling repos. Mainnet lists 53 actions across twelve protocol groups; Arbitrum samples smaller coverage (25 actions, six groups). Added **Proposed additions from defi-skills mining** to `ROADMAP.md` with three scored proposals (ERC-721 writes, WETH helpers, allowance-gap pure helpers) plus cross-references to existing Tasks 51, 57, and 73. No library code changes.
+
 ## v0.5.4 — Cartouche 0.2 + ABI revert decoding + fee history (2026-05-07)
 
 ### Bumped — cartouche 0.2.0 + ex_ast 0.10.1

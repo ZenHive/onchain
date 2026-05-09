@@ -17,15 +17,16 @@
 
 **Last shipped:** v0.5.4 (2026-05-07) — Tasks 49, 53, 71, 72 + cartouche 0.2.0 / ex_ast 0.10.1 dep bumps.
 
-**Up next:** Code Health backlog — no breaking change pending. Future Code Health / Phase 10 tasks will follow. Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code Health rationale.
+**Up next:** Code Health backlog — no breaking change pending. Future Code Health / Phase 10 tasks will follow. **Task 68** (defi-skills mining) complete — see [Proposed additions from defi-skills mining](#proposed-additions-from-defi-skills-mining). Task 48 (`onchain_ws` extraction) closed as won't-fix on 2026-05-02 — see Code Health rationale.
 
 > **Philosophy:** Pure functions first. Consumers call from their own state. No forced state management.
 >
 > **Doc checklist (every task):** ROADMAP.md ✅ → CHANGELOG.md ✅ → README.md ✅ → CLAUDE.md ✅
 
-### ✅ Recently Completed (6)
+### ✅ Recently Completed (7)
 | Task | Description | Notes |
 |------|-------------|-------|
+| 68 | Mine `defi-skills` action surface for onchain coverage gaps | Discovery-only: `defi-skills actions --json` on mainnet (53 actions / 12 protocol groups) vs Arbitrum (25 actions / 6 groups). Cross-protocol gaps proposed under [Proposed additions from defi-skills mining](#proposed-additions-from-defi-skills-mining); protocol-specific surfaces delegated to sibling repos in that section. |
 | 49 | `Onchain.RPC.get_proof/3` (+ bang) wraps `eth_getProof` | Account + storage Merkle proofs for light clients and cross-chain proofs. Validates address (`ensure_hex_address/1`), 32-byte storage keys (new `Helpers.ensure_storage_key/1` re-tagging `ensure_tx_hash/1`), and block tag. Returns atom-keyed map with `balance`/`nonce` decoded to integers and proof byte arrays passed through as 0x hex (caller verifies the Merkle proof). Matches `parse_transaction/1` shape rather than `get_block_by_number`'s raw map; doesn't pre-commit Task 57's unification choice. |
 | 72 | `Onchain.ABI.decode_call/3` + `decode_error/2` (+ bang variants) | Thin wrappers over hieroglyph 1.1.0/1.2.0 APIs: selector-prefixed calldata decoding (forwards opts including `decode_structs: true`) and Solidity 0.8.4+ custom-error revert decoding. Same `{:error, {:decode_error, _}}` envelope as `decode_response/2`. |
 | 71 | Hieroglyph 1.0.0 → 1.4.0 bug-fix audit | Confirmed no silent-bug-fix windfall surfaces in onchain: `Onchain.Log.decode_event/2`'s indexed-param branch is independently spec-compliant for `string`/`bytes`/all arrays; no `int<N>` callers in `lib/`; integration suite green against hieroglyph 1.4.0. Lock-in tests added for indexed `bytes`, indexed fixed-size array, indexed dynamic array of static elements, and interleaved static/reference indexed params. |
@@ -181,7 +182,7 @@ Add ERC-4337 support: UserOperation construction, signing, and bundler RPC (`eth
 | 65 | Differential test harness: same RPC method via `Onchain.RPC` vs reference impl (signet first, then Web3.py / viem if needed) — catches protocol-level mistakes unit tests miss | ⬜ | 6 | 5 | 3 | 0.67 ⚠️ | `test/onchain/differential/` |
 | 66 | Tree-sitter scrape of Erigon Go source for `trace_*` / `ots_*` method enumeration (~30 methods OpenRPC doesn't cover) — gated on Task 64 + actual consumer demand | ⬜ | 5 | 4 | 3 | 0.70 ⚠️ | dev-only `Mix.Task` |
 | 67 | Migrate `:signet` → `:cartouche` dep (renames every `Signet.*` reference, swaps in `{:cartouche, "~> 0.1"}`) — see [CHANGELOG](CHANGELOG.md#changed--signet--cartouche-dep-migration-task-67) | ✅ | 4 | 7 | 8 | 1.88 🚀 | Multiple |
-| 68 | Mine `defi-skills:intent-to-transaction` action surface for `onchain` coverage gaps | ⬜ | 3 | 8 | 7 | 2.50 🎯 | (cross-cutting research) |
+| 68 | Mine `defi-skills:intent-to-transaction` action surface for `onchain` coverage gaps | ✅ | 3 | 8 | 7 | 2.50 🎯 | (cross-cutting research) |
 | 70 | Harden `Onchain.Subscription.lookup_or_buffer/3` against unsolicited sub_id keys: `pending` map has per-key cap of 100 but unbounded distinct-keys count. Server emitting notifications for never-`subscribe`-d sub_ids grows key set until connection closes (per-connection Agent dies with the conn, so blast radius is bounded — but worth fixing). Buffer only sub_ids in an in-flight subscribe state, or add a global key cap with eviction. | ⬜ | 3 | 4 | 3 | 1.17 📋 | `Onchain.Subscription` |
 | 73 | Surface `data` field on `eth_call` revert errors so consumers can feed it to `Onchain.ABI.decode_error/2`. Currently `do_rpc/3` returns `{:error, {:rpc_error, %{code, message}}}` and drops the revert payload that nodes attach for execution-reverted calls (`code: 3`). Discovered 2026-05-02 during Task 72 — without this passthrough, the new `decode_error/2` wrapper has no straightforward consumer. | ⬜ | 3 | 5 | 5 | 1.67 🚀 | `Onchain.RPC` |
 
@@ -282,6 +283,52 @@ Planted 2026-04-30 from a cartouche session that surveyed cross-repo applicabili
 > Read-only exercise — discovery + scoring only, no `Onchain.*` code edits in this task itself. The skill is already installed (`pip install defi-skills`); no new deps. Companion tasks were planted in `hieroglyph`, `onchain_aave`, and `onchain_evm` ROADMAPs the same day, with a downstream cartouche audit task gated on all four landing.
 
 **Acceptance:** a "Proposed additions from defi-skills mining" section lands in this ROADMAP listing each candidate task with D/B/U scores, scope notes, and which `defi-skills` actions motivated it. The user merges accepted entries into the Code Health table.
+
+---
+
+## Proposed additions from defi-skills mining
+
+**Completed:** 2026-05-09. **Tooling:** `defi-skills actions --json` (pip package `defi-skills`; no Mix dependency). **Coverage sampled:** Ethereum mainnet default (`count`: 53 actions grouped by protocol); Arbitrum `--chain-id 42161` (`count`: 25 actions — only `aave_v3`, `balancer_v2`, `compound_v3`, `transfers`, `uniswap_v3`, `weth`). Chain-dependent availability matches the intent-to-transaction skill: not every protocol action exists on every chain.
+
+**Already covered by onchain today (no new core task):**
+
+- **`transfer_native`, `transfer_erc20`** — Signer + raw tx or `Onchain.ERC20.transfer/*`; native balance via `Onchain.Wallet` / RPC.
+- **Multi-step “approve then act”** — `Onchain.ERC20.approve/*` + `Onchain.Contract.call/*` or protocol-specific calldata built upstream.
+- **Quotes, routing, pool math, protocol ABIs** — Uniswap / Balancer / Pendle / Curve / Lido / Aave / Compound / EigenLayer / Maker / Rocket Pool actions (`uniswap_*`, `balancer_*`, `pendle_*`, `curve_*`, `lido_*`, `aave_*`, `compound_*`, `eigenlayer_*`, `maker_*`, `rocketpool_*`) belong in sibling packages ([onchain_aave](../onchain_aave/), [onchain_js](../onchain_js/), consumers) or JS SDKs — not duplicated here as thin protocol wrappers.
+
+**Existing roadmap tasks reinforced by this pass:**
+
+| Task | Why defi-skills cares |
+|------|----------------------|
+| **73** | Simulation and `eth_call` revert paths need revert `data` for `Onchain.ABI.decode_error/2` when decoding failed swaps/supplies/etc. |
+| **51** | Batch JSON-RPC round-trips mirror indexer-style parallel `eth_call`s before composing transactions. |
+| **57** | Agents consuming both decoded txs and raw blocks benefit from one consistent RPC return shape. |
+
+### Proposal P1 — ERC-721 transfer writes
+
+| Field | Value |
+|-------|--------|
+| **Motivated by** | `transfer_erc721` |
+| **Scope** | Write-side ERC-721 helpers aligned with `Onchain.ERC20` writes: `safeTransferFrom` / `transferFrom` (+ bang variants), and optionally `setApprovalForAll` for marketplace/operator flows. Reads already live on `Onchain.ERC721`. |
+| **Scoring** | [D:3/B:7/U:8 → Eff:2.50] |
+
+### Proposal P2 — WETH9 wrap / unwrap helpers
+
+| Field | Value |
+|-------|--------|
+| **Motivated by** | `weth_wrap`, `weth_unwrap` |
+| **Scope** | Thin module (e.g. `Onchain.WETH`) exposing canonical WETH contract addresses per `chain_id` and deposit/withdraw calldata or signed-tx helpers using existing `Contract` / `Signer` patterns — avoids copy-pasting WETH9 ABI snippets in every sibling package. |
+| **Scoring** | [D:3/B:6/U:7 → Eff:2.17] |
+
+### Proposal P3 — Pure ERC-20 allowance gap helper
+
+| Field | Value |
+|-------|--------|
+| **Motivated by** | All lending/swap/LP actions that compose **ERC20 approve → router/pool call** (e.g. `aave_supply`, `uniswap_swap`, `compound_supply`, `balancer_swap`, `pendle_*`, `curve_*`, `maker_*`, `rocketpool_stake`, `eigenlayer_deposit`, …). |
+| **Scope** | Pure functions (no RPC): given required spend and current allowance, decide whether an `approve` is needed and to what raw amount (exact vs max-line patterns); optionally return encoded calldata via existing `Onchain.ABI` / ERC20 encode paths. Callers still execute transactions via `Signer`. |
+| **Scoring** | [D:3/B:6/U:7 → Eff:2.17] |
+
+**Merge hint:** When promoting a proposal into the scored tables, assign the next free task number in Code Health or Phase 10, copy the scoring row verbatim, and delete or strike the proposal entry here after merge.
 
 ---
 
