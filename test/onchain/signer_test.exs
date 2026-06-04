@@ -204,8 +204,8 @@ defmodule Onchain.SignerTest do
       assert {:ok, %V2{} = signed} = Signer.sign_transaction(trx, @test_key_binary, @test_chain_id)
 
       assert is_boolean(signed.signature_y_parity)
-      assert is_binary(signed.signature_r) and byte_size(signed.signature_r) == 32
-      assert is_binary(signed.signature_s) and byte_size(signed.signature_s) == 32
+      assert byte_size(signed.signature_r) == 32
+      assert byte_size(signed.signature_s) == 32
     end
 
     test "recoverable signer matches test address", %{unsigned: trx} do

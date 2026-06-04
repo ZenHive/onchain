@@ -1,6 +1,8 @@
 defmodule Onchain.LogTest do
   use ExUnit.Case, async: true
 
+  import Onchain.TypeEvasion, only: [untyped: 1]
+
   alias Onchain.Log
 
   # Known keccak256 hashes for common events
@@ -134,7 +136,7 @@ defmodule Onchain.LogTest do
 
     test "raises on invalid log" do
       assert_raise RuntimeError, ~r/decode_event failed/, fn ->
-        Log.decode_event!("bad", "Transfer(address,uint256)")
+        Log.decode_event!(untyped("bad"), "Transfer(address,uint256)")
       end
     end
   end

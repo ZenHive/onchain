@@ -1,6 +1,8 @@
 defmodule Onchain.AddressTest do
   use ExUnit.Case, async: true
 
+  import Onchain.TypeEvasion, only: [untyped: 1]
+
   alias Cartouche.Hex.InvalidHex
   alias Onchain.Address
 
@@ -152,7 +154,7 @@ defmodule Onchain.AddressTest do
 
     test "raises on nil" do
       assert_raise InvalidHex, fn ->
-        Address.checksum!(nil)
+        Address.checksum!(untyped(nil))
       end
     end
   end

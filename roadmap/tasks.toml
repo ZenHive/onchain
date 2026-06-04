@@ -182,15 +182,16 @@ phase = 10
 bundle = "rpc_composition"
 status = "pending"
 title = "Telemetry events around Onchain.RPC request path"
-module = "Onchain.RPC"
 scores = { d = 3, b = 5, u = 5 }
-assignee = "codex"
 domains = ["rpc", "observability"]
-created_at = "2026-04-23"
-scored_at = "2026-04-23"
+assignee = "codex"
+module = "Onchain.RPC"
 body = """
 Emit [:onchain, :rpc, :request] telemetry events (start/stop/exception) around the RPC request path. Zero runtime cost when no handler is attached — standard Elixir telemetry lib pattern. Lets consumers measure RPC latency / error rates without patching signet. Well-bounded, mechanical. Include tests.
 """
+created_at = "2026-04-23"
+started_at = "2026-06-04"
+scored_at = "2026-04-23"
 
 [[task]]
 id = 54
@@ -387,3 +388,26 @@ acceptance_criteria = [
   "Fixtures: a descriptor each for ERC-20 transfer, a Uniswap V3 router call, an EIP-712 permit message",
   "All public functions have Descripex api() annotations + @spec; unit tests for parser/binding/each formatter + one integration test against real calldata",
 ]
+
+[[task]]
+id = 75
+phase = 12
+bundle = "rpc_shapes"
+status = "pending"
+title = "Stop dialyzer cold-building the PLT per harness worktree (it OOM'd the host twice)"
+scores = { d = 2, b = 3, u = 5 }
+acceptance_criteria = ["A `mix dialyzer.json` run started in a freshly-created git worktree (no priv/plts present) reuses an existing core PLT instead of rebuilding the OTP+deps PLT from cold — verified by timing/log: cold-build path is not entered when a seed PLT is reachable.", "The chosen mechanism is concurrency-safe under concurrency_cap=4: multiple simultaneous dialyzer runs across worktrees must not corrupt or race on a shared PLT file (either each worktree gets its own copy seeded read-only from a shared core, or builds are serialized — document which).", "Main-checkout `mix dialyzer.json` behavior is unchanged (still finds priv/plts).", "mix.exs dialyzer config documents WHY the path strategy changed (the harness-worktree cold-build OOM), referencing the existing OOM-mitigation comment."]
+out_of_scope = ["Not changing plt_add_deps/plt_add_apps tuning (the apps_direct mitigation stays).", "Not a harness-side change — harness's general per-run memory watchdog is tracked separately (harness task 200); this is the onchain-side targeted fix so the common case never approaches the limit.", "Not adding a CI workflow."]
+files_to_modify = ["mix.exs"]
+touches = ["mix.exs", ".gitignore"]
+domains = ["tooling"]
+assignee = "claude"
+body = """
+Root cause of the 2026-06-04 double host-OOM (kernel watchdog panic 13:10 + jetsam OOM 13:41 -> reboot 13:48): the onchain reviewer check_command ends in `mix dialyzer.json`, and the PLT path is worktree-relative (plt_core_path/plt_local_path = "priv/plts"). priv/plts is gitignored, so it is ABSENT in every fresh harness run worktree. Each dispatched run therefore cold-builds the entire core+deps PLT from zero (all of OTP plus plt_add_apps [:mix, :hieroglyph]) in one mix/dialyzer beam -> the 12-27 GB runaway process (PID 16184 in the worktree run-1780547484818-438b5f97). Proof it was killed mid-build: the worktree's deps-dev.plt was truncated at 1.84 MB (core-PLT size) vs the complete 5.43 MB in the main checkout. Oban crash-only retry re-dispatched after reboot -> a second cold build (14:02-14:09 timestamps) -> second OOM. The harness node itself was calm at 30 MB; this was entirely the spawned check_command's dialyzer.
+
+mix.exs already carries an "OOM mitigation: skip transitive deps" comment (plt_add_deps: :apps_direct) — but that only helps once a PLT exists; the cold build from zero in a throwaway worktree pays full cost every run.
+
+Fix direction (implementer picks, must satisfy the concurrency-safety AC): either (a) point plt_core_path at an absolute shared path outside the worktree so the expensive cold OTP/core PLT is built once and reused read-mostly (deps PLT can stay worktree-local), or (b) have the check seed priv/plts into the worktree by copying from a known-good shared PLT before invoking dialyzer. (a) is cheapest but needs a guard against concurrent cold-build races under concurrency_cap=4.
+"""
+created_at = "2026-06-04"
+scored_at = "2026-06-04"

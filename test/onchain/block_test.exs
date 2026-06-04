@@ -1,6 +1,8 @@
 defmodule Onchain.BlockTest do
   use ExUnit.Case, async: true
 
+  import Onchain.TypeEvasion, only: [untyped: 1]
+
   alias Onchain.Block
 
   # --- Unit tests: input validation (no network calls) ---
@@ -23,7 +25,7 @@ defmodule Onchain.BlockTest do
   describe "find_by_timestamp!/2" do
     test "raises on invalid timestamp" do
       assert_raise RuntimeError, ~r/find_by_timestamp failed/, fn ->
-        Block.find_by_timestamp!("bad")
+        Block.find_by_timestamp!(untyped("bad"))
       end
     end
   end

@@ -38,26 +38,26 @@ defmodule Onchain.MixProject do
 
   defp deps do
     [
-      {:cartouche, "~> 0.2.0"},
-      {:decimal, "~> 2.0"},
-      {:descripex, "~> 0.6.0"},
+      {:cartouche, "~> 0.2.1"},
+      {:decimal, "~> 3.1.1"},
+      {:descripex, "~> 0.7.0"},
       {:jason, "~> 1.4"},
       {:zen_websocket, "~> 0.4.2"},
 
       # Dev/test tooling
       {:tidewave, "~> 0.5.6", only: :dev},
       {:bandit, "~> 1.0", only: :dev},
-      {:ex_unit_json, "~> 0.4.3", only: [:dev, :test], runtime: false},
+      {:ex_unit_json, "~> 0.5.0", only: [:dev, :test], runtime: false},
       {:dialyzer_json, "~> 0.2.0", only: [:dev, :test], runtime: false},
       {:styler, "~> 1.0", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:doctor, "~> 0.22.0", only: [:dev, :test], runtime: false},
+      {:doctor, "~> 0.23.0", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.14.1", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.40.1", only: :dev, runtime: false},
       {:ex_dna, "~> 1.3", only: [:dev, :test], runtime: false},
-      {:ex_ast, "~> 0.11.0", only: [:dev, :test], runtime: false},
-      {:reach, "~> 2.2", only: [:dev, :test], runtime: false},
+      {:ex_ast, "~> 0.12.0", only: [:dev, :test], runtime: false},
+      {:reach, "~> 2.7.1", only: [:dev, :test], runtime: false},
       {:boxart, "~> 0.3.3", only: [:dev, :test], runtime: false}
     ]
   end

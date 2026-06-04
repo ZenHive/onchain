@@ -6,6 +6,15 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Bumped — dependency refresh + decimal 2→3
+
+- **`decimal` 2.4.1 → 3.1.1** (major; pin `~> 2.0` → `~> 3.1.1`). 3.0 is a CVE-2026-32686 security-hardening release: it caps `Decimal.parse/1` & `Decimal.cast/1` at 34 significant digits / exponent magnitude 6_144 and shifts `Decimal.Context` defaults to decimal128 (precision 28 → 34). No function signatures changed. Verified safe for Ethereum amounts: `Decimal.new/1` on a 78-digit uint256-max constructs exactly (integer path bypasses the parse digit-limit); `Onchain.Decimal.{to_decimal,div_pow10,to_basis_points}` all return correct values; full offline suite green (508/508). The 2.x pin was a hard blocker until this bump — see cartouche note below.
+- **`cartouche` 0.2.0 → 0.2.1** (pin `~> 0.2.0` → `~> 0.2.1`). 0.2.1 moved its own `decimal` requirement to `~> 3.1`, which is what unblocked the decimal major bump (and transitively `doctor`).
+- **`doctor` 0.22.0 → 0.23.0** (dev/test; pin `~> 0.22.0` → `~> 0.23.0`). Requires `decimal ~> 3.1`; landed in lockstep with the decimal bump.
+- **`reach` 2.3.3 → 2.7.1** (dev/test; pin `~> 2.2` → `~> 2.7.1`) — pulled **`ex_ast` 0.11.2 → 0.12.0** (`~> 0.11.0` → `~> 0.12.0`) since reach ≥ 2.3.4 requires `ex_ast ~> 0.12`.
+- **`descripex` 0.6.0 → 0.7.0** (pin `~> 0.6.0` → `~> 0.7.0`) and **`ex_unit_json` 0.4.3 → 0.5.0** (dev/test; pin `~> 0.4.3` → `~> 0.5.0`).
+- All `mix.exs` constraints pinned to the resolved versions; `mix hex.outdated` reports zero updatable deps.
+
 ### Changed — RPC execution-revert `data` for `decode_error/2` (Task 73)
 
 - **`Onchain.RPC.Helpers.do_rpc/3`** — when cartouche returns an RPC error map that includes execution-revert bytes as `:revert`, the map is enriched with `:data` as a lowercase `0x` hex string (via `Onchain.Hex.encode/1`) unless `:data` is already present. Callers can pass `data` into `Onchain.ABI.decode_error/2` without manual encoding. Documented on `Onchain.RPC`, `Onchain.Contract`, and README.
