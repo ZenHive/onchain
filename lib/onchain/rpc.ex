@@ -94,7 +94,11 @@ defmodule Onchain.RPC do
 
   use Descripex, namespace: "/rpc"
 
-  import Onchain.RPC.Helpers
+  import Onchain.RPC.Helpers, except: [do_rpc: 3]
+
+  alias Onchain.RPC.Helpers
+
+  @rpc_request_event [:onchain, :rpc, :request]
 
   # --- eth_call ---
 
@@ -351,7 +355,7 @@ defmodule Onchain.RPC do
     }
   )
 
-  @block_tags Onchain.RPC.Helpers.block_tags()
+  @block_tags Helpers.block_tags()
 
   # Canonical log-filter keys accepted by eth_get_logs/2.
   # Unknown keys are rejected loudly rather than silently dropped (Task 56).
@@ -849,6 +853,20 @@ defmodule Onchain.RPC do
   end
 
   # --- Private helpers ---
+
+  @spec do_rpc(String.t(), list(), keyword()) :: {:ok, term()} | {:error, term()}
+  defp do_rpc(method, params, opts) do
+    :telemetry.span(@rpc_request_event, %{method: method}, fn ->
+      result = Helpers.do_rpc(method, params, opts)
+      {result, rpc_request_stop_metadata(method, result)}
+    end)
+  end
+
+  defp rpc_request_stop_metadata(method, {:ok, _result}), do: %{method: method, status: :ok}
+
+  defp rpc_request_stop_metadata(method, {:error, reason}) do
+    %{method: method, status: :error, error: reason}
+  end
 
   @doc false
   # Builds a JSON-RPC filter object from an Elixir map.
