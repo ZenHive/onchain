@@ -2,23 +2,26 @@
 
 Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) and write (transaction signing) capabilities using `cartouche` as the sole Ethereum dependency.
 
-@~/.claude/includes/across-instances.md
+<!-- Selective-load (Opus 4.8): eager floor = critical-rules only. Everything previously
+     imported here (worktree, task-prioritization/writing, workflow-philosophy, web-command,
+     code-style, development-philosophy/commands, elixir-setup, ex-unit-json, dialyzer-json,
+     agent-economy, reach) is now skill-on-demand via the elixir / task-driver / dev-lifecycle
+     plugins. Re-add an @-import per-surface only if Opus visibly degrades on it.
+     See ~/.claude/setup-guide.md § "Skills vs Includes". -->
 @~/.claude/includes/critical-rules.md
-@~/.claude/includes/worktree-workflow.md
-
-@~/.claude/includes/task-prioritization.md
-@~/.claude/includes/task-writing.md
-@~/.claude/includes/workflow-philosophy.md
-@~/.claude/includes/web-command.md
-@~/.claude/includes/code-style.md
-@~/.claude/includes/development-philosophy.md
-@~/.claude/includes/development-commands.md
-@~/.claude/includes/elixir-setup.md
-@~/.claude/includes/ex-unit-json.md
-@~/.claude/includes/dialyzer-json.md
-@~/.claude/includes/agent-economy.md
+@~/.claude/includes/onchain-workspace.md
 @~/.claude/includes/ethereum-rpc.md
-@~/.claude/includes/reach.md
+
+<!-- Harness driver contract: onchain is registered with the harness OTP node
+     (~/_DATA/code/harness, config/dev.local.exs). The harness MCP server
+     (mcp__harness__dispatch__*, port 4018) is the primary surface for dispatching
+     onchain roadmap tasks to headless agents gated by a cross-family reviewer AI;
+     mcp__harness_eval__project_eval is the escape hatch. See .mcp.json.
+
+     On-demand, NOT eager: the harness-driver SKILL.md is 55.8k chars (over the
+     40k eager-import limit) — loading it every session is wasteful. Read it only
+     when actually driving harness dispatch:
+       Read ~/_DATA/code/harness/skills/harness-driver/SKILL.md -->
 
 
 ## Portfolio Context

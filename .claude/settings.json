@@ -1,4 +1,12 @@
 {
+  "extraKnownMarketplaces": {
+    "nethermind-defi-skills": {
+      "source": {
+        "source": "github",
+        "repo": "NethermindEth/defi-skills"
+      }
+    }
+  },
   "enabledPlugins": {
     "defi-skills@nethermind-defi-skills": true
   }
