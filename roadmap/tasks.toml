@@ -217,23 +217,27 @@ Opt-in retry/backoff wrapper over Signet.RPC.send_rpc/3 with configurable policy
 id = 57
 phase = 12
 bundle = "rpc_shapes"
-status = "pending"
+status = "done"
 title = "Unify get_block_* / get_transaction_* RPC return shapes"
-module = "Onchain.RPC"
 scores = { d = 4, b = 6, u = 6 }
-assignee = "claude"
-model = "claude-sonnet-4-6"
-domains = ["rpc"]
-created_at = "2026-04-23"
-scored_at = "2026-04-23"
-body = """
-get_transaction_by_hash/2 returns an atom-keyed struct with integers decoded; get_block_by_number/2 returns a raw string-keyed map with hex-string values. Callers must remember which returns which, and the second shape forces manual String.to_integer/2. Pick one: both decode to atom-keyed structs (Onchain.Block.t() / Onchain.Transaction.t()), or both surface raw string-keyed maps. Leaning toward decoded structs — matches the Phase 8 transfer-parser direction and the Onchain.Transfer pattern. Breaking change for get_block_by_number/2 consumers; justify with a minor-version bump and a CHANGELOG migration note.
-"""
 acceptance_criteria = [
   "Both get_block_* and get_transaction_* return the same shape family (decoded structs OR raw maps — one choice, documented)",
   "Breaking change noted in CHANGELOG with a migration snippet",
   "Existing callers and tests updated; suite green",
 ]
+domains = ["rpc"]
+assignee = "claude"
+module = "Onchain.RPC"
+model = "claude-sonnet-4-6"
+body = """
+get_transaction_by_hash/2 returns an atom-keyed struct with integers decoded; get_block_by_number/2 returns a raw string-keyed map with hex-string values. Callers must remember which returns which, and the second shape forces manual String.to_integer/2. Pick one: both decode to atom-keyed structs (Onchain.Block.t() / Onchain.Transaction.t()), or both surface raw string-keyed maps. Leaning toward decoded structs — matches the Phase 8 transfer-parser direction and the Onchain.Transfer pattern. Breaking change for get_block_by_number/2 consumers; justify with a minor-version bump and a CHANGELOG migration note.
+"""
+implemented = "RPC.get_block_by_number decodes block maps (hex→int fields, tx list) via Helpers.parse_block_response/1 + parse_transaction_map/1"
+delivered_by = "feat/task-57 branch (PR #3)"
+created_at = "2026-04-23"
+scored_at = "2026-04-23"
+done_at = "2026-06-04"
+shipped_in = "PR #3"
 
 [[task]]
 id = 63

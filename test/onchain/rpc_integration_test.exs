@@ -55,29 +55,29 @@ defmodule Onchain.RPC.IntegrationTest do
   end
 
   describe "get_block_by_number/2" do
-    test "fetches a known block and returns raw map" do
+    test "fetches a known block and returns decoded map" do
       assert {:ok, block} = RPC.get_block_by_number(20_000_000, rpc_opts())
       assert is_map(block)
-      assert block["number"] == "0x1312d00"
-      assert is_binary(block["timestamp"])
-      assert is_binary(block["hash"])
+      assert block.number == 20_000_000
+      assert is_integer(block.timestamp)
+      assert is_binary(block.hash)
     end
 
     test "accepts 'latest' tag" do
       assert {:ok, block} = RPC.get_block_by_number("latest", rpc_opts())
       assert is_map(block)
-      assert is_binary(block["number"])
+      assert is_integer(block.number)
     end
 
     test "accepts 'finalized' tag" do
       assert {:ok, block} = RPC.get_block_by_number("finalized", rpc_opts())
       assert is_map(block)
-      assert is_binary(block["number"])
+      assert is_integer(block.number)
     end
 
     test "accepts hex block number" do
       assert {:ok, block} = RPC.get_block_by_number("0x1312d00", rpc_opts())
-      assert block["number"] == "0x1312d00"
+      assert block.number == 20_000_000
     end
   end
 
@@ -118,7 +118,7 @@ defmodule Onchain.RPC.IntegrationTest do
     test "returns block map directly" do
       block = RPC.get_block_by_number!(20_000_000, rpc_opts())
       assert is_map(block)
-      assert block["number"] == "0x1312d00"
+      assert block.number == 20_000_000
     end
   end
 
