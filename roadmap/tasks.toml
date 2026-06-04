@@ -393,7 +393,7 @@ acceptance_criteria = [
 id = 75
 phase = 12
 bundle = "rpc_shapes"
-status = "pending"
+status = "done"
 title = "Stop dialyzer cold-building the PLT per harness worktree (it OOM'd the host twice)"
 scores = { d = 2, b = 3, u = 5 }
 acceptance_criteria = ["A `mix dialyzer.json` run started in a freshly-created git worktree (no priv/plts present) reuses an existing core PLT instead of rebuilding the OTP+deps PLT from cold — verified by timing/log: cold-build path is not entered when a seed PLT is reachable.", "The chosen mechanism is concurrency-safe under concurrency_cap=4: multiple simultaneous dialyzer runs across worktrees must not corrupt or race on a shared PLT file (either each worktree gets its own copy seeded read-only from a shared core, or builds are serialized — document which).", "Main-checkout `mix dialyzer.json` behavior is unchanged (still finds priv/plts).", "mix.exs dialyzer config documents WHY the path strategy changed (the harness-worktree cold-build OOM), referencing the existing OOM-mitigation comment."]
@@ -408,6 +408,13 @@ Root cause of the 2026-06-04 double host-OOM (kernel watchdog panic 13:10 + jets
 mix.exs already carries an "OOM mitigation: skip transitive deps" comment (plt_add_deps: :apps_direct) — but that only helps once a PLT exists; the cold build from zero in a throwaway worktree pays full cost every run.
 
 Fix direction (implementer picks, must satisfy the concurrency-safety AC): either (a) point plt_core_path at an absolute shared path outside the worktree so the expensive cold OTP/core PLT is built once and reused read-mostly (deps PLT can stay worktree-local), or (b) have the check seed priv/plts into the worktree by copying from a known-good shared PLT before invoking dialyzer. (a) is cheapest but needs a guard against concurrent cold-build races under concurrency_cap=4.
+
+RESOLUTION (2026-06-05) — premise was wrong; fix was upstream, not the PLT path. Measurement falsified the cold-build hypothesis: a single dialyzer run peaked at ~30 GB even with a fully cached PLT (the main checkout did too), and trimming plt_add_apps didn't lower it. The real culprit was in cartouche: `Cartouche.Assembly.compile/1` had seven fixed-arity tuple heads ({op,a}..{op,a,b,c,d,e,f,g}), each guarded by a large opcode atom-union — a 7-shape tuple_set product type whose success-typing fixpoint under compile/1's self-recursion exploded to ~30 GB peak RSS on OTP 29 (cartouche Task 103). cartouche 0.2.2 collapses those into one `def compile(op) when is_tuple(op) and tuple_size(op) >= 2` clause. Bumping onchain to `{:cartouche, "~> 0.2.2"}` drops a cold dialyzer build from ~30 GB to 0.94 GB peak RSS (measured on development, total: 0, warnings: []). No onchain-side PLT-path change, seeding, or serialization lock is needed — those were stopgaps for an irreducible-30-GB premise that turned out false. The earlier serialization-lock PR (#4, branch task-75-plt-seed) was closed unmerged.
 """
+implemented = 'Bumped {:cartouche, "~> 0.2.2"} — the Assembly.compile/1 tuple_set fix (cartouche Task 103) drops a cold onchain dialyzer build from ~30 GB to 0.94 GB peak RSS. No onchain-side PLT-path/seeding/lock change. PR #4 (serialization stopgap) closed unmerged.'
+delivered_by = "claude (opus-4-8)"
+verified = true
 created_at = "2026-06-04"
+started_at = "2026-06-04"
 scored_at = "2026-06-04"
+done_at = "2026-06-04"

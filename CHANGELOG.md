@@ -6,6 +6,10 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Fixed — dialyzer ~30 GB → ~0.9 GB peak RSS via cartouche 0.2.2 (Task 75)
+
+- **`cartouche` 0.2.1 → 0.2.2** (pin `~> 0.2.1` → `~> 0.2.2`). 0.2.2 fixes a dialyzer memory bomb that originated in cartouche, not onchain: `Cartouche.Assembly.compile/1` had seven fixed-arity tuple heads (`{op,a}` … `{op,a,b,c,d,e,f,g}`), each guarded by a large opcode atom-union — a 7-shape `tuple_set` product type whose success-typing fixpoint under `compile/1`'s self-recursion exploded to ~30 GB peak RSS on OTP 29 (cartouche Task 103). 0.2.2 collapses them into one `def compile(op) when is_tuple(op) and tuple_size(op) >= 2` clause. **A cold `mix dialyzer.json` build drops from ~30 GB to 0.94 GB peak RSS** (measured on development, `total: 0`, `warnings: []`). This was the real cause of the 2026-06-04 double host-OOM — four concurrent reviewer dialyzers under `concurrency_cap=4`. No onchain-side PLT-path change, seeding, or serialization lock was needed; the earlier serialization-lock PR (#4) was closed unmerged once measurement falsified the "irreducible 30 GB" premise.
+
 ### Bumped — dependency refresh + decimal 2→3
 
 - **`decimal` 2.4.1 → 3.1.1** (major; pin `~> 2.0` → `~> 3.1.1`). 3.0 is a CVE-2026-32686 security-hardening release: it caps `Decimal.parse/1` & `Decimal.cast/1` at 34 significant digits / exponent magnitude 6_144 and shifts `Decimal.Context` defaults to decimal128 (precision 28 → 34). No function signatures changed. Verified safe for Ethereum amounts: `Decimal.new/1` on a 78-digit uint256-max constructs exactly (integer path bypasses the parse digit-limit); `Onchain.Decimal.{to_decimal,div_pow10,to_basis_points}` all return correct values; full offline suite green (508/508). The 2.x pin was a hard blocker until this bump — see cartouche note below.

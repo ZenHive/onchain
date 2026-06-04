@@ -38,7 +38,7 @@ defmodule Onchain.MixProject do
 
   defp deps do
     [
-      {:cartouche, "~> 0.2.1"},
+      {:cartouche, "~> 0.2.2"},
       {:decimal, "~> 3.1.1"},
       {:descripex, "~> 0.7.0"},
       {:jason, "~> 1.4"},
