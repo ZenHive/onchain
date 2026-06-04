@@ -180,7 +180,7 @@ JSON-RPC 2.0 allows array-batched requests; currently each Signet.RPC.send_rpc/3
 id = 52
 phase = 10
 bundle = "rpc_composition"
-status = "pending"
+status = "done"
 title = "Telemetry events around Onchain.RPC request path"
 scores = { d = 3, b = 5, u = 5 }
 domains = ["rpc", "observability"]
@@ -189,9 +189,13 @@ module = "Onchain.RPC"
 body = """
 Emit [:onchain, :rpc, :request] telemetry events (start/stop/exception) around the RPC request path. Zero runtime cost when no handler is attached — standard Elixir telemetry lib pattern. Lets consumers measure RPC latency / error rates without patching signet. Well-bounded, mechanical. Include tests.
 """
+implemented = "Telemetry :telemetry.span around Onchain.RPC.do_rpc (shadows Helpers.do_rpc, wraps all RPC call sites). Salvaged from OOM'd run-1780547484818: rebased onto current dev (cartouche 0.2.2 dialyzer fix), added :telemetry as direct dep so dialyzer resolves span/3. Verified: compile --warnings-as-errors clean, 2/2 telemetry tests pass, dialyzer 0 warnings (peak 0.87 GB)."
+verified = true
 created_at = "2026-04-23"
 started_at = "2026-06-04"
 scored_at = "2026-04-23"
+done_at = "2026-06-04"
+shipped_in = "8701bb9"
 
 [[task]]
 id = 54
