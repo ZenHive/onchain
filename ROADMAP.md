@@ -70,7 +70,7 @@
 | Task 65 `[P]` | ⬜ | 🎁 **differential_testing** · *test/onchain/differential/* · Differential test harness: Onchain.RPC vs reference impl (signet first) [D:6/B:5/U:3 → Eff:0.67?] ⚠️ |
 | Task 70 `[P]` | ⬜ | 🎁 **subscription_hardening** · *Onchain.Subscription* · Harden Onchain.Subscription.lookup_or_buffer/3 against unsolicited sub_id keys [D:3/B:4/U:3 → Eff:1.17] 📋 |
 | Task 74 `[P]` | ⬜ | 🎁 **erc_standards** · *Onchain.ERC7730* · ERC-7730 clear-signing descriptor parser + binding evaluator [D:6/B:7/U:6 → Eff:1.08] 📋 |
-| Task 75 | ⬜ | 🎁 **rpc_shapes** · Stop dialyzer cold-building the PLT per harness worktree (it OOM'd the host twice) [D:2/B:3/U:5 → Eff:2.0] 🎯 |
+| Task 75 | ✅ | 🎁 **rpc_shapes** · Stop dialyzer cold-building the PLT per harness worktree (it OOM'd the host twice) [D:2/B:3/U:5 → Eff:2.0] 🎯 |
 <!-- TASKS:END -->
 
 ---

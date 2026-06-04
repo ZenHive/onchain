@@ -393,7 +393,7 @@ acceptance_criteria = [
 id = 75
 phase = 12
 bundle = "rpc_shapes"
-status = "pending"
+status = "done"
 title = "Stop dialyzer cold-building the PLT per harness worktree (it OOM'd the host twice)"
 scores = { d = 2, b = 3, u = 5 }
 acceptance_criteria = ["A `mix dialyzer.json` run started in a freshly-created git worktree (no priv/plts present) reuses an existing core PLT instead of rebuilding the OTP+deps PLT from cold — verified by timing/log: cold-build path is not entered when a seed PLT is reachable.", "The chosen mechanism is concurrency-safe under concurrency_cap=4: multiple simultaneous dialyzer runs across worktrees must not corrupt or race on a shared PLT file (either each worktree gets its own copy seeded read-only from a shared core, or builds are serialized — document which).", "Main-checkout `mix dialyzer.json` behavior is unchanged (still finds priv/plts).", "mix.exs dialyzer config documents WHY the path strategy changed (the harness-worktree cold-build OOM), referencing the existing OOM-mitigation comment."]
@@ -408,6 +408,13 @@ Root cause of the 2026-06-04 double host-OOM (kernel watchdog panic 13:10 + jets
 mix.exs already carries an "OOM mitigation: skip transitive deps" comment (plt_add_deps: :apps_direct) — but that only helps once a PLT exists; the cold build from zero in a throwaway worktree pays full cost every run.
 
 Fix direction (implementer picks, must satisfy the concurrency-safety AC): either (a) point plt_core_path at an absolute shared path outside the worktree so the expensive cold OTP/core PLT is built once and reused read-mostly (deps PLT can stay worktree-local), or (b) have the check seed priv/plts into the worktree by copying from a known-good shared PLT before invoking dialyzer. (a) is cheapest but needs a guard against concurrent cold-build races under concurrency_cap=4.
+
+RESOLUTION (2026-06-04, premise corrected by measurement): the seeding direction above cannot prevent the OOM. Empirically, (1) a single dialyzer run on this dep graph peaks at ~30 GB regardless of seeding — the MAIN checkout hits ~36 GB with a fully cached PLT — so the cold build is not the hog; the analysis itself is. (2) The deps PLT is un-seedable: dep beam debug_info embeds the absolute worktree path, so its per-beam md5s differ per worktree and dialyxir rebuilds it whether or not it was copied. (3) Trimming plt_add_apps (dropping :hieroglyph) gave NO memory win AND broke ABI coverage (onchain calls ABI.*), so the PLT can't be slimmed. The real OOM mechanism was FOUR concurrent ~30 GB runs (concurrency_cap=4), not any single avoidable build. Shipped fix = the AC's sanctioned "builds are serialized" branch: a host-global mkdir lock (~/.cache/onchain-dialyzer.lock, macOS-safe — no flock) in the dialyzer.json alias serializes runs to one-at-a-time (peak ~30 GB, survivable). Core-PLT seeding kept as a per-worktree time-saver (skips the ~5s core build), not as the OOM fix. If even one ~30 GB run is too much for the host, the only remaining lever is harness-side concurrency control (harness task 200) — onchain cannot reduce a single run below ~30 GB without losing ABI coverage. Verified: two concurrent `mix dialyzer.json` queue (one prints "Waiting for onchain dialyzer lock", starts after release); both green.
 """
+implemented = "Serialized dialyzer across worktrees via a host-global atomic mkdir lock (~/.cache/onchain-dialyzer.lock) in the dialyzer.json mix alias — the real OOM fix (the 2026-06-04 double-OOM was 4 concurrent ~30 GB runs under concurrency_cap=4, not a cold build; a single run is ~30 GB even in the main checkout and that floor is irreducible without losing ABI coverage). Kept core-PLT seeding from the main checkout as a per-worktree time-saver. macOS-safe (mkdir, no flock); 30-min stale-lock reclaim. Verified two concurrent runs serialize and both pass green."
+delivered_by = "claude (opus-4.8)"
+verified = true
 created_at = "2026-06-04"
 scored_at = "2026-06-04"
+done_at = "2026-06-04"
+shipped_in = "task-75-plt-seed branch"
