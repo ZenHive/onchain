@@ -76,7 +76,9 @@
 
 ## Agent Routing
 
-Every pending task carries an `assignee` (which agent executes it) and, for `claude` tasks, a `model` pin. Token-protective split — **Opus only where the work is genuinely hard** (deep spec/wire-format, macro/DSL design, signing): Tasks 28, 41, 63, 69, 74. **Sonnet** for medium judgment: 29, 57. **Codex** for spec-driven impl / codegen / test harnesses: 51, 54, 64, 65, 66. **Cursor** for bounded hardening: 70. **Antigravity (agy)** for the simplest standard-pattern work: 52.
+Every pending task carries an `assignee` (which agent executes it) and, for `claude` tasks, a `model` pin. Token-protective split — **Opus only where the work is genuinely hard** (deep spec/wire-format, macro/DSL design, signing): Tasks 28, 41, 63, 69, 74. **Sonnet** for medium judgment: 29, 57. **Codex** for spec-driven impl / codegen / test harnesses / telemetry: 51, 52, 54, 64, 65, 66. **Cursor** for bounded hardening: 70.
+
+> **Antigravity (agy) is temporarily out of the routing pool** — disabled by an adapter bug. Task 52 (telemetry), originally routed to `antigravity`, is reassigned to `codex` (its `rpc_composition` bundle-mates 51/54 already run codex). Re-route to `antigravity` once the bug is fixed.
 
 Drive dispatch with `rmap ready --fields id,title,assignee,model,dep_layer` (the parallel-safe set) or `rmap delegate <id>` (renders a native prompt for the task's assignee).
 

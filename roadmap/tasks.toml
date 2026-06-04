@@ -184,7 +184,7 @@ status = "pending"
 title = "Telemetry events around Onchain.RPC request path"
 module = "Onchain.RPC"
 scores = { d = 3, b = 5, u = 5 }
-assignee = "antigravity"
+assignee = "codex"
 domains = ["rpc", "observability"]
 created_at = "2026-04-23"
 scored_at = "2026-04-23"
