@@ -95,6 +95,11 @@ lib/onchain/
 **Moved to onchain_aave:** `aave/` (math, contracts, pool, oracle, faucet, ui_pool_data_provider, types/)
 **Moved to onchain_evm:** `evm.ex`, `solidity.ex`, `trace.ex`, `contract/generator.ex`, `native/`
 
+## Git Workflow (current)
+
+- **No PRs (currently).** As of 2026-06 this repo no longer uses pull requests for routine work. Completed work commits and merges **directly to `development`** (the default branch). Don't open `gh pr create` — just commit/merge to `development`. (Overrides the global PR-based / GH-native-auto-merge flow for this repo.)
+- **Always ask before using a worktree.** The global worktree-workflow auto-allows creating a worktree when a tracking ID exists; in this repo, **ask first** — don't auto-create one.
+
 ## After Every Task
 
 Update **all affected `.md` files** after completing any roadmap task. This is part of every task, not a separate step.
