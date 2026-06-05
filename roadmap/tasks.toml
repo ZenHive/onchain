@@ -353,10 +353,15 @@ title = "ENS enhancements: CCIP-Read, ENSIP-10 wildcard, UTS-46/ENSIP-15 normali
 scores = { d = 6, b = 6, u = 5 }
 markers = ["parallel"]
 assignee = "claude"
+module = "Onchain.ENS"
 model = "claude-opus-4-8"
 domains = ["ens", "rpc"]
 created_at = "2026-04-19"
+started_at = "2026-06-05"
 scored_at = "2026-04-19"
+done_at = "2026-06-05"
+shipped_in = "6795b9732c83a3ba1d042717117cc94c6e523ac9"
+verified = true
 implemented = "Onchain.ENS gains normalize/1+! (UTS-46/ENSIP-15 deterministic subset via Onchain.ENS.Normalize: case-fold + NFC + ignored/disallowed code points — namehash/1 now normalizes first), dns_encode/1+! (ENSIP-10 DNS wire format), evm_coin_type/1 (ENSIP-11), and address/3+! (ENSIP-9 multi-coin) routed through a resolver engine that does ENSIP-10 wildcard discovery + extended resolve(bytes,bytes) + EIP-3668 CCIP-Read. Onchain.ENS.CCIP holds the pure EIP-3668 helpers + injectable round-trip loop. Tests: ens_normalize_test (16), ens_ccip_test (14), expanded ens_test, live address/3 integration. dialyzer 0 warnings. NOTE: ENSIP-15 confusable/script-mixing/NSM security filters intentionally out of scope (need generated data tables) — documented in Onchain.ENS.Normalize."
 delivered_by = "claude-opus-4-8"
 body = """
@@ -368,16 +373,6 @@ acceptance_criteria = [
   "UTS-46 / ENSIP-15 normalization applied to names before namehash (verified against reference vectors)",
   "Multi-coin address resolution beyond ETH-only addr(bytes32); unit tests per resolution path; api() + @spec on public functions",
 ]
-domains = ["ens", "rpc"]
-assignee = "claude"
-module = "Onchain.ENS"
-model = "claude-opus-4-8"
-body = """
-Extend ENS beyond the current ETH-only addr(bytes32) resolution: CCIP-Read / EIP-3668 off-chain lookups, ENSIP-10 wildcard resolution, full UTS-46 / ENSIP-15 Unicode normalization, and multi-coin address resolution. The Unicode normalization (UTS-46/ENSIP-15) and the EIP-3668 off-chain-gateway round-trip are the spec-heavy, easy-to-get-wrong parts — research the reference implementations (ensjs, eth-ens-namehash) before asserting byte behavior. Include tests covering each new resolution path.
-"""
-created_at = "2026-04-19"
-started_at = "2026-06-05"
-scored_at = "2026-04-19"
 
 [[task]]
 id = 65
@@ -411,7 +406,7 @@ shipped_in = "5248d61451421deb3938bd7363b74cb8bba8f1dd"
 id = 70
 phase = 12
 bundle = "subscription_hardening"
-status = "completed"
+status = "done"
 title = "Harden Onchain.Subscription.lookup_or_buffer/3 against unsolicited sub_id keys"
 scores = { d = 3, b = 4, u = 3 }
 markers = ["parallel"]
@@ -421,9 +416,14 @@ module = "Onchain.Subscription"
 body = """
 The pending map has a per-key cap of 100 but an unbounded distinct-keys count. A server emitting notifications for never-subscribed sub_ids grows the key set until the connection closes (per-connection Agent dies with the conn, so blast radius is bounded — but worth fixing). Fix: buffer only sub_ids in an in-flight subscribe state, or add a global key cap with eviction. Well-bounded hardening on an existing module. Include a test exercising the unsolicited-sub_id path.
 """
+implemented = "Onchain.Subscription.lookup_or_buffer/3 now bounds the distinct pending sub_id key count with @max_pending_distinct_sub_ids (16): a never-before-seen sub_id is buffered only while map_size(pending) < cap, otherwise the oldest key is evicted (with a warning log) before insert. Existing keys still honor the per-key @max_pending_per_sub_id (100) cap. Tests in subscription_test.exs exercise the unsolicited-sub_id eviction path."
+delivered_by = "cursor"
+verified = true
 created_at = "2026-05-07"
 started_at = "2026-06-05"
 scored_at = "2026-05-07"
+done_at = "2026-06-05"
+shipped_in = "058fd1de83bdc71221a0f7469d3beed187c2448f"
 
 [[task]]
 id = 74
