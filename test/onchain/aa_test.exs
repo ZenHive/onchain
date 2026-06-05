@@ -277,6 +277,40 @@ defmodule Onchain.AATest do
       assert params["paymasterPostOpGasLimit"] == "0x7d0"
       assert params["paymasterData"] == "0xfeed"
     end
+
+    test "v0.7 unpacks init_code into factory + factoryData for bundler RPC" do
+      factory = "0x00000000000000000000000000000000000000aa"
+
+      {:ok, op} =
+        AA.new(%{sender: "0x1234567890123456789012345678901234567890", init_code: factory <> "deadbeef"})
+
+      {:ok, params} = AA.to_rpc_params(op, version: :v0_7)
+
+      assert params["factory"] == factory
+      assert params["factoryData"] == "0xdeadbeef"
+      refute Map.has_key?(params, "initCode")
+    end
+
+    test "v0.7 unpacks paymaster_and_data into paymaster fields for bundler RPC" do
+      paymaster = "0x00000000000000000000000000000000000000bb"
+
+      packed =
+        paymaster <>
+          "00000000000000000000000000001111" <>
+          "00000000000000000000000000002222" <>
+          "cafe"
+
+      {:ok, op} =
+        AA.new(%{sender: "0x1234567890123456789012345678901234567890", paymaster_and_data: packed})
+
+      {:ok, params} = AA.to_rpc_params(op, version: :v0_7)
+
+      assert params["paymaster"] == paymaster
+      assert params["paymasterVerificationGasLimit"] == "0x1111"
+      assert params["paymasterPostOpGasLimit"] == "0x2222"
+      assert params["paymasterData"] == "0xcafe"
+      refute Map.has_key?(params, "paymasterAndData")
+    end
   end
 
   describe "bundler RPC argument validation" do

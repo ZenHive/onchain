@@ -635,7 +635,20 @@ defmodule Onchain.AA do
     Map.merge(map, %{"factory" => downcase_hex(factory), "factoryData" => op.factory_data || "0x"})
   end
 
-  defp maybe_put_factory_fields(map, _op), do: map
+  defp maybe_put_factory_fields(map, %UserOperation{init_code: "0x"}), do: map
+
+  defp maybe_put_factory_fields(map, %UserOperation{init_code: init_code}) do
+    case Hex.decode(init_code) do
+      {:ok, <<factory_bin::binary-size(20), factory_data::binary>>} ->
+        Map.merge(map, %{
+          "factory" => Hex.encode(factory_bin),
+          "factoryData" => encode_optional_bytes(factory_data)
+        })
+
+      _ ->
+        map
+    end
+  end
 
   defp maybe_put_paymaster_fields(map, %UserOperation{paymaster: paymaster} = op) when is_binary(paymaster) do
     Map.merge(map, %{
@@ -646,7 +659,25 @@ defmodule Onchain.AA do
     })
   end
 
-  defp maybe_put_paymaster_fields(map, _op), do: map
+  defp maybe_put_paymaster_fields(map, %UserOperation{paymaster_and_data: "0x"}), do: map
+
+  defp maybe_put_paymaster_fields(map, %UserOperation{paymaster_and_data: paymaster_and_data}) do
+    case Hex.decode(paymaster_and_data) do
+      {:ok, <<paymaster_bin::binary-size(20), ver_gas::128, post_gas::128, data::binary>>} ->
+        Map.merge(map, %{
+          "paymaster" => Hex.encode(paymaster_bin),
+          "paymasterVerificationGasLimit" => Hex.from_integer(ver_gas),
+          "paymasterPostOpGasLimit" => Hex.from_integer(post_gas),
+          "paymasterData" => encode_optional_bytes(data)
+        })
+
+      _ ->
+        map
+    end
+  end
+
+  defp encode_optional_bytes(<<>>), do: "0x"
+  defp encode_optional_bytes(bin), do: Hex.encode(bin)
 
   defp downcase_hex(hex), do: String.downcase(hex)
 end

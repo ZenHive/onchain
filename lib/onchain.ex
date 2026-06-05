@@ -31,6 +31,7 @@ defmodule Onchain do
       Onchain.Signer,
       Onchain.Subscription,
       Onchain.Transfer,
-      Onchain.Wallet
+      Onchain.Wallet,
+      Onchain.AA
     ]
 end
