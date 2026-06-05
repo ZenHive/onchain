@@ -63,8 +63,8 @@ defmodule Onchain.RPC.Codegen do
 
     rpc_opts =
       case decode do
-        nil -> quote(do: Onchain.RPC.Helpers.to_rpc_opts(opts))
-        d -> quote(do: Keyword.put(Onchain.RPC.Helpers.to_rpc_opts(opts), :decode, unquote(d)))
+        nil -> quote(do: to_rpc_opts(opts))
+        d -> quote(do: Keyword.put(to_rpc_opts(opts), :decode, unquote(d)))
       end
 
     build_rpc(name, method, arg, rpc_opts)
@@ -74,7 +74,8 @@ defmodule Onchain.RPC.Codegen do
   # Generates the mechanical `name!` variant. See @defrpc_bang_schema.
   defmacro defrpc_bang(name, opts \\ []) do
     opts = NimbleOptions.validate!(opts, @defrpc_bang_schema)
-    arg_vars = Enum.map(Keyword.fetch!(opts, :args), &Macro.var(&1, __MODULE__))
+    caller = __CALLER__.module
+    arg_vars = Enum.map(Keyword.fetch!(opts, :args), &Macro.var(&1, caller))
     bang = :"#{name}!"
     fail_prefix = "#{name} failed: "
 
@@ -101,8 +102,8 @@ defmodule Onchain.RPC.Codegen do
   defp build_rpc(name, method, :address, rpc_opts) do
     quote do
       def unquote(name)(address, opts \\ []) do
-        with {:ok, hex_addr} <- Onchain.RPC.Helpers.ensure_hex_address(address),
-             {:ok, block} <- Onchain.RPC.Helpers.normalize_block(Keyword.get(opts, :block, "latest")) do
+        with {:ok, hex_addr} <- ensure_hex_address(address),
+             {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")) do
           do_rpc(unquote(method), [hex_addr, block], unquote(rpc_opts))
         end
       end
@@ -112,7 +113,7 @@ defmodule Onchain.RPC.Codegen do
   defp build_rpc(name, method, :data, rpc_opts) do
     quote do
       def unquote(name)(data, opts \\ []) do
-        with {:ok, _hex_data} <- Onchain.RPC.Helpers.ensure_hex_data(data) do
+        with {:ok, _hex_data} <- ensure_hex_data(data) do
           do_rpc(unquote(method), [data], unquote(rpc_opts))
         end
       end

@@ -259,7 +259,7 @@ shipped_in = "PR #3"
 id = 63
 phase = 12
 bundle = "rpc_codegen"
-status = "pending"
+status = "done"
 title = "defrpc macro — codegen named JSON-RPC wrappers from declarative specs"
 module = "Onchain.RPC"
 scores = { d = 4, b = 6, u = 5 }
