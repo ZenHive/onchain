@@ -12,6 +12,12 @@ Completed roadmap tasks.
 - **`Onchain.MEV`** — `max_block_number` (`eth_sendPrivateTransaction`) and `block_number` (`eth_sendBundle`) now route through `normalize_block_number/1` instead of tag-accepting `normalize_block/1`, failing fast with `{:error, {:invalid_block, tag}}` rather than sending invalid relay payloads.
 - **Tests:** `test/onchain/mev_test.exs` and `test/onchain/rpc/helpers_test.exs` assert all standard block tags are rejected.
 
+### Fixed — malformed RPC response decoding (Task 81)
+
+- **`Onchain.RPC.batch/2`** — non-map JSON-RPC batch array items no longer crash `Map.new/2`; they fall through to the existing missing/unexpected batch-item error paths.
+- **`Onchain.RPC.Helpers.parse_block_response/1`** — returns `{:ok, map()} | {:error, term()}` instead of raising or masking decode failures: invalid `"number"` hex (e.g. `"0xZZ"`) surfaces `{:invalid_block_response, :number, hex}` rather than `number: nil`; non-map/non-binary `transactions` entries and non-map `withdrawals` entries return `{:invalid_block_response, field, value}`.
+- **`Onchain.RPC.get_block_by_number/2`** — propagates `parse_block_response/1` decode errors instead of returning a pending-like block.
+
 ### Added — differential RPC test harness (Task 65)
 
 - **`test/onchain/differential/rpc_cartouche_test.exs`** — 15 `@tag :differential` cases compare `Onchain.RPC` against `Cartouche.RPC.send_rpc/3` on the same node (cartouche replaced signet as the zero-infra oracle per Task 67). Covers chain id, balance/nonce/code at a historical block, `eth_call` map params, block tags (`earliest`/`safe`/`finalized`), log filter maps, tx/receipt sparse decoding, fee history, proof (latest block — nodes cap proof window), and generic `call/3` passthrough. Gated by `ONCHAIN_DIFFERENTIAL_TESTS=1` plus `ETHEREUM_API_URL`; excluded from the default suite via `@moduletag :integration`.

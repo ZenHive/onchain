@@ -595,7 +595,7 @@ scored_at = "2026-06-05"
 id = 81
 phase = 10
 bundle = "rpc_composition"
-status = "pending"
+status = "done"
 title = "Audit-surfaced: RPC batch + block decode crash on malformed node responses"
 assignee = "cursor"
 scores = { d = 2, b = 3, u = 4 }

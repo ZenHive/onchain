@@ -265,62 +265,108 @@ defmodule Onchain.RPC.Helpers do
   @doc false
   # Decodes eth_getBlockByNumber JSON object when full_transactions is false (hashes only)
   # or true (full tx maps). Aligns with parse_transaction_map/1 field conventions.
-  @spec parse_block_response(map()) :: map()
+  @spec parse_block_response(map()) :: {:ok, map()} | {:error, term()}
   def parse_block_response(raw) when is_map(raw) do
-    %{
-      number: parse_hex_integer(raw["number"]),
-      hash: raw["hash"],
-      parent_hash: raw["parentHash"],
-      sha3_uncles: raw["sha3Uncles"],
-      logs_bloom: raw["logsBloom"],
-      transactions_root: raw["transactionsRoot"],
-      state_root: raw["stateRoot"],
-      receipts_root: raw["receiptsRoot"],
-      miner: parse_address(raw["miner"]),
-      difficulty: parse_hex_integer(raw["difficulty"]),
-      total_difficulty: parse_hex_integer(raw["totalDifficulty"]),
-      extra_data: raw["extraData"],
-      size: parse_hex_integer(raw["size"]),
-      gas_limit: parse_hex_integer(raw["gasLimit"]),
-      gas_used: parse_hex_integer(raw["gasUsed"]),
-      timestamp: parse_hex_integer(raw["timestamp"]),
-      transactions: parse_block_transactions(raw["transactions"]),
-      uncles: raw["uncles"] || [],
-      mix_hash: raw["mixHash"],
-      nonce: raw["nonce"],
-      base_fee_per_gas: parse_hex_integer(raw["baseFeePerGas"]),
-      withdrawals_root: raw["withdrawalsRoot"],
-      withdrawals: parse_withdrawals(raw["withdrawals"]),
-      blob_gas_used: parse_hex_integer(raw["blobGasUsed"]),
-      excess_blob_gas: parse_hex_integer(raw["excessBlobGas"]),
-      parent_beacon_block_root: raw["parentBeaconBlockRoot"],
-      requests_hash: raw["requestsHash"]
-    }
+    with {:ok, number} <- parse_block_number(raw["number"]),
+         {:ok, transactions} <- parse_block_transactions(raw["transactions"]),
+         {:ok, withdrawals} <- parse_withdrawals(raw["withdrawals"]) do
+      {:ok,
+       %{
+         number: number,
+         hash: raw["hash"],
+         parent_hash: raw["parentHash"],
+         sha3_uncles: raw["sha3Uncles"],
+         logs_bloom: raw["logsBloom"],
+         transactions_root: raw["transactionsRoot"],
+         state_root: raw["stateRoot"],
+         receipts_root: raw["receiptsRoot"],
+         miner: parse_address(raw["miner"]),
+         difficulty: parse_hex_integer(raw["difficulty"]),
+         total_difficulty: parse_hex_integer(raw["totalDifficulty"]),
+         extra_data: raw["extraData"],
+         size: parse_hex_integer(raw["size"]),
+         gas_limit: parse_hex_integer(raw["gasLimit"]),
+         gas_used: parse_hex_integer(raw["gasUsed"]),
+         timestamp: parse_hex_integer(raw["timestamp"]),
+         transactions: transactions,
+         uncles: raw["uncles"] || [],
+         mix_hash: raw["mixHash"],
+         nonce: raw["nonce"],
+         base_fee_per_gas: parse_hex_integer(raw["baseFeePerGas"]),
+         withdrawals_root: raw["withdrawalsRoot"],
+         withdrawals: withdrawals,
+         blob_gas_used: parse_hex_integer(raw["blobGasUsed"]),
+         excess_blob_gas: parse_hex_integer(raw["excessBlobGas"]),
+         parent_beacon_block_root: raw["parentBeaconBlockRoot"],
+         requests_hash: raw["requestsHash"]
+       }}
+    end
   end
 
-  defp parse_block_transactions(nil), do: []
+  @spec parse_block_number(String.t() | nil) :: {:ok, non_neg_integer() | nil} | {:error, term()}
+  defp parse_block_number(nil), do: {:ok, nil}
+
+  defp parse_block_number(hex) do
+    case Onchain.Hex.to_integer(hex) do
+      {:ok, n} -> {:ok, n}
+      {:error, _} -> {:error, {:invalid_block_response, :number, hex}}
+    end
+  end
+
+  @spec parse_block_transactions(term()) :: {:ok, [map() | String.t()]} | {:error, term()}
+  defp parse_block_transactions(nil), do: {:ok, []}
 
   defp parse_block_transactions(list) when is_list(list) do
-    Enum.map(list, fn
-      %{} = tx -> parse_transaction_map(tx)
-      other when is_binary(other) -> other
+    list
+    |> Enum.reduce_while({:ok, []}, fn item, {:ok, acc} ->
+      case parse_block_transaction_item(item) do
+        {:ok, parsed} -> {:cont, {:ok, [parsed | acc]}}
+        {:error, _} = error -> {:halt, error}
+      end
     end)
+    |> case do
+      {:ok, items} -> {:ok, Enum.reverse(items)}
+      error -> error
+    end
   end
 
-  defp parse_block_transactions(_), do: []
+  defp parse_block_transactions(_), do: {:ok, []}
 
-  defp parse_withdrawals(nil), do: nil
+  @spec parse_block_transaction_item(term()) :: {:ok, map() | String.t()} | {:error, term()}
+  defp parse_block_transaction_item(%{} = tx), do: {:ok, parse_transaction_map(tx)}
+  defp parse_block_transaction_item(other) when is_binary(other), do: {:ok, other}
+
+  defp parse_block_transaction_item(other), do: {:error, {:invalid_block_response, :transactions, other}}
+
+  @spec parse_withdrawals(term()) :: {:ok, [map()] | nil} | {:error, term()}
+  defp parse_withdrawals(nil), do: {:ok, nil}
 
   defp parse_withdrawals(list) when is_list(list) do
-    Enum.map(list, fn w when is_map(w) ->
-      %{
-        index: parse_hex_integer(w["index"]),
-        validator_index: parse_hex_integer(w["validatorIndex"]),
-        address: parse_address(w["address"]),
-        amount: parse_hex_integer(w["amount"])
-      }
+    list
+    |> Enum.reduce_while({:ok, []}, fn item, {:ok, acc} ->
+      case parse_withdrawal_item(item) do
+        {:ok, parsed} -> {:cont, {:ok, [parsed | acc]}}
+        {:error, _} = error -> {:halt, error}
+      end
     end)
+    |> case do
+      {:ok, items} -> {:ok, Enum.reverse(items)}
+      error -> error
+    end
   end
 
-  defp parse_withdrawals(_), do: nil
+  defp parse_withdrawals(_), do: {:ok, nil}
+
+  @spec parse_withdrawal_item(term()) :: {:ok, map()} | {:error, term()}
+  defp parse_withdrawal_item(w) when is_map(w) do
+    {:ok,
+     %{
+       index: parse_hex_integer(w["index"]),
+       validator_index: parse_hex_integer(w["validatorIndex"]),
+       address: parse_address(w["address"]),
+       amount: parse_hex_integer(w["amount"])
+     }}
+  end
+
+  defp parse_withdrawal_item(other), do: {:error, {:invalid_block_response, :withdrawals, other}}
 end

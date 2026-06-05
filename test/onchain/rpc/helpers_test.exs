@@ -67,15 +67,16 @@ defmodule Onchain.RPC.HelpersTest do
         "baseFeePerGas" => "0x3b9aca00"
       }
 
-      assert %{
-               number: 20_000_000,
-               timestamp: 1_717_281_407,
-               gas_limit: 30_000_000,
-               gas_used: 1_193_046,
-               base_fee_per_gas: 1_000_000_000,
-               transactions: [_, _],
-               miner: miner
-             } = Helpers.parse_block_response(raw)
+      assert {:ok,
+              %{
+                number: 20_000_000,
+                timestamp: 1_717_281_407,
+                gas_limit: 30_000_000,
+                gas_used: 1_193_046,
+                base_fee_per_gas: 1_000_000_000,
+                transactions: [_, _],
+                miner: miner
+              }} = Helpers.parse_block_response(raw)
 
       assert String.starts_with?(miner, "0x")
       assert byte_size(miner) == 42
@@ -105,10 +106,41 @@ defmodule Onchain.RPC.HelpersTest do
         ]
       }
 
-      assert %{transactions: [tx]} = Helpers.parse_block_response(raw)
+      assert {:ok, %{transactions: [tx]}} = Helpers.parse_block_response(raw)
       assert tx.hash =~ ~r/^0x/
       assert tx.nonce == 0
       assert tx.type == 0
+    end
+
+    test "returns error for invalid block number hex instead of masking as pending" do
+      raw = %{"number" => "0xZZ", "transactions" => []}
+
+      assert {:error, {:invalid_block_response, :number, "0xZZ"}} =
+               Helpers.parse_block_response(raw)
+    end
+
+    test "accepts nil number for pending blocks" do
+      raw = %{"number" => nil, "transactions" => []}
+
+      assert {:ok, %{number: nil}} = Helpers.parse_block_response(raw)
+    end
+
+    test "returns error for non-map/non-binary transaction list member" do
+      raw = %{"number" => "0x1", "transactions" => [123]}
+
+      assert {:error, {:invalid_block_response, :transactions, 123}} =
+               Helpers.parse_block_response(raw)
+    end
+
+    test "returns error for non-map withdrawal list member" do
+      raw = %{
+        "number" => "0x1",
+        "transactions" => [],
+        "withdrawals" => ["not-a-map"]
+      }
+
+      assert {:error, {:invalid_block_response, :withdrawals, "not-a-map"}} =
+               Helpers.parse_block_response(raw)
     end
   end
 end

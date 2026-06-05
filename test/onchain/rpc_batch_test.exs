@@ -84,5 +84,17 @@ defmodule Onchain.RPC.BatchTest do
                  rpc_url: "http://stub.invalid"
                )
     end
+
+    test "returns error when batch body contains a non-map response item" do
+      StubClient.queue_response(fn _body ->
+        [1]
+      end)
+
+      assert {:error, {:rpc_error, %{message: "missing batch response"}}} =
+               RPC.batch(
+                 [{"eth_blockNumber", []}],
+                 rpc_url: "http://stub.invalid"
+               )
+    end
   end
 end

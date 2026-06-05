@@ -53,7 +53,7 @@
 | Task 51 | ✅ | 🎁 **rpc_composition** · *Onchain.RPC* · Onchain.RPC.batch/2 — JSON-RPC 2.0 array-batched requests [D:4/B:6/U:5 → Eff:1.38?] 📋 |
 | Task 52 | ✅ | 🎁 **rpc_composition** · *Onchain.RPC* · Telemetry events around Onchain.RPC request path [D:3/B:5/U:5 → Eff:1.67?] 🚀 |
 | Task 54 | ✅ | 🎁 **rpc_composition** · *Onchain.RPC* · Opt-in retry/backoff wrapper over Signet.RPC.send_rpc/3 [D:4/B:5/U:4 → Eff:1.12?] 📋 |
-| Task 81 | ⬜ | 🎁 **rpc_composition** · *Onchain.RPC* · Audit-surfaced: RPC batch + block decode crash on malformed node responses [D:2/B:3/U:4 → Eff:1.75] 🚀 |
+| Task 81 | ✅ | 🎁 **rpc_composition** · *Onchain.RPC* · Audit-surfaced: RPC batch + block decode crash on malformed node responses [D:2/B:3/U:4 → Eff:1.75] 🚀 |
 <!-- TASKS:END -->
 
 ---

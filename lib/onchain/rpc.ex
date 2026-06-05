@@ -1063,9 +1063,12 @@ defmodule Onchain.RPC do
     end
   end
 
-  @spec decode_batch_responses([map()], [pos_integer()]) :: {:ok, [term()]} | {:error, term()}
+  @spec decode_batch_responses([term()], [pos_integer()]) :: {:ok, [term()]} | {:error, term()}
   defp decode_batch_responses(responses, ids) do
-    responses_by_id = Map.new(responses, &{&1["id"], &1})
+    responses_by_id =
+      responses
+      |> Enum.filter(&is_map/1)
+      |> Map.new(&{&1["id"], &1})
 
     ids
     |> Enum.map(&Map.get(responses_by_id, &1))
@@ -1231,7 +1234,12 @@ defmodule Onchain.RPC do
   @doc false
   defp decode_get_block_result({:ok, nil}), do: {:ok, nil}
 
-  defp decode_get_block_result({:ok, block}) when is_map(block), do: {:ok, parse_block_response(block)}
+  defp decode_get_block_result({:ok, block}) when is_map(block) do
+    case parse_block_response(block) do
+      {:ok, parsed} -> {:ok, parsed}
+      {:error, _} = error -> error
+    end
+  end
 
   defp decode_get_block_result(other), do: other
 
