@@ -20,7 +20,10 @@ defmodule Onchain.RPC.Codegen do
   #
   # The `@doc`/`@spec`/`api/3` declarations stay hand-authored in `Onchain.RPC`
   # so the Descripex hints and dialyzer specs remain byte-identical; these macros
-  # only emit the function bodies.
+  # only emit the function bodies. Method names are checked against the vendored
+  # OpenRPC spec at compile time so declarations fail fast on typos.
+
+  alias Onchain.RPC.Specs
 
   @defrpc_schema [
     method: [
@@ -60,6 +63,7 @@ defmodule Onchain.RPC.Codegen do
     method = Keyword.fetch!(opts, :method)
     arg = Keyword.fetch!(opts, :arg)
     decode = Keyword.fetch!(opts, :decode)
+    ensure_known_method!(method)
 
     rpc_opts =
       case decode do
@@ -68,6 +72,14 @@ defmodule Onchain.RPC.Codegen do
       end
 
     build_rpc(name, method, arg, rpc_opts)
+  end
+
+  defp ensure_known_method!(method) do
+    Code.ensure_compiled!(Specs)
+
+    if is_nil(Specs.lookup(method)) do
+      raise ArgumentError, "unknown OpenRPC method for defrpc: #{inspect(method)}"
+    end
   end
 
   @doc false

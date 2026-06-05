@@ -110,6 +110,7 @@ defmodule Onchain.RPC do
 
   use Descripex, namespace: "/rpc"
 
+  import Onchain.RPC.Codegen
   import Onchain.RPC.Helpers, except: [do_rpc: 3]
 
   alias Onchain.RPC.Helpers
@@ -303,9 +304,7 @@ defmodule Onchain.RPC do
   )
 
   @spec block_number(keyword()) :: {:ok, non_neg_integer()} | {:error, term()}
-  def block_number(opts \\ []) do
-    do_rpc("eth_blockNumber", [], Keyword.put(to_rpc_opts(opts), :decode, :hex_unsigned))
-  end
+  defrpc(:block_number, method: "eth_blockNumber", decode: :hex_unsigned)
 
   # --- block_number! ---
 
@@ -317,12 +316,7 @@ defmodule Onchain.RPC do
   )
 
   @spec block_number!(keyword()) :: non_neg_integer()
-  def block_number!(opts \\ []) do
-    case block_number(opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "block_number failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:block_number)
 
   # --- syncing ---
 
@@ -338,9 +332,7 @@ defmodule Onchain.RPC do
   )
 
   @spec syncing(keyword()) :: {:ok, false | map()} | {:error, term()}
-  def syncing(opts \\ []) do
-    do_rpc("eth_syncing", [], to_rpc_opts(opts))
-  end
+  defrpc(:syncing, method: "eth_syncing")
 
   # --- syncing! ---
 
@@ -352,12 +344,7 @@ defmodule Onchain.RPC do
   )
 
   @spec syncing!(keyword()) :: false | map()
-  def syncing!(opts \\ []) do
-    case syncing(opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "syncing failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:syncing)
 
   # --- get_block_by_number ---
 
@@ -462,9 +449,7 @@ defmodule Onchain.RPC do
   )
 
   @spec chain_id(keyword()) :: {:ok, non_neg_integer()} | {:error, term()}
-  def chain_id(opts \\ []) do
-    do_rpc("eth_chainId", [], Keyword.put(to_rpc_opts(opts), :decode, :hex_unsigned))
-  end
+  defrpc(:chain_id, method: "eth_chainId", decode: :hex_unsigned)
 
   # --- chain_id! ---
 
@@ -476,12 +461,7 @@ defmodule Onchain.RPC do
   )
 
   @spec chain_id!(keyword()) :: non_neg_integer()
-  def chain_id!(opts \\ []) do
-    case chain_id(opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "chain_id failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:chain_id)
 
   # --- get_transaction_receipt ---
 

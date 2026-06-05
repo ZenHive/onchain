@@ -72,7 +72,7 @@ defmodule Onchain.MixProject do
     [
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib .formatter.exs mix.exs README.md LICENSE CHANGELOG.md)
+      files: ~w(lib priv/specs .formatter.exs mix.exs README.md LICENSE CHANGELOG.md)
     ]
   end
 

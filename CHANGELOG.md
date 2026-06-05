@@ -24,6 +24,12 @@ Completed roadmap tasks.
 - **`Onchain.RPC.Helpers.parse_block_response/1`** — returns `{:ok, map()} | {:error, term()}` instead of raising or masking decode failures: invalid `"number"` hex (e.g. `"0xZZ"`) surfaces `{:invalid_block_response, :number, hex}` rather than `number: nil`; non-map/non-binary `transactions` entries and non-map `withdrawals` entries return `{:invalid_block_response, field, value}`.
 - **`Onchain.RPC.get_block_by_number/2`** — propagates `parse_block_response/1` decode errors instead of returning a pending-like block.
 
+### Added — OpenRPC spec lookup for RPC codegen (Task 64)
+
+- **`priv/specs/openrpc-v1.0.0-beta.4.json`** — vendored self-contained Ethereum OpenRPC JSON built with `make build` from `ethereum/execution-apis@1ad4d25520875162d24c85480ef01e286d791e7a` and pinned as `v1.0.0-beta.4+main.1ad4d255`. The generated corpus currently contains 78 methods (`eth_*` 42, `engine_*` 25, `debug_*` 6, `txpool_*` 3, `net_*` 1, `testing_*` 1). Refresh procedure: fetch the next upstream release/commit, run `make build`, diff `openrpc.json`, update the vendored file/version pin, and rerun RPC/spec tests.
+- **`Onchain.RPC.Specs`** — compile-time Jason parser exposing `all/0` and `lookup/1`; `lookup("eth_blockNumber")` returns `%{params: [], returns: ..., description: ...}` from the vendored spec.
+- **`Onchain.RPC.Codegen.defrpc/2`** — validates declared JSON-RPC method names against `Onchain.RPC.Specs` at compile time. `Onchain.RPC.block_number/1`, `syncing/1`, and `chain_id/1` plus their bang variants now expand through the Task 63 macros while preserving the existing hand-authored docs/specs/API metadata.
+
 ### Added — differential RPC test harness (Task 65)
 
 - **`test/onchain/differential/rpc_cartouche_test.exs`** — 15 `@tag :differential` cases compare `Onchain.RPC` against `Cartouche.RPC.send_rpc/3` on the same node (cartouche replaced signet as the zero-infra oracle per Task 67). Covers chain id, balance/nonce/code at a historical block, `eth_call` map params, block tags (`earliest`/`safe`/`finalized`), log filter maps, tx/receipt sparse decoding, fee history, proof (latest block — nodes cap proof window), and generic `call/3` passthrough. Gated by `ONCHAIN_DIFFERENTIAL_TESTS=1` plus `ETHEREUM_API_URL`; excluded from the default suite via `@moduletag :integration`.
