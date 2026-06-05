@@ -588,8 +588,14 @@ Add a stricter `normalize_block_number/1` (integer or 0x-hex quantity only; reje
 
 Codex-flagged; Claude concurs (normalize_block accepts tags by design). Filed by audit-review against commit 986a545 on 2026-06-05; see .audit/986a545-*.md.
 """
+implemented = "Onchain.RPC.Helpers.normalize_block_number/1 added (non-neg integer→hex or valid 0x-hex quantity; rejects block tags). Onchain.MEV.build_bundle_params and normalize_optional_block now route blockNumber/maxBlockNumber through it instead of tag-accepting normalize_block/1 (still used by tag call sites). Tests assert tags rejected (mev_test.exs, rpc/helpers_test.exs)."
+delivered_by = "cursor"
+verified = true
 created_at = "2026-06-05"
 scored_at = "2026-06-05"
+started_at = "2026-06-05"
+done_at = "2026-06-05"
+shipped_in = "5fce6fcd44844e77892cb7f3db226f89acb145fd"
 
 [[task]]
 id = 81
@@ -609,5 +615,11 @@ Two defensive-coding gaps where a non-spec node response raises instead of retur
 
 Codex-flagged (3 items); Claude verified items 1-2 in source. Low severity (malformed-input only). Filed by audit-review against commits 3c39dd1/b3cc9b0 on 2026-06-05; see the corresponding .audit reports.
 """
+implemented = "Two malformed-node-response guards. (1) Onchain.RPC.decode_batch_responses/2 filters non-map items before Map.new, restoring the graceful missing/unexpected-batch-item error path (rpc_batch_test.exs). (2) Onchain.RPC.Helpers.parse_block_response/1 now returns {:ok,_}|{:error,_}; parse_block_transactions/parse_withdrawals catch-all on non-binary/non-map members; invalid hex \"number\" surfaces a decode error instead of nil-masking as pending; decode_get_block_result threads the error tuple (helpers_test.exs)."
+delivered_by = "cursor"
+verified = true
 created_at = "2026-06-05"
 scored_at = "2026-06-05"
+started_at = "2026-06-05"
+done_at = "2026-06-05"
+shipped_in = "1a316e3c4e5eb64cae751de55adbfd2990549998"
