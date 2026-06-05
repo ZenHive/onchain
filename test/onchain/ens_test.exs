@@ -169,6 +169,24 @@ defmodule Onchain.ENSTest do
     end
   end
 
+  describe "wildcard_suffix_names/1 (ENSIP-10 parent walk)" do
+    test "lists suffixes from the full name down to the TLD" do
+      assert ENS.wildcard_suffix_names("sub.parent.eth") == [
+               "sub.parent.eth",
+               "parent.eth",
+               "eth"
+             ]
+    end
+
+    test "single-label name is only itself" do
+      assert ENS.wildcard_suffix_names("eth") == ["eth"]
+    end
+
+    test "root name is a single empty-label candidate (EIP-137 root node)" do
+      assert ENS.wildcard_suffix_names("") == [""]
+    end
+  end
+
   describe "evm_coin_type/1" do
     test "derives the ENSIP-11 coin type from a chain id" do
       # 0x80000000 | 1 = 2147483649 (Ethereum mainnet, ENSIP-11 form)

@@ -5,8 +5,8 @@ defmodule Onchain.ENS do
   ## Does
 
   - Compute EIP-137 namehash for ENS names (`namehash/1`)
-  - Normalize names (lowercase ASCII, strip trailing dot)
-  - Validate name structure (reject empty labels, non-ASCII)
+  - Normalize names via UTS-46 / ENSIP-15 before hashing (case-fold, NFC, strip trailing dot)
+  - Validate name structure (reject empty labels, disallowed code points)
   - Forward resolution: ENS name → ETH address (`resolve/2`)
   - Multi-coin address resolution via `addr(bytes32,uint256)` (`address/3`, ENSIP-9/11)
   - ENSIP-10 wildcard resolution + EIP-3668 CCIP-Read off-chain lookups (`address/3`)
@@ -657,22 +657,37 @@ defmodule Onchain.ENS do
 
   # ENSIP-10 wildcard discovery: try the full name, then strip the leftmost label
   # and retry, until a resolver is registered or the name is exhausted.
+  @doc false
+  @spec wildcard_suffix_names(String.t()) :: [String.t()]
+  def wildcard_suffix_names(name) when is_binary(name) do
+    name
+    |> String.split(".")
+    |> suffix_names_from_labels()
+  end
+
+  @spec suffix_names_from_labels([String.t()]) :: [String.t()]
+  defp suffix_names_from_labels([]), do: []
+
+  defp suffix_names_from_labels(labels) do
+    [Enum.join(labels, ".") | suffix_names_from_labels(tl(labels))]
+  end
+
   @spec find_resolver(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   defp find_resolver(name, opts) do
     name
-    |> String.split(".")
-    |> do_find_resolver(opts)
+    |> wildcard_suffix_names()
+    |> do_find_resolver_by_name(opts)
   end
 
-  @spec do_find_resolver([String.t()], keyword()) :: {:ok, String.t()} | {:error, term()}
-  defp do_find_resolver([], _opts), do: {:error, :no_resolver}
+  @spec do_find_resolver_by_name([String.t()], keyword()) :: {:ok, String.t()} | {:error, term()}
+  defp do_find_resolver_by_name([], _opts), do: {:error, :no_resolver}
 
-  defp do_find_resolver(labels, opts) do
-    node = labels |> Enum.join(".") |> compute_namehash()
+  defp do_find_resolver_by_name([candidate | rest], opts) do
+    node = compute_namehash(candidate)
 
     case get_resolver(node, opts) do
       {:ok, resolver_addr} -> {:ok, resolver_addr}
-      {:error, :no_resolver} -> do_find_resolver(tl(labels), opts)
+      {:error, :no_resolver} -> do_find_resolver_by_name(rest, opts)
       error -> error
     end
   end
