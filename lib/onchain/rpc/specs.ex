@@ -3,24 +3,45 @@ defmodule Onchain.RPC.Specs do
   Compile-time lookup table for the vendored Ethereum OpenRPC method specs.
   """
 
-  @spec_path Path.expand("../../../priv/specs/openrpc-v1.0.0-beta.4.json", __DIR__)
-  @external_resource @spec_path
+  @openrpc_spec_path Path.expand("../../../priv/specs/openrpc-v1.0.0-beta.4.json", __DIR__)
+  @erigon_spec_path Path.expand("../../../priv/specs/erigon-methods.json", __DIR__)
+  @external_resource @openrpc_spec_path
+  @external_resource @erigon_spec_path
 
-  @raw_spec @spec_path |> File.read!() |> Jason.decode!()
+  @raw_spec @openrpc_spec_path |> File.read!() |> Jason.decode!()
 
-  @specs_by_method_name Map.new(@raw_spec["methods"], fn method ->
-                          description =
-                            method["description"] ||
-                              method["summary"] ||
-                              ""
+  @openrpc_specs_by_method_name Map.new(@raw_spec["methods"], fn method ->
+                                  description =
+                                    method["description"] ||
+                                      method["summary"] ||
+                                      ""
 
-                          {method["name"],
-                           %{
-                             params: Map.get(method, "params", []),
-                             returns: method["result"],
-                             description: description
-                           }}
-                        end)
+                                  {method["name"],
+                                   %{
+                                     params: Map.get(method, "params", []),
+                                     returns: method["result"],
+                                     description: description
+                                   }}
+                                end)
+
+  @erigon_specs_by_method_name (if File.exists?(@erigon_spec_path) do
+                                  @erigon_spec_path
+                                  |> File.read!()
+                                  |> Jason.decode!()
+                                  |> Map.new(fn method ->
+                                    {method["method"],
+                                     %{
+                                       params: [],
+                                       returns: %{},
+                                       description:
+                                         "Erigon #{method["receiver"]}.#{method["go_method"]} scraped from #{method["source"]}"
+                                     }}
+                                  end)
+                                else
+                                  %{}
+                                end)
+
+  @specs_by_method_name Map.merge(@openrpc_specs_by_method_name, @erigon_specs_by_method_name)
 
   @type method_spec :: %{
           params: [map()],

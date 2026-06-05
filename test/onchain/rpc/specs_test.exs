@@ -22,6 +22,17 @@ defmodule Onchain.RPC.SpecsTest do
   end
 
   test "loads the pinned OpenRPC corpus" do
-    assert 78 = map_size(Specs.all())
+    openrpc_methods =
+      Specs.all()
+      |> Map.keys()
+      |> Enum.reject(&(String.starts_with?(&1, "trace_") or String.starts_with?(&1, "ots_")))
+
+    assert 78 = length(openrpc_methods)
+  end
+
+  test "loads scraped Erigon trace and otterscan methods" do
+    assert %{description: description, params: [], returns: %{}} = Specs.lookup("trace_call")
+    assert String.contains?(description, "Erigon")
+    assert %{params: [], returns: %{}} = Specs.lookup("ots_getApiLevel")
   end
 end

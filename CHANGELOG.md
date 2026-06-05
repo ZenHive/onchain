@@ -6,6 +6,12 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Added — Erigon trace/otterscan RPC method scrape (Task 66)
+
+- **`priv/specs/erigon-3578acb3a63d34ca746ff03c5350584c1a4eed0f/jsonrpc`** — vendored Erigon JSON-RPC Go source from `erigontech/erigon@3578acb3a63d34ca746ff03c5350584c1a4eed0f`. The task originally referenced the older `turbo/jsonrpc` path; this pin stores the same RPC package under `rpc/jsonrpc`.
+- **`mix onchain.scrape_erigon_methods`** — dev/test-only tree-sitter scrape over `TraceAPIImpl` and `OtterscanAPIImpl` method receivers. It emits `priv/specs/erigon-methods.json` with 21 exported Erigon-specific RPC methods (`trace_*` 9, `ots_*` 12) while keeping tree-sitter out of runtime dependencies.
+- **`Onchain.RPC.Specs`** — pure-Elixir runtime lookup now merges the vendored OpenRPC corpus with the generated Erigon method list so `defrpc` validation can accept `trace_*`/`ots_*` declarations.
+
 ### Fixed — wire `defrpc` macro call sites for uniform RPC wrappers (Task 76)
 
 - **`Onchain.RPC`** — imports `Onchain.RPC.Codegen` and declares the uniform wrappers through `defrpc/2` + `defrpc_bang/2`: `eth_send_raw_transaction`, `get_balance`, `block_number`, `syncing`, `chain_id`, `get_transaction_count`, and `eth_get_code`, plus their `!` variants. Public `api/3`, `@doc`, and `@spec` surfaces remain hand-authored; the macro owns only the duplicated wrapper bodies.

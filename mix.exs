@@ -60,7 +60,8 @@ defmodule Onchain.MixProject do
       {:ex_dna, "~> 1.3", only: [:dev, :test], runtime: false},
       {:ex_ast, "~> 0.12.0", only: [:dev, :test], runtime: false},
       {:reach, "~> 2.7.1", only: [:dev, :test], runtime: false},
-      {:boxart, "~> 0.3.3", only: [:dev, :test], runtime: false}
+      {:boxart, "~> 0.3.3", only: [:dev, :test], runtime: false},
+      {:tree_sitter_language_pack, "1.6.2", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -92,7 +93,8 @@ defmodule Onchain.MixProject do
     ]
   end
 
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(:dev), do: ["lib", "dev"]
+  defp elixirc_paths(:test), do: ["lib", "dev", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
   defp dialyzer do
