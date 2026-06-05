@@ -86,27 +86,29 @@ phase = 7
 bundle = "dex"
 status = "done"
 title = "DEX swap routing (optimal path across pools)"
-module = "Onchain.DEX.Router"
 scores = { d = 7, b = 8, u = 7 }
 markers = ["parallel"]
-assignee = "claude"
-model = "claude-opus-4-8"
-domains = ["dex", "rpc"]
-created_at = "2026-04-23"
-scored_at = "2026-04-23"
-body = """
-Find optimal swap paths across DEX pools (Uniswap, Curve, Balancer). Three approaches to evaluate before committing: (a) Rust routing libs via onchain_evm, (b) Elixir with revm for local simulation of candidate routes, (c) QuickBEAM + Uniswap v3 SDK (see onchain_js Task 3). Primary consumer: ccxt_ex when it adds DEX trading. High design surface — the approach choice is the core judgment call; prototype before building out. Include tests.
-"""
 acceptance_criteria = [
   "Approach (a/b/c) chosen with a documented rationale in CHANGELOG + module @moduledoc",
   "Onchain.DEX.Router returns an optimal-path result for at least Uniswap v2/v3-style pools given token in/out + amount",
   "Unit tests cover path selection; integration test (env-gated) against a real pool set",
   "Public functions carry Descripex api() annotations + @spec",
 ]
+domains = ["dex", "rpc"]
+assignee = "claude"
+module = "Onchain.DEX.Router"
+model = "claude-opus-4-8"
+body = """
+Find optimal swap paths across DEX pools (Uniswap, Curve, Balancer). Three approaches to evaluate before committing: (a) Rust routing libs via onchain_evm, (b) Elixir with revm for local simulation of candidate routes, (c) QuickBEAM + Uniswap v3 SDK (see onchain_js Task 3). Primary consumer: ccxt_ex when it adds DEX trading. High design surface — the approach choice is the core judgment call; prototype before building out. Include tests.
+"""
 implemented = "Onchain.DEX.Router: route/5 (optimal path), quote_pool/4, amount_out_v2/4. All three scoped approaches (a Rust/onchain_evm, b revm, c QuickBEAM) rejected — each pulls a native dep onchain can't take and inverts the dep graph. Chosen: pure-Elixir analytic v2 (canonical getAmountOut) + on-chain v3 QuoterV2 quoteExactInputSingle eth_call. Pure graph path enumeration, greedy per-hop pool choice (globally optimal: output monotonic in input). No split routing (documented). api()+@spec on all public fns. test/onchain/dex/router_test.exs (24 unit + doctests), router_integration_test.exs (@tag :integration, real v2 pair + v3 QuoterV2; not run this session — RPC tunnel down)."
 delivered_by = "claude"
-verified = false
+verified = true
+created_at = "2026-04-23"
+started_at = "2026-06-05"
+scored_at = "2026-04-23"
 done_at = "2026-06-05"
+shipped_in = "f231c2ee3bafe1ee39b2140b08a04dcaca5e3fc7"
 
 [[task]]
 id = 29
@@ -130,10 +132,12 @@ body = """
 Private transaction submission via Flashbots-style APIs to prevent front-running on DEX trades. Lower priority until DEX trading is active (gated by real Task 28 consumer pressure). Include tests.
 """
 implemented = "lib/onchain/mev.ex — Onchain.MEV.send_private_transaction/2 + send_bundle/2 via Flashbots-style JSON-RPC (eth_sendPrivateTransaction / eth_sendBundle) over Cartouche.RPC.send_rpc; caller-supplied :endpoint (no public-node fallback) + :headers auth. Unit tests (request shaping + error envelopes) + env-gated integration test."
-delivered_by = "claude-opus-4-8"
+delivered_by = "claude"
+verified = true
 created_at = "2026-04-23"
 scored_at = "2026-04-23"
 done_at = "2026-06-05"
+shipped_in = "986a545f9617f9c7e6cb9c39fca817ba9420e0eb"
 
 # ============================================================================
 # Phase 9 — Account Abstraction (ERC-4337)
@@ -145,24 +149,29 @@ phase = 9
 bundle = "account_abstraction"
 status = "done"
 title = "ERC-4337 UserOperation construction, signing, and bundler RPC"
-module = "Onchain.AA"
 scores = { d = 7, b = 8, u = 7 }
 markers = ["parallel"]
-assignee = "claude"
-model = "claude-opus-4-8"
-domains = ["account_abstraction", "signing", "rpc"]
-created_at = "2026-05-07"
-scored_at = "2026-05-07"
-body = """
-Add ERC-4337 support: UserOperation construction, signing, and bundler RPC (eth_sendUserOperation, eth_estimateUserOperationGas, eth_getUserOperationByHash, eth_getUserOperationReceipt, eth_supportedEntryPoints). Cover both v0.6 and v0.7 EntryPoint shapes if both are still relevant when picked up — the wire-format differences between EntryPoint versions are the trap. Include tests.
-"""
 acceptance_criteria = [
   "Onchain.AA builds + signs a UserOperation for at least the v0.7 EntryPoint (v0.6 too if still relevant)",
   "Bundler RPC wrappers: eth_sendUserOperation, eth_estimateUserOperationGas, eth_getUserOperationByHash, eth_getUserOperationReceipt, eth_supportedEntryPoints",
   "UserOp hashing matches the EntryPoint spec (verified against a reference vector)",
   "Unit tests for construction/signing/hashing; integration test env-gated against a real bundler; api() + @spec on public functions",
 ]
+domains = ["account_abstraction", "signing", "rpc"]
+assignee = "claude"
+module = "Onchain.AA"
+model = "claude-opus-4-8"
+body = """
+Add ERC-4337 support: UserOperation construction, signing, and bundler RPC (eth_sendUserOperation, eth_estimateUserOperationGas, eth_getUserOperationByHash, eth_getUserOperationReceipt, eth_supportedEntryPoints). Cover both v0.6 and v0.7 EntryPoint shapes if both are still relevant when picked up — the wire-format differences between EntryPoint versions are the trap. Include tests.
+"""
 implemented = "Onchain.AA (lib/onchain/aa.ex) + Onchain.AA.UserOperation struct. Both EntryPoint versions: v0.6 (UserOperation) and v0.7 (PackedUserOperation — accountGasLimits/gasFees high‖low-128 packing, initCode/paymasterAndData derived from unpacked factory*/paymaster* fields). user_op_hash/4 = keccak256(abi.encode(keccak256(packed), entryPoint, chainId)) computed by primitive 32-byte-word concatenation via Cartouche.Hash.keccak — verified exact against viem reference vectors (v0.6 0xe331…fcba, v0.7 0x1903…40d). sign_user_operation/5 with :eip191 (SimpleAccount toEthSignedMessageHash) + :raw schemes, r‖s‖v(27/28). Bundler RPC via Onchain.RPC.call/3: send/estimate/getByHash/getReceipt/supportedEntryPoints; :bundler_url opt. Added :curvy to dialyzer plt_add_apps. test/onchain/aa_test.exs (31 tests) + aa_integration_test.exs (env-gated BUNDLER_RPC_URL). Dialyzer 0, credo strict 0, doctor 100%."
+delivered_by = "claude"
+verified = true
+created_at = "2026-05-07"
+started_at = "2026-06-05"
+scored_at = "2026-05-07"
+done_at = "2026-06-05"
+shipped_in = "222f3c08cb1f99f9455c1384c82681366ff317ef"
 
 # ============================================================================
 # Phase 10 — RPC Composition Layer
@@ -185,9 +194,10 @@ implemented = "Onchain.RPC.batch/2 JSON-RPC array batch: one HTTP POST for [{met
 delivered_by = "codex+reviewer"
 verified = true
 created_at = "2026-04-23"
+started_at = "2026-06-05"
 scored_at = "2026-04-23"
 done_at = "2026-06-05"
-shipped_in = "3c39dd1"
+shipped_in = "8a7e1cde884f6992245c4fa9fcaea9bb3d965bd6"
 
 [[task]]
 id = 52
@@ -216,15 +226,21 @@ phase = 10
 bundle = "rpc_composition"
 status = "done"
 title = "Opt-in retry/backoff wrapper over Signet.RPC.send_rpc/3"
-module = "Onchain.RPC"
 scores = { d = 4, b = 5, u = 4 }
-assignee = "codex"
 domains = ["rpc"]
-created_at = "2026-04-23"
-scored_at = "2026-04-23"
+assignee = "codex"
+module = "Onchain.RPC"
 body = """
 Opt-in retry/backoff wrapper over Signet.RPC.send_rpc/3 with configurable policy (default: no retry — preserves current behavior). Opt-in via keyword policy; changing send_rpc default upstream would silently change every consumer, so a downstream wrapper is the correct posture per the scope principle. Include tests.
 """
+implemented = "Landed by codex via merge-train; reviewer-approved (run run-1780623029806-ebf4f7f6, de6524918ccf21712599d900c0f3eaf7ead178ee)."
+delivered_by = "codex"
+verified = true
+created_at = "2026-04-23"
+started_at = "2026-06-05"
+scored_at = "2026-04-23"
+done_at = "2026-06-05"
+shipped_in = "de6524918ccf21712599d900c0f3eaf7ead178ee"
 
 # ============================================================================
 # Phase 12 — Code Health
@@ -262,22 +278,27 @@ phase = 12
 bundle = "rpc_codegen"
 status = "done"
 title = "defrpc macro — codegen named JSON-RPC wrappers from declarative specs"
-module = "Onchain.RPC"
 scores = { d = 4, b = 6, u = 5 }
-assignee = "claude"
-model = "claude-opus-4-8"
-domains = ["rpc", "macros"]
-created_at = "2026-04-23"
-scored_at = "2026-04-23"
-body = """
-The 11 existing Onchain.RPC.* wrappers follow a near-identical shape: per-arg validation + param construction + do_rpc(method, params, to_signet_opts(opts)) + an identical bang variant + a Descripex api() annotation. A defrpc macro expands a declaration like `defrpc :block_number, \"eth_blockNumber\", decode: :hex_unsigned, description: \"...\"` into the full function + bang + api() + @spec. Precedents that disprove the macros-are-scary objection: Phoenix.Router, Ecto.Schema, Absinthe.Schema — defrpc faces strictly less variance. The knob-growth failure mode is solved by NimbleOptions: the validate!/2 schema IS the macro's contract; adding a knob requires changing the schema, making drift visible. Variance to handle: per-arg validators, nested-map params, literal extra params, filter-key whitelist (eth_get_logs), :decode pass-through, descripex returns: variation. If a case doesn't fit, follow Ecto and add a sibling macro (defrpc_with_filter) rather than overloading defrpc.
-"""
 acceptance_criteria = [
   "Macro lives in Onchain.RPC (or a private helper module); NimbleOptions schema documents the public contract",
   "Existing 11 wrappers reimplemented through it with byte-identical public behavior (returns, error shapes, descripex hints, dialyzer story unchanged)",
   "Test suite green without changes; CHANGELOG entry explains the refactor and notes no API change",
   "Kill the prototype if the option schema balloons past ~10 keys or 3+ wrappers need bespoke escape hatches",
 ]
+domains = ["rpc", "macros"]
+assignee = "claude"
+module = "Onchain.RPC"
+model = "claude-opus-4-8"
+body = """
+The 11 existing Onchain.RPC.* wrappers follow a near-identical shape: per-arg validation + param construction + do_rpc(method, params, to_signet_opts(opts)) + an identical bang variant + a Descripex api() annotation. A defrpc macro expands a declaration like `defrpc :block_number, \"eth_blockNumber\", decode: :hex_unsigned, description: \"...\"` into the full function + bang + api() + @spec. Precedents that disprove the macros-are-scary objection: Phoenix.Router, Ecto.Schema, Absinthe.Schema — defrpc faces strictly less variance. The knob-growth failure mode is solved by NimbleOptions: the validate!/2 schema IS the macro's contract; adding a knob requires changing the schema, making drift visible. Variance to handle: per-arg validators, nested-map params, literal extra params, filter-key whitelist (eth_get_logs), :decode pass-through, descripex returns: variation. If a case doesn't fit, follow Ecto and add a sibling macro (defrpc_with_filter) rather than overloading defrpc.
+"""
+implemented = "Landed by claude via merge-train; reviewer-approved (run run-1780622112912-a0ae3c31, a4d9d64d3139f12cd6b1666461741f72927f5a5e)."
+delivered_by = "claude"
+verified = true
+created_at = "2026-04-23"
+scored_at = "2026-04-23"
+done_at = "2026-06-05"
+shipped_in = "a4d9d64d3139f12cd6b1666461741f72927f5a5e"
 
 [[task]]
 id = 64
@@ -327,47 +348,54 @@ acceptance_criteria = [
 id = 41
 phase = 12
 bundle = "ens"
-status = "pending"
+status = "in_progress"
 title = "ENS enhancements: CCIP-Read, ENSIP-10 wildcard, UTS-46/ENSIP-15 normalization, multi-coin"
-module = "Onchain.ENS"
 scores = { d = 6, b = 6, u = 5 }
 markers = ["parallel"]
-assignee = "claude"
-model = "claude-opus-4-8"
-domains = ["ens", "rpc"]
-created_at = "2026-04-19"
-scored_at = "2026-04-19"
-body = """
-Extend ENS beyond the current ETH-only addr(bytes32) resolution: CCIP-Read / EIP-3668 off-chain lookups, ENSIP-10 wildcard resolution, full UTS-46 / ENSIP-15 Unicode normalization, and multi-coin address resolution. The Unicode normalization (UTS-46/ENSIP-15) and the EIP-3668 off-chain-gateway round-trip are the spec-heavy, easy-to-get-wrong parts — research the reference implementations (ensjs, eth-ens-namehash) before asserting byte behavior. Include tests covering each new resolution path.
-"""
 acceptance_criteria = [
   "CCIP-Read / EIP-3668 off-chain lookups resolve via the gateway round-trip (OffchainLookup revert -> gateway call -> callback)",
   "ENSIP-10 wildcard resolution supported for subdomains under a wildcard resolver",
   "UTS-46 / ENSIP-15 normalization applied to names before namehash (verified against reference vectors)",
   "Multi-coin address resolution beyond ETH-only addr(bytes32); unit tests per resolution path; api() + @spec on public functions",
 ]
+domains = ["ens", "rpc"]
+assignee = "claude"
+module = "Onchain.ENS"
+model = "claude-opus-4-8"
+body = """
+Extend ENS beyond the current ETH-only addr(bytes32) resolution: CCIP-Read / EIP-3668 off-chain lookups, ENSIP-10 wildcard resolution, full UTS-46 / ENSIP-15 Unicode normalization, and multi-coin address resolution. The Unicode normalization (UTS-46/ENSIP-15) and the EIP-3668 off-chain-gateway round-trip are the spec-heavy, easy-to-get-wrong parts — research the reference implementations (ensjs, eth-ens-namehash) before asserting byte behavior. Include tests covering each new resolution path.
+"""
+created_at = "2026-04-19"
+started_at = "2026-06-05"
+scored_at = "2026-04-19"
 
 [[task]]
 id = 65
 phase = 12
 bundle = "differential_testing"
-status = "pending"
+status = "done"
 title = "Differential test harness: Onchain.RPC vs reference impl (signet first)"
-module = "test/onchain/differential/"
 scores = { d = 6, b = 5, u = 3 }
 markers = ["parallel"]
-assignee = "codex"
-domains = ["rpc", "testing"]
-created_at = "2026-04-23"
-scored_at = "2026-04-23"
-body = """
-Unit tests don't catch protocol-level mistakes: wrong param ordering vs spec, wrong map-param nesting, wrong block-tag handling (safe/finalized/earliest), wrong response decoding for sparse fields. A differential harness runs the same RPC method against the same node via Onchain.RPC AND a reference implementation, then asserts equality. Reference candidates by cost: (1) signet itself — already in deps, pure Elixir, zero new infra, weakest oracle but cheapest, do first; (2) Web3.py via external Python; (3) viem via elixir-volt. Scope: test/onchain/differential/, @tag :differential, gated behind an env var, runs against ETHEREUM_API_URL. Pick ~10 methods covering map-param construction, block-tag variance, and decoding edge cases. Defer 65b/65c (Web3.py, viem) until signet-as-oracle finds >=1 bug.
-"""
 acceptance_criteria = [
   "Harness runs >=10 methods against signet as oracle",
   "Documents any divergences as either Onchain bugs (fix) or signet differences (annotate)",
   "Gated behind env var + @tag :differential so the default suite is unaffected",
 ]
+domains = ["rpc", "testing"]
+assignee = "codex"
+module = "test/onchain/differential/"
+body = """
+Unit tests don't catch protocol-level mistakes: wrong param ordering vs spec, wrong map-param nesting, wrong block-tag handling (safe/finalized/earliest), wrong response decoding for sparse fields. A differential harness runs the same RPC method against the same node via Onchain.RPC AND a reference implementation, then asserts equality. Reference candidates by cost: (1) signet itself — already in deps, pure Elixir, zero new infra, weakest oracle but cheapest, do first; (2) Web3.py via external Python; (3) viem via elixir-volt. Scope: test/onchain/differential/, @tag :differential, gated behind an env var, runs against ETHEREUM_API_URL. Pick ~10 methods covering map-param construction, block-tag variance, and decoding edge cases. Defer 65b/65c (Web3.py, viem) until signet-as-oracle finds >=1 bug.
+"""
+implemented = "Landed by codex via merge-train; reviewer-approved (run run-1780624113579-03fa4366, 5248d61451421deb3938bd7363b74cb8bba8f1dd)."
+delivered_by = "codex"
+verified = true
+created_at = "2026-04-23"
+started_at = "2026-06-05"
+scored_at = "2026-04-23"
+done_at = "2026-06-05"
+shipped_in = "5248d61451421deb3938bd7363b74cb8bba8f1dd"
 
 [[task]]
 id = 70
@@ -375,16 +403,17 @@ phase = 12
 bundle = "subscription_hardening"
 status = "pending"
 title = "Harden Onchain.Subscription.lookup_or_buffer/3 against unsolicited sub_id keys"
-module = "Onchain.Subscription"
 scores = { d = 3, b = 4, u = 3 }
 markers = ["parallel"]
-assignee = "cursor"
 domains = ["subscription"]
-created_at = "2026-05-07"
-scored_at = "2026-05-07"
+assignee = "cursor"
+module = "Onchain.Subscription"
 body = """
 The pending map has a per-key cap of 100 but an unbounded distinct-keys count. A server emitting notifications for never-subscribed sub_ids grows the key set until the connection closes (per-connection Agent dies with the conn, so blast radius is bounded — but worth fixing). Fix: buffer only sub_ids in an in-flight subscribe state, or add a global key cap with eviction. Well-bounded hardening on an existing module. Include a test exercising the unsolicited-sub_id path.
 """
+created_at = "2026-05-07"
+started_at = "2026-06-05"
+scored_at = "2026-05-07"
 
 [[task]]
 id = 74
@@ -392,24 +421,29 @@ phase = 12
 bundle = "erc_standards"
 status = "done"
 title = "ERC-7730 clear-signing descriptor parser + binding evaluator"
-module = "Onchain.ERC7730"
 scores = { d = 6, b = 7, u = 6 }
 markers = ["parallel"]
-assignee = "claude"
-model = "claude-opus-4-8"
-domains = ["abi", "erc_standards"]
-created_at = "2026-05-07"
-implemented = "Onchain.ERC7730 (load/1, format/2, format!/2) over three modules: Descriptor (parse/validate JSON into a struct, contract + eip712 contexts), Binding (resolve which display format applies via chain_id+address+selector for calldata, domain+primaryType for EIP-712, callData unwrap for UserOps), Formatter (path resolution #./@./$., coercion across calldata-binary and eip712-string sources, formatters: raw, amount, tokenAmount w/ threshold + tokenPath + RPC/opts/metadata decimals, addressName, date, duration, unit, enum). Selectors via Cartouche.Hash.keccak; named-signature decode via ABI.FunctionSelector. Three fixtures (ERC-20 transfer, Uniswap V3 SwapRouter02, EIP-712 ERC-2612 permit) under test/support/fixtures/erc7730/. 82 unit tests + 1 RPC integration test (live USDC decimals). Proxy/addressMatcher + registry fetch + includes/$ref + calldata/nftName sub-formatters deferred (documented). Verified: compile --warnings-as-errors clean, credo --strict clean, dialyzer 0 warnings, doctor 100%, coverage 84-88% per module, full offline suite 600/0."
-scored_at = "2026-05-07"
-body = """
-ERC-7730 (eips.ethereum.org/EIPS/eip-7730) standardizes a JSON descriptor that binds calldata / EIP-712 typed messages / ERC-4337 UserOps to human-readable display rules. Three pieces (pure Elixir, no native deps): (1) descriptor loader/validator — parse the JSON schema, validate structural rules; (2) binding evaluator — given {chain_id, contract_address, calldata} (or EIP-712 payload, or UserOp), resolve which descriptor applies via the binding context (chain ID, address, EIP-712 domain separator, proxy detection); (3) display rule engine — apply field formatters (token amount w/ decimals, address w/ checksum/ENS, date, enum, interpolated strings) to decoded ABI/EIP-712 fields, producing {label, value, formatted_value}. Deps already in onchain: ABI decoding, EIP-712 hashing (Cartouche), ERC-20 metadata, Address checksum, proxy detection. Registry side (fetching curated descriptors from Ledger's repo/IPFS/CDN) stays OUT — start with caller-provided descriptors. Module layout: lib/onchain/erc7730.ex (load/1, format/2, format!/2) + descriptor.ex / binding.ex / formatter.ex. First pass covers common formatters; defer rare ones (NFT URI, recursive sub-message). Survey how Ledger/Uniswap reference impls handle proxy detection before implementing.
-"""
 acceptance_criteria = [
   "Onchain.ERC7730.load/1 accepts a JSON string or Path; returns {:ok, descriptor} / {:error, {tag, reason}}",
   "Onchain.ERC7730.format/2 takes a descriptor + {:calldata, address, chain_id, hex_data} (or {:eip712, payload}, {:user_op, ...}); returns {:ok, [%{label, value, formatted_value, raw}]} or {:error, {tag, reason}}",
   "Fixtures: a descriptor each for ERC-20 transfer, a Uniswap V3 router call, an EIP-712 permit message",
   "All public functions have Descripex api() annotations + @spec; unit tests for parser/binding/each formatter + one integration test against real calldata",
 ]
+domains = ["abi", "erc_standards"]
+assignee = "claude"
+module = "Onchain.ERC7730"
+model = "claude-opus-4-8"
+body = """
+ERC-7730 (eips.ethereum.org/EIPS/eip-7730) standardizes a JSON descriptor that binds calldata / EIP-712 typed messages / ERC-4337 UserOps to human-readable display rules. Three pieces (pure Elixir, no native deps): (1) descriptor loader/validator — parse the JSON schema, validate structural rules; (2) binding evaluator — given {chain_id, contract_address, calldata} (or EIP-712 payload, or UserOp), resolve which descriptor applies via the binding context (chain ID, address, EIP-712 domain separator, proxy detection); (3) display rule engine — apply field formatters (token amount w/ decimals, address w/ checksum/ENS, date, enum, interpolated strings) to decoded ABI/EIP-712 fields, producing {label, value, formatted_value}. Deps already in onchain: ABI decoding, EIP-712 hashing (Cartouche), ERC-20 metadata, Address checksum, proxy detection. Registry side (fetching curated descriptors from Ledger's repo/IPFS/CDN) stays OUT — start with caller-provided descriptors. Module layout: lib/onchain/erc7730.ex (load/1, format/2, format!/2) + descriptor.ex / binding.ex / formatter.ex. First pass covers common formatters; defer rare ones (NFT URI, recursive sub-message). Survey how Ledger/Uniswap reference impls handle proxy detection before implementing.
+"""
+implemented = "Onchain.ERC7730 (load/1, format/2, format!/2) over three modules: Descriptor (parse/validate JSON into a struct, contract + eip712 contexts), Binding (resolve which display format applies via chain_id+address+selector for calldata, domain+primaryType for EIP-712, callData unwrap for UserOps), Formatter (path resolution #./@./$., coercion across calldata-binary and eip712-string sources, formatters: raw, amount, tokenAmount w/ threshold + tokenPath + RPC/opts/metadata decimals, addressName, date, duration, unit, enum). Selectors via Cartouche.Hash.keccak; named-signature decode via ABI.FunctionSelector. Three fixtures (ERC-20 transfer, Uniswap V3 SwapRouter02, EIP-712 ERC-2612 permit) under test/support/fixtures/erc7730/. 82 unit tests + 1 RPC integration test (live USDC decimals). Proxy/addressMatcher + registry fetch + includes/$ref + calldata/nftName sub-formatters deferred (documented). Verified: compile --warnings-as-errors clean, credo --strict clean, dialyzer 0 warnings, doctor 100%, coverage 84-88% per module, full offline suite 600/0."
+delivered_by = "claude"
+verified = true
+created_at = "2026-05-07"
+started_at = "2026-06-05"
+scored_at = "2026-05-07"
+done_at = "2026-06-05"
+shipped_in = "a82235d44775f0e9a925d466c03710abd0048a9f"
 
 [[task]]
 id = 75

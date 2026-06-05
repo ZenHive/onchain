@@ -2,13 +2,18 @@
 
 Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) and write (transaction signing) capabilities using `cartouche` as the sole Ethereum dependency.
 
-<!-- Selective-load (Opus 4.8): eager floor = critical-rules only. Everything previously
-     imported here (worktree, task-prioritization/writing, workflow-philosophy, web-command,
-     code-style, development-philosophy/commands, elixir-setup, ex-unit-json, dialyzer-json,
-     agent-economy, reach) is now skill-on-demand via the elixir / task-driver / dev-lifecycle
-     plugins. Re-add an @-import per-surface only if Opus visibly degrades on it.
-     See ~/.claude/setup-guide.md § "Skills vs Includes". -->
+<!-- Selective-load (Opus 4.8): eager floor = critical-rules. harness-workflow is eager
+     because this repo is harness-driven (the OTP dispatch→review→land loop is the active
+     workflow). Everything else previously imported here (worktree, task-prioritization/writing,
+     workflow-philosophy, web-command, code-style, development-philosophy/commands, elixir-setup,
+     ex-unit-json, dialyzer-json, agent-economy, reach) is skill-on-demand via the elixir /
+     task-driver / dev-lifecycle plugins. Re-add an @-import per-surface only if Opus visibly
+     degrades on it. See ~/.claude/setup-guide.md § "Skills vs Includes".
+     NOTE: onchain-workspace.md is now the HARNESS workspace add-on (7-repo roster + dependency
+     shape), eager family-wide. The retired Linear/cloud-delegation add-on is
+     onchain-workspace-delegation.md (DORMANT). -->
 @~/.claude/includes/critical-rules.md
+@~/.claude/includes/harness-workflow.md
 @~/.claude/includes/onchain-workspace.md
 @~/.claude/includes/ethereum-rpc.md
 
@@ -109,8 +114,9 @@ lib/onchain/
 
 ## Git Workflow (current)
 
-- **No PRs (currently).** As of 2026-06 this repo no longer uses pull requests for routine work. Completed work commits and merges **directly to `development`** (the default branch). Don't open `gh pr create` — just commit/merge to `development`. (Overrides the global PR-based / GH-native-auto-merge flow for this repo.)
-- **Always ask before using a worktree.** The global worktree-workflow auto-allows creating a worktree when a tracking ID exists; in this repo, **ask first** — don't auto-create one.
+- **Harness-driven.** As of 2026-06 this repo's active workflow is the harness OTP loop (`@~/.claude/includes/harness-workflow.md`): rmap task → implementer AI in a `harness/<run-id>` worktree → cross-family reviewer (THE GATE) → ff-merge/land to `development`. The retired Linear-as-queue + Codex/Cursor delegation flow (`onchain-workspace`) no longer applies.
+- **No PRs for routine work.** Completed work commits and merges **directly to `development`** (the default branch). Don't open `gh pr create` — harness lands via ff-merge; manual work commits/merges to `development` directly. (Overrides the global PR-based / GH-native-auto-merge flow for this repo.)
+- **Manual worktrees: ask first.** Harness manages its own per-run worktrees automatically. For *hand-build* sessions outside harness, the global worktree-workflow auto-allows a worktree when a tracking ID exists; in this repo, **ask first** — don't auto-create one.
 
 ## After Every Task
 
