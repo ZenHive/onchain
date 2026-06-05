@@ -139,6 +139,23 @@ Update **all affected `.md` files** after completing any roadmap task. This is p
 - Use `Onchain.RPCCase.rpc_url!/0` from `test/support/rpc_case.ex` to resolve RPC URL
 - Use `flunk/1` with setup instructions for missing credentials, never silent skip
 
+#### Credentialed integration suites
+
+`BUNDLER_RPC_URL` and `MEV_RELAY_URL` are persisted in `~/.secrets` (sourced by `.zprofile`). `ETHEREUM_API_URL` defaults to the `localhost:8545` archive-node tunnel — bring it up (`ssh -L 8545:127.0.0.1:8545 blockwatch-one`) or override inline with `$ETHEREUM_ALCHEMY_URL` (mainnet, also serves ERC-4337 methods).
+
+| Suite (tag) | Env vars | Notes |
+|---|---|---|
+| Differential RPC (`:differential`) | `ONCHAIN_DIFFERENTIAL_TESTS=1` + mainnet `ETHEREUM_API_URL` | Compares `Onchain.RPC` vs `Cartouche.RPC` against one mainnet URL. Reads historical block `20_000_000` → needs archive. |
+| AA bundler (`aa_integration_test.exs`) | `BUNDLER_RPC_URL` | Read-only ERC-4337 calls. Alchemy serves these on its standard node URL. |
+| MEV relay (`mev_integration_test.exs`) | `MEV_RELAY_URL` (`https://rpc.flashbots.net`) | No `MEV_AUTH_HEADER` — Flashbots' `signature required` reply is itself the valid JSON-RPC round-trip the test asserts. |
+
+Run all three:
+
+```bash
+ONCHAIN_DIFFERENTIAL_TESTS=1 ETHEREUM_API_URL="$ETHEREUM_ALCHEMY_URL" \
+mix test.json --quiet --include integration --include differential
+```
+
 ### Quick Commands
 
 ```bash
