@@ -65,7 +65,8 @@ defmodule Onchain.ERC7730.DescriptorTest do
 
   describe "parse/1 — structural errors" do
     test "rejects a descriptor with no context" do
-      assert {:error, {:missing_context, _}} = Descriptor.parse(%{"display" => %{"formats" => %{}}})
+      assert {:error, {:missing_context, _}} =
+               Descriptor.parse(%{"display" => %{"formats" => %{}}})
     end
 
     test "rejects an unknown context type" do
@@ -75,6 +76,15 @@ defmodule Onchain.ERC7730.DescriptorTest do
 
     test "rejects a contract context with no deployments" do
       raw = %{"context" => %{"contract" => %{}}, "display" => %{"formats" => %{}}}
+      assert {:error, {:no_deployments, _}} = Descriptor.parse(raw)
+    end
+
+    test "rejects a contract context with an empty deployments list" do
+      raw = %{
+        "context" => %{"contract" => %{"deployments" => []}},
+        "display" => %{"formats" => %{}}
+      }
+
       assert {:error, {:no_deployments, _}} = Descriptor.parse(raw)
     end
 
@@ -90,7 +100,9 @@ defmodule Onchain.ERC7730.DescriptorTest do
     test "rejects a descriptor with no display section" do
       raw = %{
         "context" => %{
-          "contract" => %{"deployments" => [%{"chainId" => 1, "address" => "0x" <> String.duplicate("11", 20)}]}
+          "contract" => %{
+            "deployments" => [%{"chainId" => 1, "address" => "0x" <> String.duplicate("11", 20)}]
+          }
         }
       }
 
@@ -100,12 +112,61 @@ defmodule Onchain.ERC7730.DescriptorTest do
     test "rejects a field with neither path nor value" do
       raw = %{
         "context" => %{
-          "contract" => %{"deployments" => [%{"chainId" => 1, "address" => "0x" <> String.duplicate("11", 20)}]}
+          "contract" => %{
+            "deployments" => [%{"chainId" => 1, "address" => "0x" <> String.duplicate("11", 20)}]
+          }
         },
-        "display" => %{"formats" => %{"f()" => %{"fields" => [%{"label" => "x", "format" => "raw"}]}}}
+        "display" => %{
+          "formats" => %{"f()" => %{"fields" => [%{"label" => "x", "format" => "raw"}]}}
+        }
       }
 
       assert {:error, {:invalid_field, {:no_path_or_value, _}}} = Descriptor.parse(raw)
+    end
+
+    test "rejects a field with a non-string format" do
+      raw = %{
+        "context" => %{
+          "contract" => %{
+            "deployments" => [%{"chainId" => 1, "address" => "0x" <> String.duplicate("11", 20)}]
+          }
+        },
+        "display" => %{
+          "formats" => %{"f()" => %{"fields" => [%{"path" => "#.x", "format" => 1}]}}
+        }
+      }
+
+      assert {:error, {:invalid_field, {:invalid_format, 1}}} = Descriptor.parse(raw)
+    end
+
+    test "rejects a non-list excluded value" do
+      raw = %{
+        "context" => %{
+          "contract" => %{
+            "deployments" => [%{"chainId" => 1, "address" => "0x" <> String.duplicate("11", 20)}]
+          }
+        },
+        "display" => %{
+          "formats" => %{"f()" => %{"excluded" => "#.x", "fields" => [%{"path" => "#.x"}]}}
+        }
+      }
+
+      assert {:error, {:invalid_field, {:invalid_excluded, "#.x"}}} = Descriptor.parse(raw)
+    end
+
+    test "rejects a field with non-map params" do
+      raw = %{
+        "context" => %{
+          "contract" => %{
+            "deployments" => [%{"chainId" => 1, "address" => "0x" <> String.duplicate("11", 20)}]
+          }
+        },
+        "display" => %{
+          "formats" => %{"f()" => %{"fields" => [%{"path" => "#.x", "params" => "bad"}]}}
+        }
+      }
+
+      assert {:error, {:invalid_field, {:invalid_params, "bad"}}} = Descriptor.parse(raw)
     end
 
     test "rejects a non-map input" do
@@ -135,7 +196,9 @@ defmodule Onchain.ERC7730.DescriptorTest do
     test "honors a legacy format-level excluded array" do
       raw = %{
         "context" => %{
-          "contract" => %{"deployments" => [%{"chainId" => 1, "address" => "0x" <> String.duplicate("11", 20)}]}
+          "contract" => %{
+            "deployments" => [%{"chainId" => 1, "address" => "0x" <> String.duplicate("11", 20)}]
+          }
         },
         "display" => %{
           "formats" => %{
@@ -155,9 +218,13 @@ defmodule Onchain.ERC7730.DescriptorTest do
     test "defaults a missing format to :raw" do
       raw = %{
         "context" => %{
-          "contract" => %{"deployments" => [%{"chainId" => 1, "address" => "0x" <> String.duplicate("11", 20)}]}
+          "contract" => %{
+            "deployments" => [%{"chainId" => 1, "address" => "0x" <> String.duplicate("11", 20)}]
+          }
         },
-        "display" => %{"formats" => %{"f(uint256 a)" => %{"fields" => [%{"path" => "#.a", "label" => "A"}]}}}
+        "display" => %{
+          "formats" => %{"f(uint256 a)" => %{"fields" => [%{"path" => "#.a", "label" => "A"}]}}
+        }
       }
 
       {:ok, descriptor} = Descriptor.parse(raw)

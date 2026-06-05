@@ -6,6 +6,12 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Fixed — ERC-7730 binding/descriptor hardening (Task 78)
+
+- **`Onchain.ERC7730.Binding`** — EIP-712 domain constraints now fail with `:domain_mismatch` when a constrained field is missing; EIP-712 formats match by `primaryType`/`encodeType` rather than ABI selector parsing; EIP-712 field types are derived from payload `types` or descriptor schemas for formatter coercion; duplicate calldata format selectors now return `{:invalid_descriptor, {:duplicate_format_selector, selector}}`.
+- **`Onchain.ERC7730.Descriptor`** — malformed display/deployment shapes now return validation errors instead of crashing or loading invalid data: non-string field `format`, non-list format `excluded`, non-map field `params`, and empty contract `deployments`.
+- **Tests:** binding and descriptor regression coverage for all audit-surfaced cases, including bare primary-type and nested `encodeType` EIP-712 format keys.
+
 ### Fixed — MEV block fields reject tags (Task 80)
 
 - **`Onchain.RPC.Helpers.normalize_block_number/1`** — stricter block normalization for RPC params that require a concrete quantity (non-negative integer or `0x` hex only; rejects `"latest"`, `"pending"`, and other block tags).

@@ -133,6 +133,8 @@ defmodule Onchain.ERC7730.Descriptor do
 
   defp parse_deployments(map, required \\ true)
 
+  defp parse_deployments(%{"deployments" => []}, true), do: {:error, {:no_deployments, "context has no deployments"}}
+
   defp parse_deployments(%{"deployments" => deployments}, _required) when is_list(deployments) do
     deployments
     |> Enum.reduce_while({:ok, []}, fn dep, {:ok, acc} ->
@@ -148,6 +150,7 @@ defmodule Onchain.ERC7730.Descriptor do
   end
 
   defp parse_deployments(_map, false), do: {:ok, []}
+
   defp parse_deployments(_map, true), do: {:error, {:no_deployments, "context has no deployments"}}
 
   defp parse_deployment(%{"chainId" => chain_id, "address" => address}) when is_integer(chain_id) do
@@ -194,6 +197,9 @@ defmodule Onchain.ERC7730.Descriptor do
 
   defp parse_format(other), do: {:error, {:invalid_format, other}}
 
+  defp parse_fields(_fields, excluded) when not is_list(excluded),
+    do: {:error, {:invalid_field, {:invalid_excluded, excluded}}}
+
   defp parse_fields(fields, excluded) when is_list(fields) do
     fields
     |> Enum.reduce_while({:ok, []}, fn field, {:ok, acc} ->
@@ -212,20 +218,28 @@ defmodule Onchain.ERC7730.Descriptor do
 
   defp parse_field(field, excluded) when is_map(field) do
     path = Map.get(field, "path")
+    params = Map.get(field, "params", %{})
 
     # A field must carry either a path (into the bound data) or a literal value.
-    if is_nil(path) and not Map.has_key?(field, "value") do
-      {:error, {:invalid_field, {:no_path_or_value, field}}}
-    else
-      {:ok,
-       %{
-         path: path,
-         value: Map.get(field, "value"),
-         label: Map.get(field, "label"),
-         format: parse_format_type(Map.get(field, "format")),
-         params: Map.get(field, "params", %{}),
-         visible: visible?(field, path, excluded)
-       }}
+    cond do
+      is_nil(path) and not Map.has_key?(field, "value") ->
+        {:error, {:invalid_field, {:no_path_or_value, field}}}
+
+      not is_map(params) ->
+        {:error, {:invalid_field, {:invalid_params, params}}}
+
+      true ->
+        with {:ok, format} <- parse_format_type(Map.get(field, "format")) do
+          {:ok,
+           %{
+             path: path,
+             value: Map.get(field, "value"),
+             label: Map.get(field, "label"),
+             format: format,
+             params: params,
+             visible: visible?(field, path, excluded)
+           }}
+        end
     end
   end
 
@@ -250,6 +264,9 @@ defmodule Onchain.ERC7730.Descriptor do
     "nftName" => :nft_name
   }
 
-  defp parse_format_type(nil), do: :raw
-  defp parse_format_type(type) when is_binary(type), do: Map.get(@format_types, type, :unknown)
+  defp parse_format_type(nil), do: {:ok, :raw}
+
+  defp parse_format_type(type) when is_binary(type), do: {:ok, Map.get(@format_types, type, :unknown)}
+
+  defp parse_format_type(other), do: {:error, {:invalid_field, {:invalid_format, other}}}
 end

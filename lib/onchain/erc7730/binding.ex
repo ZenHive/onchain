@@ -57,7 +57,9 @@ defmodule Onchain.ERC7730.Binding do
           envelope: map()
         }
 
-  api(:resolve, "Resolve which display format applies to a signing request and decode the bound data.",
+  api(
+    :resolve,
+    "Resolve which display format applies to a signing request and decode the bound data.",
     params: [
       descriptor: [kind: :value, description: "Parsed %Onchain.ERC7730.Descriptor{}"],
       request: [
@@ -106,17 +108,22 @@ defmodule Onchain.ERC7730.Binding do
     with {:ok, domain} <- fetch(payload, "domain", %{}),
          {:ok, primary_type} <- fetch(payload, "primaryType"),
          {:ok, message} <- fetch(payload, "message", %{}),
+         {:ok, payload_types} <- fetch(payload, "types", nil),
          :ok <- match_domain(ctx, domain),
-         {:ok, _key, format, fs} <- find_format_by_type(descriptor, primary_type) do
+         {:ok, _key, format} <- find_format_by_type(descriptor, primary_type) do
       verifying = stringify_keys(domain)["verifyingContract"]
 
       {:ok,
        %{
          format: format,
-         signature: fs,
+         signature: nil,
          message: stringify_keys(message),
-         types: types_from_selector(fs),
-         envelope: %{to: verifying, value: Keyword.get(opts, :value, 0), from: Keyword.get(opts, :from)}
+         types: eip712_types(primary_type, payload_types, ctx.schemas),
+         envelope: %{
+           to: verifying,
+           value: Keyword.get(opts, :value, 0),
+           from: Keyword.get(opts, :from)
+         }
        }}
     end
   end
@@ -166,7 +173,7 @@ defmodule Onchain.ERC7730.Binding do
     mismatch =
       Enum.find(expected, fn {key, expected_value} ->
         actual_value = Map.get(actual, key)
-        not is_nil(actual_value) and not domain_value_equal?(key, expected_value, actual_value)
+        is_nil(actual_value) or not domain_value_equal?(key, expected_value, actual_value)
       end)
 
     case mismatch do
@@ -182,32 +189,93 @@ defmodule Onchain.ERC7730.Binding do
   # --- format lookup ---
 
   defp find_format_by_selector(descriptor, selector) do
-    descriptor.display.formats
-    |> Enum.find_value(fn {key, format} ->
-      case function_selector(key) do
-        {:ok, fs, sel} when sel == selector -> {key, format, fs}
-        _ -> nil
-      end
-    end)
-    |> case do
-      {key, format, fs} -> {:ok, key, format, fs}
-      nil -> {:error, {:no_format_match, Hex.encode(selector)}}
+    matches =
+      Enum.flat_map(descriptor.display.formats, fn {key, format} ->
+        case function_selector(key) do
+          {:ok, fs, sel} when sel == selector -> [{key, format, fs}]
+          _ -> []
+        end
+      end)
+
+    case matches do
+      [{key, format, fs}] ->
+        {:ok, key, format, fs}
+
+      [] ->
+        {:error, {:no_format_match, Hex.encode(selector)}}
+
+      _multiple ->
+        {:error, {:invalid_descriptor, {:duplicate_format_selector, Hex.encode(selector)}}}
     end
   end
 
   defp find_format_by_type(descriptor, primary_type) do
     descriptor.display.formats
     |> Enum.find_value(fn {key, format} ->
-      case parse_selector(key) do
-        {:ok, %{function: ^primary_type} = fs} -> {key, format, fs}
-        _ -> nil
-      end
+      if eip712_format_primary_type(key) == primary_type, do: {key, format}
     end)
     |> case do
-      {key, format, fs} -> {:ok, key, format, fs}
+      {key, format} -> {:ok, key, format}
       nil -> {:error, {:no_format_match, primary_type}}
     end
   end
+
+  defp eip712_format_primary_type(key) when is_binary(key) do
+    key
+    |> String.split("(", parts: 2)
+    |> hd()
+  end
+
+  defp eip712_format_primary_type(_key), do: nil
+
+  defp eip712_types(primary_type, payload_types, schemas) do
+    type_defs = eip712_type_defs(primary_type, payload_types, schemas)
+
+    case Map.get(type_defs, primary_type) do
+      fields when is_list(fields) -> Map.new(fields, &eip712_field_type/1)
+      _other -> %{}
+    end
+  end
+
+  defp eip712_type_defs(_primary_type, payload_types, _schemas) when is_map(payload_types) do
+    stringify_keys(payload_types)
+  end
+
+  defp eip712_type_defs(primary_type, _payload_types, schemas) when is_list(schemas) do
+    schemas
+    |> Enum.find(fn schema ->
+      fetch_key(schema, "primaryType") == primary_type
+    end)
+    |> case do
+      nil -> %{}
+      schema -> schema |> fetch_key("types") |> type_defs_or_empty()
+    end
+  end
+
+  defp eip712_type_defs(_primary_type, _payload_types, _schemas), do: %{}
+
+  defp type_defs_or_empty(type_defs) when is_map(type_defs), do: stringify_keys(type_defs)
+  defp type_defs_or_empty(_other), do: %{}
+
+  defp eip712_field_type(field) when is_map(field) do
+    name = fetch_key(field, "name")
+    type = fetch_key(field, "type")
+    {name, parse_eip712_type(type)}
+  end
+
+  defp parse_eip712_type(type) when is_binary(type) do
+    ABI.FunctionSelector.decode_type(type)
+  rescue
+    _ -> type
+  end
+
+  defp parse_eip712_type(type), do: type
+
+  defp fetch_key(map, key) when is_map(map) do
+    Map.get(map, key, Map.get(map, safe_atom(key)))
+  end
+
+  defp fetch_key(_other, _key), do: nil
 
   defp function_selector(key) do
     with {:ok, fs} <- parse_selector(key),
@@ -260,8 +328,6 @@ defmodule Onchain.ERC7730.Binding do
       {Map.get(type, :name) || Integer.to_string(i), Map.get(type, :type)}
     end)
   end
-
-  defp types_from_selector(_), do: %{}
 
   # --- helpers ---
 

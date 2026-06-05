@@ -43,7 +43,9 @@ defmodule Onchain.ERC7730.BindingTest do
 
     test "errors when the selector matches no format", %{descriptor: d} do
       unknown = ABI.encode_call!("approve(address,uint256)", [Hex.decode!(@recipient), 1])
-      assert {:error, {:no_format_match, _selector}} = Binding.resolve(d, {:calldata, @usdc, 1, unknown})
+
+      assert {:error, {:no_format_match, _selector}} =
+               Binding.resolve(d, {:calldata, @usdc, 1, unknown})
     end
 
     test "errors on calldata shorter than a 4-byte selector", %{descriptor: d} do
@@ -53,7 +55,10 @@ defmodule Onchain.ERC7730.BindingTest do
 
     test "passes envelope value/from overrides through", %{descriptor: d} do
       assert {:ok, resolution} =
-               Binding.resolve(d, {:calldata, @usdc, 1, transfer_calldata()}, value: 42, from: @recipient)
+               Binding.resolve(d, {:calldata, @usdc, 1, transfer_calldata()},
+                 value: 42,
+                 from: @recipient
+               )
 
       assert resolution.envelope.value == 42
       assert resolution.envelope.from == @recipient
@@ -66,7 +71,12 @@ defmodule Onchain.ERC7730.BindingTest do
     defp permit_payload(overrides \\ %{}) do
       Map.merge(
         %{
-          "domain" => %{"name" => "USD Coin", "version" => "2", "chainId" => 1, "verifyingContract" => @usdc},
+          "domain" => %{
+            "name" => "USD Coin",
+            "version" => "2",
+            "chainId" => 1,
+            "verifyingContract" => @usdc
+          },
           "primaryType" => "Permit",
           "message" => %{
             "owner" => @recipient,
@@ -89,13 +99,76 @@ defmodule Onchain.ERC7730.BindingTest do
     end
 
     test "errors when the domain name mismatches the descriptor", %{descriptor: d} do
-      payload = permit_payload(%{"domain" => %{"name" => "Wrong", "version" => "2", "chainId" => 1}})
+      payload =
+        permit_payload(%{"domain" => %{"name" => "Wrong", "version" => "2", "chainId" => 1}})
+
+      assert {:error, {:domain_mismatch, "name"}} = Binding.resolve(d, {:eip712, payload})
+    end
+
+    test "errors when a constrained domain field is missing", %{descriptor: d} do
+      payload = permit_payload(%{"domain" => %{"version" => "2", "chainId" => 1}})
       assert {:error, {:domain_mismatch, "name"}} = Binding.resolve(d, {:eip712, payload})
     end
 
     test "errors when the primaryType has no matching format", %{descriptor: d} do
       payload = permit_payload(%{"primaryType" => "Unknown"})
       assert {:error, {:no_format_match, "Unknown"}} = Binding.resolve(d, {:eip712, payload})
+    end
+
+    test "matches a bare primaryType format key and derives types from the payload" do
+      raw = %{
+        "context" => %{"eip712" => %{"domain" => %{"name" => "USD Coin"}}},
+        "display" => %{"formats" => %{"Permit" => %{"fields" => [%{"path" => "value"}]}}}
+      }
+
+      assert {:ok, descriptor} = ERC7730.load(raw)
+
+      payload =
+        permit_payload(%{
+          "types" => %{
+            "Permit" => [
+              %{"name" => "owner", "type" => "address"},
+              %{"name" => "value", "type" => "uint256"}
+            ]
+          }
+        })
+
+      assert {:ok, resolution} = Binding.resolve(descriptor, {:eip712, payload})
+      assert resolution.signature == nil
+      assert resolution.types["owner"] == :address
+      assert resolution.types["value"] == {:uint, 256}
+    end
+
+    test "matches an encodeType format key by primaryType" do
+      raw = %{
+        "context" => %{"eip712" => %{"domain" => %{"name" => "Mail App"}}},
+        "display" => %{
+          "formats" => %{
+            "Mail(address from,Person to)Person(address wallet)" => %{
+              "fields" => [%{"path" => "from"}]
+            }
+          }
+        }
+      }
+
+      assert {:ok, descriptor} = ERC7730.load(raw)
+
+      payload = %{
+        "domain" => %{"name" => "Mail App"},
+        "primaryType" => "Mail",
+        "types" => %{
+          "Mail" => [
+            %{"name" => "from", "type" => "address"},
+            %{"name" => "to", "type" => "Person"}
+          ],
+          "Person" => [%{"name" => "wallet", "type" => "address"}]
+        },
+        "message" => %{"from" => @recipient, "to" => %{"wallet" => @router}}
+      }
+
+      assert {:ok, resolution} = Binding.resolve(descriptor, {:eip712, payload})
+      assert resolution.message["from"] == @recipient
+      assert resolution.types["from"] == :address
     end
 
     test "accepts atom-keyed payloads", %{descriptor: d} do
@@ -110,6 +183,28 @@ defmodule Onchain.ERC7730.BindingTest do
     end
   end
 
+  describe "resolve/3 — descriptor hardening" do
+    test "errors when two format keys share the same calldata selector" do
+      raw = %{
+        "context" => %{
+          "contract" => %{"deployments" => [%{"chainId" => 1, "address" => @usdc}]}
+        },
+        "display" => %{
+          "formats" => %{
+            "f(uint256 a)" => %{"fields" => [%{"path" => "a"}]},
+            "f(uint256 b)" => %{"fields" => [%{"path" => "b"}]}
+          }
+        }
+      }
+
+      assert {:ok, descriptor} = ERC7730.load(raw)
+      calldata = ABI.encode_call!("f(uint256)", [1])
+
+      assert {:error, {:invalid_descriptor, {:duplicate_format_selector, _selector}}} =
+               Binding.resolve(descriptor, {:calldata, @usdc, 1, calldata})
+    end
+  end
+
   describe "resolve/3 — user_op" do
     test "unwraps callData and binds as calldata" do
       d = load("erc20-transfer.json")
@@ -120,7 +215,9 @@ defmodule Onchain.ERC7730.BindingTest do
 
     test "errors when the user_op has no callData" do
       d = load("erc20-transfer.json")
-      assert {:error, {:missing_calldata, _}} = Binding.resolve(d, {:user_op, @usdc, 1, %{"sender" => @recipient}})
+
+      assert {:error, {:missing_calldata, _}} =
+               Binding.resolve(d, {:user_op, @usdc, 1, %{"sender" => @recipient}})
     end
   end
 
@@ -132,7 +229,9 @@ defmodule Onchain.ERC7730.BindingTest do
 
     test "rejects a calldata request against an eip712 descriptor" do
       d = load("eip712-permit.json")
-      assert {:error, {:context_mismatch, _}} = Binding.resolve(d, {:calldata, @usdc, 1, transfer_calldata()})
+
+      assert {:error, {:context_mismatch, _}} =
+               Binding.resolve(d, {:calldata, @usdc, 1, transfer_calldata()})
     end
 
     test "rejects an unrecognized request shape" do
