@@ -18,8 +18,7 @@ defmodule Onchain.RPC.BatchTest do
         response_fun when is_function(response_fun, 1) ->
           body = encoded_body |> IO.iodata_to_binary() |> Jason.decode!()
 
-          {:ok,
-           %Finch.Response{status: 200, body: Jason.encode!(response_fun.(body)), headers: []}}
+          {:ok, %Finch.Response{status: 200, body: Jason.encode!(response_fun.(body)), headers: []}}
       end
     end
 

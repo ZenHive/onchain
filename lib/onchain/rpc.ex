@@ -100,7 +100,6 @@ defmodule Onchain.RPC do
   alias Onchain.RPC.Helpers
 
   @rpc_request_event [:onchain, :rpc, :request]
-  @json_rpc_version "2.0"
   @batch_method "batch"
   @content_type_json {"Content-Type", "application/json"}
   @default_ethereum_node "https://mainnet.infura.io"
@@ -925,14 +924,7 @@ defmodule Onchain.RPC do
     |> Enum.with_index(1)
     |> Enum.reduce_while({:ok, []}, fn
       {{method, params}, id}, {:ok, acc} when is_binary(method) and is_list(params) ->
-        request = %{
-          "jsonrpc" => @json_rpc_version,
-          "id" => id,
-          "method" => method,
-          "params" => params
-        }
-
-        {:cont, {:ok, [request | acc]}}
+        {:cont, {:ok, [Cartouche.RPC.get_body(method, params, id) | acc]}}
 
       {request, _id}, {:ok, _acc} ->
         {:halt, {:error, {:invalid_batch_request, request}}}
@@ -951,9 +943,12 @@ defmodule Onchain.RPC do
     end
   end
 
+  # Finch is intentionally excluded from the PLT (`plt_add_deps: :apps_direct` in mix.exs);
+  # cartouche uses the same Finch.build pattern in Cartouche.RPC.send_rpc/3.
+  @dialyzer {:nowarn_function, send_batch_request: 2}
   @spec send_batch_request(binary(), keyword()) :: {:ok, binary()} | {:error, term()}
   defp send_batch_request(encoded_body, opts) do
-    request = Finch.build(:post, ethereum_node(opts), [@content_type_json], encoded_body)
+    request = Finch.build(:post, ethereum_node(opts), [@content_type_json], encoded_body, [])
     client = Application.get_env(:cartouche, :client, Finch)
     finch_name = Application.get_env(:cartouche, :finch_name, @default_finch_name)
 

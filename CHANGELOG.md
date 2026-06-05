@@ -6,6 +6,11 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Added — `Onchain.RPC.batch/2` (Task 51)
+
+- **`Onchain.RPC.batch/2`** — JSON-RPC 2.0 array batching: send many `{method, params}` calls in one HTTP POST and return raw decoded results in request order (reorders out-of-order node responses by `id`). Empty list returns `{:ok, []}`; first per-item JSON-RPC error halts with `{:rpc_error, map}` (revert `:data` hex enrichment matches single-call path). Uses `Cartouche.RPC.get_body/3` for request bodies and the same `:rpc_url`/`:timeout` opts as other RPC helpers.
+- **Tests:** `test/onchain/rpc_batch_test.exs` stubs `Application.get_env(:cartouche, :client)` to assert batch payload shape, response reordering, and error normalization.
+
 ### Fixed — dialyzer ~30 GB → ~0.9 GB peak RSS via cartouche 0.2.2 (Task 75)
 
 - **`cartouche` 0.2.1 → 0.2.2** (pin `~> 0.2.1` → `~> 0.2.2`). 0.2.2 fixes a dialyzer memory bomb that originated in cartouche, not onchain: `Cartouche.Assembly.compile/1` had seven fixed-arity tuple heads (`{op,a}` … `{op,a,b,c,d,e,f,g}`), each guarded by a large opcode atom-union — a 7-shape `tuple_set` product type whose success-typing fixpoint under `compile/1`'s self-recursion exploded to ~30 GB peak RSS on OTP 29 (cartouche Task 103). 0.2.2 collapses them into one `def compile(op) when is_tuple(op) and tuple_size(op) >= 2` clause. **A cold `mix dialyzer.json` build drops from ~30 GB to 0.94 GB peak RSS** (measured on development, `total: 0`, `warnings: []`). This was the real cause of the 2026-06-04 double host-OOM — four concurrent reviewer dialyzers under `concurrency_cap=4`. No onchain-side PLT-path change, seeding, or serialization lock was needed; the earlier serialization-lock PR (#4) was closed unmerged once measurement falsified the "irreducible 30 GB" premise.

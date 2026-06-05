@@ -164,17 +164,22 @@ acceptance_criteria = [
 id = 51
 phase = 10
 bundle = "rpc_composition"
-status = "pending"
+status = "done"
 title = "Onchain.RPC.batch/2 — JSON-RPC 2.0 array-batched requests"
-module = "Onchain.RPC"
 scores = { d = 4, b = 6, u = 5 }
-assignee = "codex"
 domains = ["rpc"]
-created_at = "2026-04-23"
-scored_at = "2026-04-23"
+assignee = "codex"
+module = "Onchain.RPC"
 body = """
 JSON-RPC 2.0 allows array-batched requests; currently each Signet.RPC.send_rpc/3 is a separate HTTP round-trip. For indexers doing N eth_calls this is a real latency win — single round-trip over N method calls. Composition over signet's primitive transport. Include tests.
 """
+implemented = "Onchain.RPC.batch/2 JSON-RPC array batch: one HTTP POST for [{method, params}], results in request order, {:rpc_error, map} on first item error. Uses Cartouche.RPC.get_body/3 + Finch transport. test/onchain/rpc_batch_test.exs (2 tests)."
+delivered_by = "codex+reviewer"
+verified = true
+created_at = "2026-04-23"
+scored_at = "2026-04-23"
+done_at = "2026-06-05"
+shipped_in = "3c39dd1"
 
 [[task]]
 id = 52
