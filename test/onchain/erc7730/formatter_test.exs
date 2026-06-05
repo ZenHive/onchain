@@ -8,6 +8,7 @@ defmodule Onchain.ERC7730.FormatterTest do
   @recipient "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"
   @recipient_bin Hex.decode!("0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed")
   @usdc "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+  @dai "0x6B175474E89094C44Da98b954EedeAC495271d0F"
 
   defp field(attrs) do
     Map.merge(%{path: nil, value: nil, label: nil, format: :raw, params: %{}, visible: true}, Map.new(attrs))
@@ -134,7 +135,7 @@ defmodule Onchain.ERC7730.FormatterTest do
 
     test "resolves a $. token reference against descriptor constants and metadata.token" do
       raw = %{"metadata" => %{"constants" => %{"tok" => @usdc}}}
-      metadata = %{"token" => %{"decimals" => 6, "ticker" => "USDC"}}
+      metadata = %{"token" => %{"address" => @usdc, "decimals" => 6, "ticker" => "USDC"}}
 
       result =
         render(
@@ -145,6 +146,20 @@ defmodule Onchain.ERC7730.FormatterTest do
         )
 
       assert result.formatted_value == "3 USDC"
+    end
+
+    test "does not use descriptor metadata when tokenPath resolves to a different token" do
+      metadata = %{"token" => %{"address" => @usdc, "decimals" => 6, "ticker" => "USDC"}}
+
+      result =
+        render(
+          field(path: "#.amount", format: :token_amount, params: %{"tokenPath" => "#.token"}),
+          resolution(%{"amount" => 1_000_000, "token" => @dai}, %{"amount" => {:uint, 256}, "token" => :address}),
+          [],
+          descriptor(%{}, metadata)
+        )
+
+      assert result.formatted_value == "1000000"
     end
   end
 

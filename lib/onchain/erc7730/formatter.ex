@@ -311,10 +311,13 @@ defmodule Onchain.ERC7730.Formatter do
     end
   end
 
-  defp from_metadata(_token, %Descriptor{metadata: %{"token" => %{} = token}}) do
-    case Map.get(token, "decimals") do
-      nil -> :miss
-      decimals -> {decimals, Map.get(token, "ticker") || Map.get(token, "name")}
+  defp from_metadata(token, %Descriptor{metadata: %{"token" => %{} = metadata_token}}) do
+    with metadata_address when not is_nil(metadata_address) <- Map.get(metadata_token, "address"),
+         true <- Address.equal?(token, metadata_address),
+         decimals when not is_nil(decimals) <- Map.get(metadata_token, "decimals") do
+      {decimals, Map.get(metadata_token, "ticker") || Map.get(metadata_token, "name")}
+    else
+      _ -> :miss
     end
   end
 
