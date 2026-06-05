@@ -42,6 +42,7 @@ defmodule Onchain.MixProject do
       {:decimal, "~> 3.1.1"},
       {:descripex, "~> 0.7.0"},
       {:jason, "~> 1.4"},
+      {:nimble_options, "~> 1.0"},
       {:telemetry, "~> 1.4"},
       {:zen_websocket, "~> 0.4.2"},
 

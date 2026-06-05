@@ -99,6 +99,7 @@ defmodule Onchain.RPC do
 
   use Descripex, namespace: "/rpc"
 
+  import Onchain.RPC.Codegen
   import Onchain.RPC.Helpers, except: [do_rpc: 3]
 
   alias Onchain.RPC.Helpers
@@ -194,12 +195,7 @@ defmodule Onchain.RPC do
   )
 
   @spec eth_call!(String.t() | binary(), String.t(), keyword()) :: String.t()
-  def eth_call!(address, data, opts \\ []) do
-    case eth_call(address, data, opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "eth_call failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:eth_call, args: [:address, :data])
 
   # --- eth_send_raw_transaction ---
 
@@ -216,11 +212,7 @@ defmodule Onchain.RPC do
   )
 
   @spec eth_send_raw_transaction(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
-  def eth_send_raw_transaction(data, opts \\ []) do
-    with {:ok, _hex_data} <- ensure_hex_data(data) do
-      do_rpc("eth_sendRawTransaction", [data], to_rpc_opts(opts))
-    end
-  end
+  defrpc(:eth_send_raw_transaction, method: "eth_sendRawTransaction", arg: :data)
 
   # --- eth_send_raw_transaction! ---
 
@@ -233,12 +225,7 @@ defmodule Onchain.RPC do
   )
 
   @spec eth_send_raw_transaction!(String.t(), keyword()) :: String.t()
-  def eth_send_raw_transaction!(data, opts \\ []) do
-    case eth_send_raw_transaction(data, opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "eth_send_raw_transaction failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:eth_send_raw_transaction, args: [:data])
 
   # --- get_balance ---
 
@@ -254,12 +241,7 @@ defmodule Onchain.RPC do
   )
 
   @spec get_balance(String.t() | binary(), keyword()) :: {:ok, non_neg_integer()} | {:error, term()}
-  def get_balance(address, opts \\ []) do
-    with {:ok, hex_addr} <- ensure_hex_address(address),
-         {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")) do
-      do_rpc("eth_getBalance", [hex_addr, block], Keyword.put(to_rpc_opts(opts), :decode, :hex_unsigned))
-    end
-  end
+  defrpc(:get_balance, method: "eth_getBalance", arg: :address, decode: :hex_unsigned)
 
   # --- get_balance! ---
 
@@ -272,12 +254,7 @@ defmodule Onchain.RPC do
   )
 
   @spec get_balance!(String.t() | binary(), keyword()) :: non_neg_integer()
-  def get_balance!(address, opts \\ []) do
-    case get_balance(address, opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "get_balance failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:get_balance, args: [:address])
 
   # --- block_number ---
 
@@ -292,9 +269,7 @@ defmodule Onchain.RPC do
   )
 
   @spec block_number(keyword()) :: {:ok, non_neg_integer()} | {:error, term()}
-  def block_number(opts \\ []) do
-    do_rpc("eth_blockNumber", [], Keyword.put(to_rpc_opts(opts), :decode, :hex_unsigned))
-  end
+  defrpc(:block_number, method: "eth_blockNumber", decode: :hex_unsigned)
 
   # --- block_number! ---
 
@@ -306,12 +281,7 @@ defmodule Onchain.RPC do
   )
 
   @spec block_number!(keyword()) :: non_neg_integer()
-  def block_number!(opts \\ []) do
-    case block_number(opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "block_number failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:block_number)
 
   # --- syncing ---
 
@@ -327,9 +297,7 @@ defmodule Onchain.RPC do
   )
 
   @spec syncing(keyword()) :: {:ok, false | map()} | {:error, term()}
-  def syncing(opts \\ []) do
-    do_rpc("eth_syncing", [], to_rpc_opts(opts))
-  end
+  defrpc(:syncing, method: "eth_syncing")
 
   # --- syncing! ---
 
@@ -341,12 +309,7 @@ defmodule Onchain.RPC do
   )
 
   @spec syncing!(keyword()) :: false | map()
-  def syncing!(opts \\ []) do
-    case syncing(opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "syncing failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:syncing)
 
   # --- get_block_by_number ---
 
@@ -431,12 +394,7 @@ defmodule Onchain.RPC do
   )
 
   @spec get_block_by_number!(integer() | String.t(), keyword()) :: map() | nil
-  def get_block_by_number!(block_id, opts \\ []) do
-    case get_block_by_number(block_id, opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "get_block_by_number failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:get_block_by_number, args: [:block_id])
 
   # --- chain_id ---
 
@@ -451,9 +409,7 @@ defmodule Onchain.RPC do
   )
 
   @spec chain_id(keyword()) :: {:ok, non_neg_integer()} | {:error, term()}
-  def chain_id(opts \\ []) do
-    do_rpc("eth_chainId", [], Keyword.put(to_rpc_opts(opts), :decode, :hex_unsigned))
-  end
+  defrpc(:chain_id, method: "eth_chainId", decode: :hex_unsigned)
 
   # --- chain_id! ---
 
@@ -465,12 +421,7 @@ defmodule Onchain.RPC do
   )
 
   @spec chain_id!(keyword()) :: non_neg_integer()
-  def chain_id!(opts \\ []) do
-    case chain_id(opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "chain_id failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:chain_id)
 
   # --- get_transaction_receipt ---
 
@@ -507,12 +458,7 @@ defmodule Onchain.RPC do
   )
 
   @spec get_transaction_receipt!(String.t(), keyword()) :: map() | nil
-  def get_transaction_receipt!(tx_hash, opts \\ []) do
-    case get_transaction_receipt(tx_hash, opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "get_transaction_receipt failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:get_transaction_receipt, args: [:tx_hash])
 
   # --- get_transaction_count ---
 
@@ -529,16 +475,7 @@ defmodule Onchain.RPC do
 
   @spec get_transaction_count(String.t() | binary(), keyword()) ::
           {:ok, non_neg_integer()} | {:error, term()}
-  def get_transaction_count(address, opts \\ []) do
-    with {:ok, hex_addr} <- ensure_hex_address(address),
-         {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")) do
-      do_rpc(
-        "eth_getTransactionCount",
-        [hex_addr, block],
-        Keyword.put(to_rpc_opts(opts), :decode, :hex_unsigned)
-      )
-    end
-  end
+  defrpc(:get_transaction_count, method: "eth_getTransactionCount", arg: :address, decode: :hex_unsigned)
 
   # --- get_transaction_count! ---
 
@@ -551,12 +488,7 @@ defmodule Onchain.RPC do
   )
 
   @spec get_transaction_count!(String.t() | binary(), keyword()) :: non_neg_integer()
-  def get_transaction_count!(address, opts \\ []) do
-    case get_transaction_count(address, opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "get_transaction_count failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:get_transaction_count, args: [:address])
 
   # --- eth_get_code ---
 
@@ -573,12 +505,7 @@ defmodule Onchain.RPC do
   )
 
   @spec eth_get_code(String.t() | binary(), keyword()) :: {:ok, String.t()} | {:error, term()}
-  def eth_get_code(address, opts \\ []) do
-    with {:ok, hex_addr} <- ensure_hex_address(address),
-         {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")) do
-      do_rpc("eth_getCode", [hex_addr, block], to_rpc_opts(opts))
-    end
-  end
+  defrpc(:eth_get_code, method: "eth_getCode", arg: :address)
 
   # --- eth_get_code! ---
 
@@ -591,12 +518,7 @@ defmodule Onchain.RPC do
   )
 
   @spec eth_get_code!(String.t() | binary(), keyword()) :: String.t()
-  def eth_get_code!(address, opts \\ []) do
-    case eth_get_code(address, opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "eth_get_code failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:eth_get_code, args: [:address])
 
   # --- get_transaction_by_hash ---
 
@@ -633,12 +555,7 @@ defmodule Onchain.RPC do
   )
 
   @spec get_transaction_by_hash!(String.t(), keyword()) :: map() | nil
-  def get_transaction_by_hash!(tx_hash, opts \\ []) do
-    case get_transaction_by_hash(tx_hash, opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "get_transaction_by_hash failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:get_transaction_by_hash, args: [:tx_hash])
 
   # --- eth_get_logs ---
 
@@ -704,12 +621,7 @@ defmodule Onchain.RPC do
   )
 
   @spec eth_get_logs!(map(), keyword()) :: [map()]
-  def eth_get_logs!(filter, opts \\ []) do
-    case eth_get_logs(filter, opts) do
-      {:ok, logs} -> logs
-      {:error, reason} -> raise "eth_get_logs failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:eth_get_logs, args: [:filter])
 
   # --- call (generic JSON-RPC passthrough) ---
 
@@ -843,12 +755,7 @@ defmodule Onchain.RPC do
   )
 
   @spec fee_history!(pos_integer(), keyword()) :: Cartouche.FeeHistory.t()
-  def fee_history!(block_count, opts \\ []) do
-    case fee_history(block_count, opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "fee_history failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:fee_history, args: [:block_count])
 
   # --- get_proof ---
 
@@ -894,12 +801,7 @@ defmodule Onchain.RPC do
   )
 
   @spec get_proof!(String.t() | binary(), [String.t()], keyword()) :: map()
-  def get_proof!(address, storage_keys, opts \\ []) do
-    case get_proof(address, storage_keys, opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "get_proof failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:get_proof, args: [:address, :storage_keys])
 
   # --- Private helpers ---
 
