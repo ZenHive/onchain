@@ -37,10 +37,12 @@ defmodule Onchain.Subscription do
 
   The race between `eth_subscribe`'s RPC reply (which returns the `subscription_id`)
   and the Agent registration of that id is closed by buffering: notifications that
-  arrive for an unregistered `subscription_id` are queued per-id (cap
-  `100` entries; oldest dropped on overflow with a `Logger.warning`).
-  On registration, buffered notifications are flushed FIFO through the same handler
-  path before `subscribe/3` returns.
+  arrive for an unregistered `subscription_id` are queued only while an
+  `eth_subscribe` is in flight; unsolicited sub_ids are dropped. Per-id cap is
+  `100` entries (oldest dropped on overflow with a `Logger.warning`); distinct
+  sub_id keys are capped at `16` (oldest key evicted on overflow). On registration,
+  buffered notifications are flushed FIFO through the same handler path before
+  `subscribe/3` returns.
 
   Cross-buffer / post-registration ordering is best-effort: a notification that
   arrives between the atomic register-and-drain step and the synchronous flush is
@@ -97,6 +99,11 @@ defmodule Onchain.Subscription do
   # mainnet pendingTransactions burst at 100 tx/s; not so high that a misbehaving
   # server can wedge memory.
   @max_pending_per_sub_id 100
+
+  # Cap on distinct sub_ids in the pending map while eth_subscribe is in flight.
+  # Prevents a server from growing the key set with never-subscribed ids during the
+  # race window; oldest key is evicted on overflow.
+  @max_pending_distinct_sub_ids 16
 
   @type subscription_type :: :new_heads | :pending_transactions | {:logs, map()}
 
@@ -163,7 +170,7 @@ defmodule Onchain.Subscription do
     {user_handler, ws_opts} = Keyword.pop(opts, :handler)
     caller = self()
 
-    {:ok, agent} = Agent.start_link(fn -> %{registry: %{}, pending: %{}} end)
+    {:ok, agent} = Agent.start_link(fn -> %{registry: %{}, pending: %{}, in_flight: 0} end)
 
     handler = user_handler || default_handler(caller)
 
@@ -336,21 +343,26 @@ defmodule Onchain.Subscription do
           {:ok, String.t()} | {:error, term()}
   defp do_subscribe(%__MODULE__{client: client, agent: agent, handler: handler}, type, params) do
     {:ok, request} = JsonRpc.build_request("eth_subscribe", params)
+    Agent.update(agent, fn state -> %{state | in_flight: state.in_flight + 1} end)
 
-    case Client.send_message(client, Jason.encode!(request)) do
-      {:ok, %{"result" => subscription_id}} when is_binary(subscription_id) ->
-        drained = register_and_drain(agent, subscription_id, type)
-        Enum.each(drained, &dispatch_event(type, subscription_id, &1, handler))
-        {:ok, subscription_id}
+    try do
+      case Client.send_message(client, Jason.encode!(request)) do
+        {:ok, %{"result" => subscription_id}} when is_binary(subscription_id) ->
+          drained = register_and_drain(agent, subscription_id, type)
+          Enum.each(drained, &dispatch_event(type, subscription_id, &1, handler))
+          {:ok, subscription_id}
 
-      {:ok, %{"error" => %{"code" => code, "message" => message}}} ->
-        {:error, {:rpc_error, %{code: code, message: message}}}
+        {:ok, %{"error" => %{"code" => code, "message" => message}}} ->
+          {:error, {:rpc_error, %{code: code, message: message}}}
 
-      {:error, reason} ->
-        {:error, {:connection_error, reason}}
+        {:error, reason} ->
+          {:error, {:connection_error, reason}}
 
-      other ->
-        {:error, {:unexpected_response, other}}
+        other ->
+          {:error, {:unexpected_response, other}}
+      end
+    after
+      Agent.update(agent, fn state -> %{state | in_flight: max(state.in_flight - 1, 0)} end)
     end
   end
 
@@ -416,6 +428,9 @@ defmodule Onchain.Subscription do
   def lookup_or_buffer(agent, sub_id, result) do
     Agent.get_and_update(agent, fn state ->
       case Map.get(state.registry, sub_id) do
+        nil when state.in_flight == 0 ->
+          {:buffered, state}
+
         nil ->
           {:buffered, %{state | pending: push_bounded(state.pending, sub_id, result)}}
 
@@ -452,6 +467,7 @@ defmodule Onchain.Subscription do
   # by Enum.reverse on drain. Overflow emits a Logger.warning every time.
   @spec push_bounded(map(), String.t(), term()) :: map()
   defp push_bounded(pending, sub_id, result) do
+    pending = evict_oldest_pending_key(pending, sub_id)
     current = Map.get(pending, sub_id, [])
     next = [result | current]
 
@@ -464,6 +480,23 @@ defmodule Onchain.Subscription do
       Map.put(pending, sub_id, kept)
     else
       Map.put(pending, sub_id, next)
+    end
+  end
+
+  # When the distinct sub_id cap is reached, evict the oldest pending key (map insertion
+  # order) before accepting a notification for a new sub_id.
+  @spec evict_oldest_pending_key(map(), String.t()) :: map()
+  defp evict_oldest_pending_key(pending, sub_id) do
+    if Map.has_key?(pending, sub_id) or map_size(pending) < @max_pending_distinct_sub_ids do
+      pending
+    else
+      {oldest_id, _} = Enum.at(pending, 0)
+
+      Logger.warning(
+        "Subscription: distinct pending sub_id cap (#{@max_pending_distinct_sub_ids}) exceeded; evicting #{inspect(oldest_id)}"
+      )
+
+      Map.delete(pending, oldest_id)
     end
   end
 

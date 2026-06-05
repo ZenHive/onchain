@@ -15,9 +15,13 @@ defmodule Onchain.SubscriptionTest do
   }
 
   defp start_agent! do
-    {:ok, agent} = Agent.start_link(fn -> %{registry: %{}, pending: %{}} end)
+    {:ok, agent} = Agent.start_link(fn -> %{registry: %{}, pending: %{}, in_flight: 0} end)
     on_exit(fn -> if Process.alive?(agent), do: Agent.stop(agent) end)
     agent
+  end
+
+  defp mark_subscribe_in_flight!(agent) do
+    Agent.update(agent, fn state -> %{state | in_flight: state.in_flight + 1} end)
   end
 
   defp register!(agent, sub_id, type) do
@@ -200,7 +204,22 @@ defmodule Onchain.SubscriptionTest do
       assert_receive {:event, {:parse_error, "0xsub_logs", {:invalid_log, "not a map"}}}, 100
     end
 
+    test "drops unsolicited sub_id when no eth_subscribe is in flight", ctx do
+      ctx.internal.(
+        {:message,
+         %{
+           "method" => "eth_subscription",
+           "params" => %{"subscription" => "0xunsolicited", "result" => %{"spam" => true}}
+         }}
+      )
+
+      refute_receive {:event, _}, 50
+      assert Agent.get(ctx.agent, & &1.pending) == %{}
+    end
+
     test "buffers notification when subscription_id is not yet registered", ctx do
+      mark_subscribe_in_flight!(ctx.agent)
+
       ctx.internal.(
         {:message,
          %{
@@ -231,6 +250,8 @@ defmodule Onchain.SubscriptionTest do
     end
 
     test "register_and_drain returns buffered results in FIFO order", ctx do
+      mark_subscribe_in_flight!(ctx.agent)
+
       # Buffer two pending-tx hashes for an unregistered sub_id
       hash1 = "0x" <> String.duplicate("a", 64)
       hash2 = "0x" <> String.duplicate("b", 64)
@@ -255,6 +276,7 @@ defmodule Onchain.SubscriptionTest do
     end
 
     test "buffered notifications dispatch through handler when flushed manually", ctx do
+      mark_subscribe_in_flight!(ctx.agent)
       hash = "0x" <> String.duplicate("c", 64)
 
       ctx.internal.(
@@ -289,6 +311,8 @@ defmodule Onchain.SubscriptionTest do
     end
 
     test "drops oldest entry and emits Logger.warning when buffer exceeds 100 entries", ctx do
+      mark_subscribe_in_flight!(ctx.agent)
+
       log =
         capture_log(fn ->
           for n <- 1..101 do
@@ -317,7 +341,7 @@ defmodule Onchain.SubscriptionTest do
       agent = start_agent!()
 
       Agent.update(agent, fn _ ->
-        %{registry: %{"0xa" => :new_heads}, pending: %{"0xa" => ["one"], "0xb" => ["two"]}}
+        %{registry: %{"0xa" => :new_heads}, pending: %{"0xa" => ["one"], "0xb" => ["two"]}, in_flight: 0}
       end)
 
       Subscription.remove_subscription(agent, "0xa")

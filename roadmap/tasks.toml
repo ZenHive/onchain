@@ -411,7 +411,7 @@ shipped_in = "5248d61451421deb3938bd7363b74cb8bba8f1dd"
 id = 70
 phase = 12
 bundle = "subscription_hardening"
-status = "pending"
+status = "completed"
 title = "Harden Onchain.Subscription.lookup_or_buffer/3 against unsolicited sub_id keys"
 scores = { d = 3, b = 4, u = 3 }
 markers = ["parallel"]
