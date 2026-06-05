@@ -68,7 +68,7 @@
 | Task 57 | ✅ | 🎁 **rpc_shapes** · *Onchain.RPC* · Unify get_block_* / get_transaction_* RPC return shapes [D:4/B:6/U:6 → Eff:1.5?] 🚀 |
 | Task 63 | ✅ | 🎁 **rpc_codegen** · *Onchain.RPC* · defrpc macro — codegen named JSON-RPC wrappers from declarative specs [D:4/B:6/U:5 → Eff:1.38?] 📋 |
 | Task 64 | ✅ | 🎁 **rpc_codegen** · *Onchain.RPC.Specs* · Vendor openrpc.json + emit Onchain.RPC.Specs lookup feeding defrpc [D:4/B:6/U:5 → Eff:1.38?] 📋 |
-| Task 66 | 🔄 | 🎁 **rpc_codegen** · *Mix.Task (dev-only)* · Tree-sitter scrape of Erigon Go source for trace_* / ots_* method enumeration [D:5/B:4/U:3 → Eff:0.7?] ⚠️ |
+| Task 66 | ✅ | 🎁 **rpc_codegen** · *Mix.Task (dev-only)* · Tree-sitter scrape of Erigon Go source for trace_* / ots_* method enumeration [D:5/B:4/U:3 → Eff:0.7?] ⚠️ |
 | Task 41 `[P]` | ✅ | 🎁 **ens** · *Onchain.ENS* · ENS enhancements: CCIP-Read, ENSIP-10 wildcard, UTS-46/ENSIP-15 normalization, multi-coin [D:6/B:6/U:5 → Eff:0.92?] ⚠️ |
 | Task 65 `[P]` | ✅ | 🎁 **differential_testing** · *test/onchain/differential/* · Differential test harness: Onchain.RPC vs reference impl (signet first) [D:6/B:5/U:3 → Eff:0.67?] ⚠️ |
 | Task 70 `[P]` | ✅ | 🎁 **subscription_hardening** · *Onchain.Subscription* · Harden Onchain.Subscription.lookup_or_buffer/3 against unsolicited sub_id keys [D:3/B:4/U:3 → Eff:1.17] 📋 |

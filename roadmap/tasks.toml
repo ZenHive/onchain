@@ -331,7 +331,7 @@ shipped_in = "2dfd0c6"
 id = 66
 phase = 12
 bundle = "rpc_codegen"
-status = "in_progress"
+status = "done"
 title = "Tree-sitter scrape of Erigon Go source for trace_* / ots_* method enumeration"
 scores = { d = 5, b = 4, u = 3 }
 depends_on = [64]
@@ -346,9 +346,14 @@ module = "Mix.Task (dev-only)"
 body = """
 OpenRPC doesn't cover Erigon-specific namespaces (trace_* ~18 methods, ots_* ~12). Vendor a pinned commit of erigon/turbo/jsonrpc/ under priv/specs/erigon-COMMIT/; tree-sitter grammar matches function defs on *TraceAPIImpl / *OtterscanAPIImpl receivers; emit a JSON list to priv/specs/erigon-methods.json. Tree-sitter is a NIF — violates the pure-Elixir invariant, so run the scrape as a DEV-ONLY Mix.Task producing vendored JSON; runtime stays pure-Elixir reading the JSON. Only worth pursuing if (a) Task 64 ships and the OpenRPC pipeline is proven, (b) consumers actually call trace_*/ots_* enough to motivate named wrappers, (c) hand-maintenance produced >=1 staleness bug. Gated on Task 64 + actual consumer demand.
 """
+implemented = "Landed by codex via merge-train; reviewer-approved (run run-1780652779951-776c26e2, 2b688079347143e83a93cc1cc331424dc551591d)."
+delivered_by = "codex"
+verified = true
 created_at = "2026-04-23"
 started_at = "2026-06-05"
 scored_at = "2026-04-23"
+done_at = "2026-06-05"
+shipped_in = "2b688079347143e83a93cc1cc331424dc551591d"
 
 [[task]]
 id = 41
