@@ -334,6 +334,30 @@ defmodule Onchain.SubscriptionTest do
       assert hd(pending["0xbuf"]) == "0x101"
       refute "0x1" in pending["0xbuf"]
     end
+
+    test "evicts oldest distinct pending sub_id when key cap exceeded during subscribe race", ctx do
+      mark_subscribe_in_flight!(ctx.agent)
+
+      log =
+        capture_log(fn ->
+          for n <- 1..17 do
+            ctx.internal.(
+              {:message,
+               %{
+                 "method" => "eth_subscription",
+                 "params" => %{"subscription" => "0xkey#{n}", "result" => n}
+               }}
+            )
+          end
+        end)
+
+      assert log =~ "distinct pending sub_id cap"
+
+      pending = Agent.get(ctx.agent, & &1.pending)
+      assert map_size(pending) == 16
+      refute Map.has_key?(pending, "0xkey1")
+      assert pending["0xkey17"] == [17]
+    end
   end
 
   describe "remove_subscription/2" do
