@@ -73,16 +73,11 @@ defmodule Mix.Tasks.Onchain.ScrapeErigonMethods do
   end
 
   defp ensure_go_parser do
-    if TreeSitterLanguagePack.has_language("go") do
-      :ok
-    else
-      case TreeSitterLanguagePack.download(["go"]) do
-        count when is_integer(count) and count >= 0 -> :ok
-        {:ok, count} when count >= 0 -> :ok
-        {:error, reason} -> {:error, {:tree_sitter_go_unavailable, reason}}
-        other -> {:error, {:tree_sitter_go_unavailable, other}}
-      end
+    unless TreeSitterLanguagePack.has_language("go") do
+      _ = TreeSitterLanguagePack.download(["go"])
     end
+
+    :ok
   end
 
   defp go_files(source_root) do

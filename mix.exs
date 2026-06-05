@@ -103,7 +103,7 @@ defmodule Onchain.MixProject do
       # Tidewave/bandit's HTTP stack (plug, finch, mint, gun, cowlib, etc.)
       # is not in lib/'s call graph and bloats PLT to ~800 modules.
       plt_add_deps: :apps_direct,
-      plt_add_apps: [:mix, :hieroglyph, :curvy],
+      plt_add_apps: [:mix, :hieroglyph, :curvy, :tree_sitter_language_pack],
       plt_local_path: "priv/plts",
       plt_core_path: "priv/plts"
     ]
