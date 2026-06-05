@@ -49,6 +49,7 @@ defmodule Onchain.MEV do
   - Invalid relay URL: `{:error, {:invalid_endpoint, input}}`
   - Invalid signed tx hex: `{:error, {:invalid_data, input}}`
   - Empty bundle: `{:error, :empty_bundle}`
+  - Non-list bundle: `{:error, {:invalid_bundle, input}}`
   - Bundle missing target block: `{:error, :missing_block_number}`
   - Invalid block value: `{:error, {:invalid_block, input}}`
   - Relay / transport errors: `{:error, {:rpc_error, map}}` — the map always has a

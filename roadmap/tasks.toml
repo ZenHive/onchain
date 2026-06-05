@@ -474,3 +474,130 @@ created_at = "2026-06-04"
 started_at = "2026-06-04"
 scored_at = "2026-06-04"
 done_at = "2026-06-04"
+
+[[task]]
+id = 76
+phase = 12
+bundle = "rpc_codegen"
+status = "pending"
+title = "Audit-surfaced: Task 63 defrpc macro is unused — wrappers still hand-written"
+assignee = "codex"
+scores = { d = 4, b = 5, u = 5 }
+domains = ["rpc", "macros"]
+module = "Onchain.RPC"
+body = """
+Task 63's acceptance criterion #2 — "Existing 11 wrappers reimplemented through it with byte-identical public behavior" — is UNMET. `grep -rn 'defrpc' lib/` returns zero call sites outside lib/onchain/rpc/codegen.ex: every wrapper (block_number, chain_id, syncing, get_balance, get_transaction_count, get_code, eth_send_raw_transaction, and all `!` variants) is still a hand-written `def`. The `Onchain.RPC.Codegen` macro module, the `nimble_options` dep, and the `.doctor.exs` ignore entry were all added to support a macro that is never invoked — dead code.
+
+The CHANGELOG (b67f5cc/a4d9d64, "### Changed — defrpc macro codegen") claims the wrappers "now expand from declarative specs" — materially false. `roadmap/tasks.toml` task 63 carries `verified = true`, also inaccurate. The audit corrected the CHANGELOG claim in this commit; this task tracks the actual decision: either (a) wire the uniform wrappers through `defrpc`/`defrpc_bang` as the task intended, or (b) per acceptance criterion #4 ("Kill the prototype if 3+ wrappers need bespoke escape hatches"), remove the unused macro + nimble_options dep + doctor ignore.
+
+Corroborated by Claude (grep verification) + Codex. Filed by audit-review against commits b67f5cc/a4d9d64 on 2026-06-05; see .audit/b67f5cc-*.md.
+"""
+created_at = "2026-06-05"
+scored_at = "2026-06-05"
+
+[[task]]
+id = 77
+phase = 12
+bundle = "erc_standards"
+status = "pending"
+title = "Audit-surfaced: ERC-7730 tokenAmount renders wrong token symbol (clear-signing safety)"
+assignee = "codex"
+scores = { d = 4, b = 7, u = 6 }
+domains = ["erc", "security"]
+module = "Onchain.ERC7730.Formatter"
+body = """
+`Onchain.ERC7730.Formatter.from_metadata/2` (lib/onchain/erc7730/formatter.ex:314) ignores its `_token` argument and unconditionally returns the descriptor's `metadata.token` decimals/symbol whenever `metadata.token.decimals` is present. When a `tokenAmount` field references a different token than the descriptor's `metadata.token` (e.g. via `tokenPath`, and the token is absent from `opts[:tokens]`), the amount is rendered with the WRONG token's symbol — e.g. a DAI amount shown as "1 USDC". For a clear-signing engine whose entire purpose is showing users what they sign, displaying the wrong token is a safety-relevant correctness bug.
+
+Fix: `from_metadata` should only apply when the requested token matches `metadata.token`'s `address` (ERC-7730 `metadata.token` carries `name/ticker/decimals/address`), or only when the field has no explicit token reference (the implicit single-token case the resolution order documents). Add a guard + tests covering the explicit-token-mismatch path.
+
+Corroborated by Codex + Claude (read formatter.ex, confirmed `_token` unused). Filed by audit-review against commit a82235d on 2026-06-05; see .audit/a82235d-*.md.
+"""
+created_at = "2026-06-05"
+scored_at = "2026-06-05"
+
+[[task]]
+id = 78
+phase = 12
+bundle = "erc_standards"
+status = "pending"
+title = "Audit-surfaced: ERC-7730 binding/descriptor hardening (domain match, EIP-712 type, malformed input)"
+assignee = "codex"
+scores = { d = 5, b = 5, u = 5 }
+domains = ["erc"]
+module = "Onchain.ERC7730.Binding"
+body = """
+Codex second-opinion surfaced a cluster of ERC-7730 binding/descriptor robustness gaps (Claude verified the first two against source):
+
+1. **Domain match too lax** — `Binding.match_domain/2` (binding.ex:167) skips any constrained domain key the payload omits (`not is_nil(actual_value)` guard), so a descriptor constraining `domain.name`/`verifyingContract` still matches a payload that omits that field. Decide whether a missing constrained field should be a `:domain_mismatch`.
+2. **EIP-712 format-key matching reuses ABI selector parsing** — `find_format_by_type/2` (binding.ex:198) parses the format key via `ABI.FunctionSelector.decode/1` and matches `.function`; for EIP-712 the key is the `primaryType` and types should come from the payload's `types`/`encodeType`, not an ABI signature. `types_from_selector(fs)` yields `%{}` for a bare type name, so the Formatter loses type-aware coercion on EIP-712 messages. Nested `encodeType` keys (`Mail(...)Person(...)`) return `:no_format_match`.
+3. **Duplicate format keys** — `find_format_by_selector/2` (binding.ex:184) silently picks the first of two formats sharing a selector instead of flagging the descriptor as invalid.
+4. **Descriptor parse crashes on malformed input** — Codex reports `descriptor.ex` raises (FunctionClauseError / BadMapError / Protocol.UndefinedError) instead of returning `{:error, {:invalid_field, ...}}` for `"format": 1`, `"excluded": "#.x"`, `"params": "bad"`, and loads `{:ok}` for `"deployments": []`. Verify each against descriptor.ex and add validation + tests.
+
+Corroborated: Codex (all) + Claude (items 1-2 verified in source). Filed by audit-review against commit a82235d on 2026-06-05; see .audit/a82235d-*.md.
+"""
+created_at = "2026-06-05"
+scored_at = "2026-06-05"
+
+[[task]]
+id = 79
+phase = 9
+bundle = "account_abstraction"
+status = "pending"
+title = "Audit-surfaced: ERC-4337 to_rpc_params validation can diverge from user_op_hash"
+assignee = "codex"
+scores = { d = 4, b = 5, u = 5 }
+domains = ["account_abstraction"]
+module = "Onchain.AA"
+body = """
+`Onchain.AA` derives the v0.7 packed `initCode`/`paymasterAndData` independently in two places — the hash path (`resolve_init_code`/`resolve_paymaster_and_data` in `pack/2`) and the RPC path (`maybe_put_factory_fields`/`maybe_put_paymaster_fields` in `rpc_map/3`). They handle invalid/malformed input inconsistently:
+
+- `user_op_hash/4` rejects an invalid `factory`/`paymaster` address; `to_rpc_params/2` emits them verbatim with no validation (returns `{:ok, map}` with a malformed `"factory"`).
+- An `init_code`/`paymaster_and_data` shorter than the 20-/52-byte split is hashed verbatim by the hash path but silently dropped by the RPC path (the `<<bin::binary-size(20), …>>` match fails → fields omitted), so the signed hash and the bundler payload can commit to different data.
+
+Valid inputs agree (verified by the reference-vector + derivation-equivalence tests); the divergence is on malformed/invalid input. Extract one shared validator/derivation used by both paths so `to_rpc_params` and `user_op_hash` cannot disagree, and validate factory/paymaster addresses in `to_rpc_params`. Add tests for the mismatch cases.
+
+Codex-flagged; Claude verified the inconsistency in aa.ex. Filed by audit-review against commits 3e58c57/222f3c0 on 2026-06-05; see .audit/3e58c57-*.md.
+"""
+created_at = "2026-06-05"
+scored_at = "2026-06-05"
+
+[[task]]
+id = 80
+phase = 7
+bundle = "dex"
+status = "pending"
+title = "Audit-surfaced: Onchain.MEV accepts block tags where a concrete block is required"
+assignee = "cursor"
+scores = { d = 3, b = 4, u = 4 }
+domains = ["dex", "rpc"]
+module = "Onchain.MEV"
+body = """
+`Onchain.MEV` validates `max_block_number` (send_private_transaction) and `block_number` (send_bundle) through `Onchain.RPC.Helpers.normalize_block/1`, which permits block TAGS (`"latest"`, `"pending"`, `"finalized"`, …). Flashbots `eth_sendBundle` `blockNumber` and `eth_sendPrivateTransaction` `maxBlockNumber` require a concrete hex block-number quantity; passing `block_number: "latest"` shapes an invalid `"blockNumber": "latest"` the relay rejects, rather than failing fast with a clear error.
+
+Add a stricter `normalize_block_number/1` (integer or 0x-hex quantity only; reject tags) for these fields and route MEV through it; keep `normalize_block/1` for tag-accepting call sites. Add tests asserting tags are rejected.
+
+Codex-flagged; Claude concurs (normalize_block accepts tags by design). Filed by audit-review against commit 986a545 on 2026-06-05; see .audit/986a545-*.md.
+"""
+created_at = "2026-06-05"
+scored_at = "2026-06-05"
+
+[[task]]
+id = 81
+phase = 10
+bundle = "rpc_composition"
+status = "pending"
+title = "Audit-surfaced: RPC batch + block decode crash on malformed node responses"
+assignee = "cursor"
+scores = { d = 2, b = 3, u = 4 }
+domains = ["rpc"]
+module = "Onchain.RPC"
+body = """
+Two defensive-coding gaps where a non-spec node response raises instead of returning an error tuple (compliant nodes never trigger these; a buggy/hostile node can):
+
+1. **batch** — `Onchain.RPC.decode_batch_responses/2` runs `Map.new(responses, &{&1["id"], &1})` before the graceful `other`/`nil` handling in `collect_batch_results/1`. A 200-body array containing a non-map element (e.g. `[1]`) raises on `1["id"]`. Guard `Map.new` to map items only so the existing "missing/unexpected batch item" error path is reachable.
+2. **block decode** — `Onchain.RPC.Helpers.parse_block_transactions/1` and `parse_withdrawals/1` raise `FunctionClauseError` on a non-binary/non-map list member (`"transactions": [123]`); `parse_block_response` decodes an invalid hex `"number"` (`"0xZZ"`) to `nil`, masking it as a pending-like block. Add catch-all handling / surface a decode error.
+
+Codex-flagged (3 items); Claude verified items 1-2 in source. Low severity (malformed-input only). Filed by audit-review against commits 3c39dd1/b3cc9b0 on 2026-06-05; see the corresponding .audit reports.
+"""
+created_at = "2026-06-05"
+scored_at = "2026-06-05"

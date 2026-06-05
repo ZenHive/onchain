@@ -10,6 +10,17 @@ defmodule Onchain.RPC do
   `retry: [max_retries: 2, backoff_ms: 100]` to retry RPC/network errors before
   returning the final normalized error.
 
+  ## Telemetry
+
+  Every single-call RPC (`do_rpc/3`, all named wrappers, and `call/3`) plus
+  `batch/2` is wrapped in `:telemetry.span/3` under the event prefix
+  `[:onchain, :rpc, :request]` — emitting `:start`, `:stop`, and `:exception`
+  events. Start metadata is `%{method: method}`; stop metadata is
+  `%{method: method, status: :ok}` on success or
+  `%{method: method, status: :error, error: reason}` on a returned error tuple
+  (`method` is `"batch"` for `batch/2`). Attach a handler to measure latency or
+  count failures per method.
+
   ## Error Format
 
   - Address validation: `{:error, {:invalid_address, input}}`

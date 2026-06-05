@@ -10,6 +10,10 @@ Completed roadmap tasks.
 
 - **`test/onchain/differential/rpc_cartouche_test.exs`** — 15 `@tag :differential` cases compare `Onchain.RPC` against `Cartouche.RPC.send_rpc/3` on the same node (cartouche replaced signet as the zero-infra oracle per Task 67). Covers chain id, balance/nonce/code at a historical block, `eth_call` map params, block tags (`earliest`/`safe`/`finalized`), log filter maps, tx/receipt sparse decoding, fee history, proof (latest block — nodes cap proof window), and generic `call/3` passthrough. Gated by `ONCHAIN_DIFFERENTIAL_TESTS=1` plus `ETHEREUM_API_URL`; excluded from the default suite via `@moduletag :integration`.
 
+### Added — telemetry on the RPC request path (Task 52)
+
+- **`Onchain.RPC`** — every single-call RPC (`do_rpc/3`, all named wrappers, `call/3`) and `batch/2` are wrapped in `:telemetry.span/3` emitting `[:onchain, :rpc, :request]` start/stop/exception events. Stop metadata: `%{method: method, status: :ok}` on success, `%{method: method, status: :error, error: reason}` on failure (`method` is `"batch"` for `batch/2`). Adds `:telemetry ~> 1.4` as a direct dep so dialyzer resolves `:telemetry.span/3`.
+
 ### Added — opt-in RPC retry/backoff (Task 54)
 
 - **`Onchain.RPC`** — single-call path (`do_rpc/3`, all named wrappers and `call/3`) accepts opt-in `retry: [max_retries: n, backoff_ms: ms]`. Omit `:retry` (or pass `retry: false`) for one attempt — same as underlying `Cartouche.RPC.send_rpc/3`. Retries only transport-level `{:rpc_error, _}` errors without a JSON-RPC `:code`; node application errors (reverts, invalid params, etc.) return immediately.
@@ -47,7 +51,7 @@ Completed roadmap tasks.
 
 ### Changed — `defrpc` macro codegen for uniform RPC wrappers (Task 63)
 
-- **`Onchain.RPC.Codegen`** — compile-time `defrpc/2` and `defrpc_bang/2` macros backed by NimbleOptions schemas (`method`, `arg`, `decode` for reads; `args` for bangs). Uniform read wrappers (`eth_sendRawTransaction`, `eth_getBalance`, `eth_blockNumber`, `eth_syncing`, `eth_chainId`, `eth_getTransactionCount`, `eth_getCode`) and all mechanical `!` variants now expand from declarative specs; bespoke bodies (`eth_call`, `get_block_by_number`, receipts, logs, `fee_history`, `get_proof`, …) stay hand-written and only use `defrpc_bang/2` where the bang is mechanical.
+- **`Onchain.RPC.Codegen`** — compile-time `defrpc/2` and `defrpc_bang/2` macros backed by NimbleOptions schemas (`method`, `arg`, `decode` for reads; `args` for bangs), capturing the uniform "(optionally validate one arg) → `do_rpc` → maybe decode" wrapper shape and its mechanical `!` variant. **Audit correction (2026-06-05):** the macros are defined but **not yet wired into `Onchain.RPC`** — every named wrapper (`eth_getBalance`, `eth_blockNumber`, `eth_syncing`, `eth_chainId`, `eth_getTransactionCount`, `eth_getCode`, `eth_sendRawTransaction`) and its `!` variant is still hand-written; `defrpc`/`defrpc_bang` have no call sites outside the macro module. (The prior wording claimed the wrappers "now expand from declarative specs" — that was inaccurate.) Migrating the uniform wrappers, or removing the unused prototype, is tracked as a ROADMAP "Audit-surfaced" follow-up.
 - **`Onchain.RPC`** — no public API change: `@doc`, `@spec`, and Descripex `api/3` hints remain hand-authored for byte-identical agent contracts; macro output is function bodies only.
 - **`.doctor.exs`** — ignore `Onchain.RPC.Codegen` (Doctor counts quoted `def`s inside macro modules as undocumented public functions).
 - **`nimble_options`** — new compile-time dependency for macro option validation.
