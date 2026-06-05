@@ -311,6 +311,56 @@ defmodule Onchain.AATest do
       assert params["paymasterData"] == "0xcafe"
       refute Map.has_key?(params, "paymasterAndData")
     end
+
+    test "v0.7 rejects a malformed factory address instead of emitting it" do
+      {:ok, op} =
+        AA.new(%{
+          sender: "0x1234567890123456789012345678901234567890",
+          factory: "0xbeef"
+        })
+
+      assert {:error, {:invalid_address, :factory, "0xbeef"}} =
+               AA.to_rpc_params(op, version: :v0_7)
+    end
+
+    test "v0.7 rejects a malformed paymaster address instead of emitting it" do
+      {:ok, op} =
+        AA.new(%{
+          sender: "0x1234567890123456789012345678901234567890",
+          paymaster: "0xbeef"
+        })
+
+      assert {:error, {:invalid_address, :paymaster, "0xbeef"}} =
+               AA.to_rpc_params(op, version: :v0_7)
+    end
+
+    test "v0.7 rejects short init_code consistently for hash and RPC" do
+      {:ok, op} =
+        AA.new(%{
+          sender: "0x1234567890123456789012345678901234567890",
+          init_code: "0xdeadbeef"
+        })
+
+      assert {:error, {:invalid_field, :init_code, "0xdeadbeef"}} =
+               AA.user_op_hash(op, @ref_entry_point, @ref_chain_id, version: :v0_7)
+
+      assert {:error, {:invalid_field, :init_code, "0xdeadbeef"}} =
+               AA.to_rpc_params(op, version: :v0_7)
+    end
+
+    test "v0.7 rejects short paymaster_and_data consistently for hash and RPC" do
+      {:ok, op} =
+        AA.new(%{
+          sender: "0x1234567890123456789012345678901234567890",
+          paymaster_and_data: "0xdeadbeef"
+        })
+
+      assert {:error, {:invalid_field, :paymaster_and_data, "0xdeadbeef"}} =
+               AA.user_op_hash(op, @ref_entry_point, @ref_chain_id, version: :v0_7)
+
+      assert {:error, {:invalid_field, :paymaster_and_data, "0xdeadbeef"}} =
+               AA.to_rpc_params(op, version: :v0_7)
+    end
   end
 
   describe "bundler RPC argument validation" do

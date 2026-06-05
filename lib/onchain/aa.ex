@@ -84,6 +84,7 @@ defmodule Onchain.AA do
   @versions [:v0_6, :v0_7]
   @eip191_prefix "\x19Ethereum Signed Message:\n32"
   @tx_hash_hex_length 66
+  @address_byte_size 20
 
   @uint256_fields ~w(nonce call_gas_limit verification_gas_limit pre_verification_gas
                      max_fee_per_gas max_priority_fee_per_gas)a
@@ -230,7 +231,7 @@ defmodule Onchain.AA do
 
     with :ok <- validate_version(version),
          {:ok, sender_bin} <- validate_address(user_op.sender, :sender) do
-      {:ok, rpc_map(user_op, Hex.encode(sender_bin), version)}
+      rpc_map(user_op, Hex.encode(sender_bin), version)
     end
   end
 
@@ -453,9 +454,8 @@ defmodule Onchain.AA do
   # v0.7 encode: PackedUserOperation with accountGasLimits and gasFees bytes32 words.
   defp pack(op, :v0_7) do
     with {:ok, sender} <- validate_address(op.sender, :sender),
-         {:ok, init_code} <- resolve_init_code(op),
+         {:ok, v0_7_fields} <- derive_v0_7_fields(op),
          {:ok, call_data} <- decode_hex_field(op.call_data, :call_data),
-         {:ok, paymaster} <- resolve_paymaster_and_data(op),
          {:ok, account_gas_limits} <-
            pack_two_uint128(op.verification_gas_limit, op.call_gas_limit, :account_gas_limits),
          {:ok, gas_fees} <-
@@ -463,35 +463,12 @@ defmodule Onchain.AA do
       {:ok,
        word_address(sender) <>
          <<op.nonce::256>> <>
-         Hash.keccak(init_code) <>
+         Hash.keccak(v0_7_fields.init_code) <>
          Hash.keccak(call_data) <>
          account_gas_limits <>
          <<op.pre_verification_gas::256>> <>
          gas_fees <>
-         Hash.keccak(paymaster)}
-    end
-  end
-
-  # v0.7 initCode = factory ‖ factoryData when factory is set; otherwise the raw init_code.
-  defp resolve_init_code(%UserOperation{factory: nil, init_code: init_code}), do: decode_hex_field(init_code, :init_code)
-
-  defp resolve_init_code(%UserOperation{factory: factory} = op) do
-    with {:ok, factory_bin} <- validate_address(factory, :factory),
-         {:ok, factory_data} <- decode_optional_hex(op.factory_data, :factory_data) do
-      {:ok, factory_bin <> factory_data}
-    end
-  end
-
-  # v0.7 paymasterAndData = paymaster ‖ verificationGasLimit(16) ‖ postOpGasLimit(16) ‖ data.
-  defp resolve_paymaster_and_data(%UserOperation{paymaster: nil, paymaster_and_data: data}),
-    do: decode_hex_field(data, :paymaster_and_data)
-
-  defp resolve_paymaster_and_data(%UserOperation{paymaster: paymaster} = op) do
-    with {:ok, paymaster_bin} <- validate_address(paymaster, :paymaster),
-         {:ok, ver_gas} <- uint128_word(op.paymaster_verification_gas_limit, :paymaster_verification_gas_limit),
-         {:ok, post_op_gas} <- uint128_word(op.paymaster_post_op_gas_limit, :paymaster_post_op_gas_limit),
-         {:ok, data} <- decode_optional_hex(op.paymaster_data, :paymaster_data) do
-      {:ok, paymaster_bin <> ver_gas <> post_op_gas <> data}
+         Hash.keccak(v0_7_fields.paymaster_and_data)}
     end
   end
 
@@ -511,6 +488,89 @@ defmodule Onchain.AA do
     if uint?(value, 128), do: {:ok, <<value::128>>}, else: {:error, {:invalid_field, field, value}}
   end
 
+  defp derive_v0_7_fields(%UserOperation{} = op) do
+    with {:ok, init_code, factory_fields} <- derive_factory_fields(op),
+         {:ok, paymaster_and_data, paymaster_fields} <- derive_paymaster_fields(op) do
+      {:ok,
+       %{
+         init_code: init_code,
+         factory_fields: factory_fields,
+         paymaster_and_data: paymaster_and_data,
+         paymaster_fields: paymaster_fields
+       }}
+    end
+  end
+
+  # v0.7 initCode = factory ‖ factoryData when factory is set; otherwise the raw
+  # init_code must be empty or unpackable into factory/factoryData for bundler RPC.
+  defp derive_factory_fields(%UserOperation{factory: nil, init_code: init_code}) do
+    with {:ok, init_code_bin} <- decode_hex_field(init_code, :init_code) do
+      case init_code_bin do
+        <<>> ->
+          {:ok, init_code_bin, nil}
+
+        <<factory_bin::binary-size(@address_byte_size), factory_data::binary>> ->
+          {:ok, init_code_bin,
+           %{
+             "factory" => Hex.encode(factory_bin),
+             "factoryData" => encode_optional_bytes(factory_data)
+           }}
+
+        _ ->
+          {:error, {:invalid_field, :init_code, init_code}}
+      end
+    end
+  end
+
+  defp derive_factory_fields(%UserOperation{factory: factory} = op) do
+    with {:ok, factory_bin} <- validate_address(factory, :factory),
+         {:ok, factory_data} <- decode_optional_hex(op.factory_data, :factory_data) do
+      {:ok, factory_bin <> factory_data,
+       %{
+         "factory" => Hex.encode(factory_bin),
+         "factoryData" => encode_optional_bytes(factory_data)
+       }}
+    end
+  end
+
+  # v0.7 paymasterAndData = paymaster ‖ verificationGasLimit(16) ‖
+  # postOpGasLimit(16) ‖ data.
+  defp derive_paymaster_fields(%UserOperation{paymaster: nil, paymaster_and_data: paymaster_and_data}) do
+    with {:ok, paymaster_bin} <- decode_hex_field(paymaster_and_data, :paymaster_and_data) do
+      case paymaster_bin do
+        <<>> ->
+          {:ok, paymaster_bin, nil}
+
+        <<paymaster::binary-size(@address_byte_size), ver_gas::128, post_gas::128, data::binary>> ->
+          {:ok, paymaster_bin,
+           %{
+             "paymaster" => Hex.encode(paymaster),
+             "paymasterVerificationGasLimit" => Hex.from_integer(ver_gas),
+             "paymasterPostOpGasLimit" => Hex.from_integer(post_gas),
+             "paymasterData" => encode_optional_bytes(data)
+           }}
+
+        _ ->
+          {:error, {:invalid_field, :paymaster_and_data, paymaster_and_data}}
+      end
+    end
+  end
+
+  defp derive_paymaster_fields(%UserOperation{paymaster: paymaster} = op) do
+    with {:ok, paymaster_bin} <- validate_address(paymaster, :paymaster),
+         {:ok, ver_gas} <- uint128_word(op.paymaster_verification_gas_limit, :paymaster_verification_gas_limit),
+         {:ok, post_op_gas} <- uint128_word(op.paymaster_post_op_gas_limit, :paymaster_post_op_gas_limit),
+         {:ok, data} <- decode_optional_hex(op.paymaster_data, :paymaster_data) do
+      {:ok, paymaster_bin <> ver_gas <> post_op_gas <> data,
+       %{
+         "paymaster" => Hex.encode(paymaster_bin),
+         "paymasterVerificationGasLimit" => Hex.from_integer(op.paymaster_verification_gas_limit || 0),
+         "paymasterPostOpGasLimit" => Hex.from_integer(op.paymaster_post_op_gas_limit || 0),
+         "paymasterData" => encode_optional_bytes(data)
+       }}
+    end
+  end
+
   defp pack_two_uint128(high, low, field) do
     if uint?(high, 128) and uint?(low, 128),
       do: {:ok, <<high::128, low::128>>},
@@ -518,7 +578,7 @@ defmodule Onchain.AA do
   end
 
   # Left-pad a 20-byte address to a 32-byte ABI word.
-  defp word_address(<<addr::binary-size(20)>>), do: <<0::96, addr::binary-size(20)>>
+  defp word_address(<<addr::binary-size(@address_byte_size)>>), do: <<0::96, addr::binary-size(@address_byte_size)>>
 
   # --- Private: signing ---
 
@@ -600,84 +660,46 @@ defmodule Onchain.AA do
   defp maybe_put_url(opts, url), do: Keyword.put(opts, :rpc_url, url)
 
   defp rpc_map(op, sender_hex, :v0_6) do
-    %{
-      "sender" => sender_hex,
-      "nonce" => Hex.from_integer(op.nonce),
-      "initCode" => op.init_code,
-      "callData" => op.call_data,
-      "callGasLimit" => Hex.from_integer(op.call_gas_limit),
-      "verificationGasLimit" => Hex.from_integer(op.verification_gas_limit),
-      "preVerificationGas" => Hex.from_integer(op.pre_verification_gas),
-      "maxFeePerGas" => Hex.from_integer(op.max_fee_per_gas),
-      "maxPriorityFeePerGas" => Hex.from_integer(op.max_priority_fee_per_gas),
-      "paymasterAndData" => op.paymaster_and_data,
-      "signature" => op.signature
-    }
+    {:ok,
+     %{
+       "sender" => sender_hex,
+       "nonce" => Hex.from_integer(op.nonce),
+       "initCode" => op.init_code,
+       "callData" => op.call_data,
+       "callGasLimit" => Hex.from_integer(op.call_gas_limit),
+       "verificationGasLimit" => Hex.from_integer(op.verification_gas_limit),
+       "preVerificationGas" => Hex.from_integer(op.pre_verification_gas),
+       "maxFeePerGas" => Hex.from_integer(op.max_fee_per_gas),
+       "maxPriorityFeePerGas" => Hex.from_integer(op.max_priority_fee_per_gas),
+       "paymasterAndData" => op.paymaster_and_data,
+       "signature" => op.signature
+     }}
   end
 
   defp rpc_map(op, sender_hex, :v0_7) do
-    %{
-      "sender" => sender_hex,
-      "nonce" => Hex.from_integer(op.nonce),
-      "callData" => op.call_data,
-      "callGasLimit" => Hex.from_integer(op.call_gas_limit),
-      "verificationGasLimit" => Hex.from_integer(op.verification_gas_limit),
-      "preVerificationGas" => Hex.from_integer(op.pre_verification_gas),
-      "maxFeePerGas" => Hex.from_integer(op.max_fee_per_gas),
-      "maxPriorityFeePerGas" => Hex.from_integer(op.max_priority_fee_per_gas),
-      "signature" => op.signature
-    }
-    |> maybe_put_factory_fields(op)
-    |> maybe_put_paymaster_fields(op)
-  end
+    with {:ok, v0_7_fields} <- derive_v0_7_fields(op) do
+      params =
+        %{
+          "sender" => sender_hex,
+          "nonce" => Hex.from_integer(op.nonce),
+          "callData" => op.call_data,
+          "callGasLimit" => Hex.from_integer(op.call_gas_limit),
+          "verificationGasLimit" => Hex.from_integer(op.verification_gas_limit),
+          "preVerificationGas" => Hex.from_integer(op.pre_verification_gas),
+          "maxFeePerGas" => Hex.from_integer(op.max_fee_per_gas),
+          "maxPriorityFeePerGas" => Hex.from_integer(op.max_priority_fee_per_gas),
+          "signature" => op.signature
+        }
+        |> merge_optional_fields(v0_7_fields.factory_fields)
+        |> merge_optional_fields(v0_7_fields.paymaster_fields)
 
-  defp maybe_put_factory_fields(map, %UserOperation{factory: factory} = op) when is_binary(factory) do
-    Map.merge(map, %{"factory" => downcase_hex(factory), "factoryData" => op.factory_data || "0x"})
-  end
-
-  defp maybe_put_factory_fields(map, %UserOperation{init_code: "0x"}), do: map
-
-  defp maybe_put_factory_fields(map, %UserOperation{init_code: init_code}) do
-    case Hex.decode(init_code) do
-      {:ok, <<factory_bin::binary-size(20), factory_data::binary>>} ->
-        Map.merge(map, %{
-          "factory" => Hex.encode(factory_bin),
-          "factoryData" => encode_optional_bytes(factory_data)
-        })
-
-      _ ->
-        map
+      {:ok, params}
     end
   end
 
-  defp maybe_put_paymaster_fields(map, %UserOperation{paymaster: paymaster} = op) when is_binary(paymaster) do
-    Map.merge(map, %{
-      "paymaster" => downcase_hex(paymaster),
-      "paymasterVerificationGasLimit" => Hex.from_integer(op.paymaster_verification_gas_limit || 0),
-      "paymasterPostOpGasLimit" => Hex.from_integer(op.paymaster_post_op_gas_limit || 0),
-      "paymasterData" => op.paymaster_data || "0x"
-    })
-  end
-
-  defp maybe_put_paymaster_fields(map, %UserOperation{paymaster_and_data: "0x"}), do: map
-
-  defp maybe_put_paymaster_fields(map, %UserOperation{paymaster_and_data: paymaster_and_data}) do
-    case Hex.decode(paymaster_and_data) do
-      {:ok, <<paymaster_bin::binary-size(20), ver_gas::128, post_gas::128, data::binary>>} ->
-        Map.merge(map, %{
-          "paymaster" => Hex.encode(paymaster_bin),
-          "paymasterVerificationGasLimit" => Hex.from_integer(ver_gas),
-          "paymasterPostOpGasLimit" => Hex.from_integer(post_gas),
-          "paymasterData" => encode_optional_bytes(data)
-        })
-
-      _ ->
-        map
-    end
-  end
+  defp merge_optional_fields(map, nil), do: map
+  defp merge_optional_fields(map, fields), do: Map.merge(map, fields)
 
   defp encode_optional_bytes(<<>>), do: "0x"
   defp encode_optional_bytes(bin), do: Hex.encode(bin)
-
-  defp downcase_hex(hex), do: String.downcase(hex)
 end
