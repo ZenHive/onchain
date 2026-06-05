@@ -95,6 +95,7 @@ balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
 | `Onchain.ERC20` | ERC-20 read (balanceOf, allowance, decimals, symbol, totalSupply) and write (transfer, approve) |
 | `Onchain.ERC721` | ERC-721 NFT reads (owner_of, token_uri, balance_of, name, symbol, get_approved, approved_for_all?) |
 | `Onchain.ERC1155` | ERC-1155 multi-token reads (balance_of, balance_of_batch, uri, approved_for_all?) |
+| `Onchain.ERC7730` | ERC-7730 clear-signing: load a descriptor (`load/1`), bind it to calldata / EIP-712 / UserOp and render human-readable display fields (`format/2`, `format!/2`) |
 
 ### Chain Intelligence
 

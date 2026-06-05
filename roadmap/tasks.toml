@@ -389,7 +389,7 @@ The pending map has a per-key cap of 100 but an unbounded distinct-keys count. A
 id = 74
 phase = 12
 bundle = "erc_standards"
-status = "pending"
+status = "done"
 title = "ERC-7730 clear-signing descriptor parser + binding evaluator"
 module = "Onchain.ERC7730"
 scores = { d = 6, b = 7, u = 6 }
@@ -398,6 +398,7 @@ assignee = "claude"
 model = "claude-opus-4-8"
 domains = ["abi", "erc_standards"]
 created_at = "2026-05-07"
+implemented = "Onchain.ERC7730 (load/1, format/2, format!/2) over three modules: Descriptor (parse/validate JSON into a struct, contract + eip712 contexts), Binding (resolve which display format applies via chain_id+address+selector for calldata, domain+primaryType for EIP-712, callData unwrap for UserOps), Formatter (path resolution #./@./$., coercion across calldata-binary and eip712-string sources, formatters: raw, amount, tokenAmount w/ threshold + tokenPath + RPC/opts/metadata decimals, addressName, date, duration, unit, enum). Selectors via Cartouche.Hash.keccak; named-signature decode via ABI.FunctionSelector. Three fixtures (ERC-20 transfer, Uniswap V3 SwapRouter02, EIP-712 ERC-2612 permit) under test/support/fixtures/erc7730/. 82 unit tests + 1 RPC integration test (live USDC decimals). Proxy/addressMatcher + registry fetch + includes/$ref + calldata/nftName sub-formatters deferred (documented). Verified: compile --warnings-as-errors clean, credo --strict clean, dialyzer 0 warnings, doctor 100%, coverage 84-88% per module, full offline suite 600/0."
 scored_at = "2026-05-07"
 body = """
 ERC-7730 (eips.ethereum.org/EIPS/eip-7730) standardizes a JSON descriptor that binds calldata / EIP-712 typed messages / ERC-4337 UserOps to human-readable display rules. Three pieces (pure Elixir, no native deps): (1) descriptor loader/validator — parse the JSON schema, validate structural rules; (2) binding evaluator — given {chain_id, contract_address, calldata} (or EIP-712 payload, or UserOp), resolve which descriptor applies via the binding context (chain ID, address, EIP-712 domain separator, proxy detection); (3) display rule engine — apply field formatters (token amount w/ decimals, address w/ checksum/ENS, date, enum, interpolated strings) to decoded ABI/EIP-712 fields, producing {label, value, formatted_value}. Deps already in onchain: ABI decoding, EIP-712 hashing (Cartouche), ERC-20 metadata, Address checksum, proxy detection. Registry side (fetching curated descriptors from Ledger's repo/IPFS/CDN) stays OUT — start with caller-provided descriptors. Module layout: lib/onchain/erc7730.ex (load/1, format/2, format!/2) + descriptor.ex / binding.ex / formatter.ex. First pass covers common formatters; defer rare ones (NFT URI, recursive sub-message). Survey how Ledger/Uniswap reference impls handle proxy detection before implementing.

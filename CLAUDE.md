@@ -80,6 +80,11 @@ lib/onchain/
   erc20.ex          # reads + writes: balanceOf, allowance, decimals, symbol, totalSupply, approve, transfer
   erc721.ex         # ERC-721 NFT reads: ownerOf, tokenURI, balanceOf
   erc1155.ex        # ERC-1155 multi-token reads: balanceOf, balanceOfBatch, uri
+  erc7730.ex        # ERC-7730 clear-signing: load/1, format/2, format!/2
+  erc7730/
+    descriptor.ex   # parse + structurally validate descriptor JSON → struct
+    binding.ex      # resolve which display format applies (calldata / EIP-712 / UserOp)
+    formatter.ex    # display-rule engine: path resolution + field formatters
   block.ex          # block queries
   contract.ex       # generic call/4 (encode → eth_call → decode)
   log.ex            # event log queries
