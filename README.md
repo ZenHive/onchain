@@ -107,6 +107,12 @@ balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
 | `Onchain.Subscription` | Real-time streaming via eth_subscribe (newHeads, pendingTx, logs) |
 | `Onchain.Subscription.Parser` | Pure parsing for eth_subscribe notification payloads (newHeads, pendingTx, logs) |
 
+### DeFi
+
+| Module | Purpose |
+|--------|---------|
+| `Onchain.DEX.Router` | Optimal swap-path routing across Uniswap v2/v3-style pools — pure-Elixir constant-product math for v2, on-chain QuoterV2 `eth_call` for v3 (`route/5`, `quote_pool/4`, `amount_out_v2/4`) |
+
 All public functions have `function!/1` bang variants that raise on error instead of returning `{:error, reason}` tuples.
 
 ## Real-time Subscriptions

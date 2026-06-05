@@ -91,6 +91,8 @@ lib/onchain/
   subscription.ex   # real-time eth_subscribe (newHeads, pendingTx, logs)
   subscription/
     parser.ex       # pure parsing for subscription notification payloads
+  dex/
+    router.ex       # DEX swap routing — optimal path across Uniswap v2/v3 pools (pure-Elixir v2 math + on-chain QuoterV2 for v3); Onchain.DEX.Router + Pool/Route structs
 ```
 
 **Moved to onchain_aave:** `aave/` (math, contracts, pool, oracle, faucet, ui_pool_data_provider, types/)

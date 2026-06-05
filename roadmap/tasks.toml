@@ -84,7 +84,7 @@ description = "ERC standard parsers/evaluators (ERC-7730 clear-signing descripto
 id = 28
 phase = 7
 bundle = "dex"
-status = "pending"
+status = "done"
 title = "DEX swap routing (optimal path across pools)"
 module = "Onchain.DEX.Router"
 scores = { d = 7, b = 8, u = 7 }
@@ -103,6 +103,10 @@ acceptance_criteria = [
   "Unit tests cover path selection; integration test (env-gated) against a real pool set",
   "Public functions carry Descripex api() annotations + @spec",
 ]
+implemented = "Onchain.DEX.Router: route/5 (optimal path), quote_pool/4, amount_out_v2/4. All three scoped approaches (a Rust/onchain_evm, b revm, c QuickBEAM) rejected — each pulls a native dep onchain can't take and inverts the dep graph. Chosen: pure-Elixir analytic v2 (canonical getAmountOut) + on-chain v3 QuoterV2 quoteExactInputSingle eth_call. Pure graph path enumeration, greedy per-hop pool choice (globally optimal: output monotonic in input). No split routing (documented). api()+@spec on all public fns. test/onchain/dex/router_test.exs (24 unit + doctests), router_integration_test.exs (@tag :integration, real v2 pair + v3 QuoterV2; not run this session — RPC tunnel down)."
+delivered_by = "claude"
+verified = false
+done_at = "2026-06-05"
 
 [[task]]
 id = 29
