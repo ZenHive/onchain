@@ -27,7 +27,7 @@
 |------|--------|-------|
 | Task 28 `[P]` | ✅ | 🎁 **dex** · *Onchain.DEX.Router* · DEX swap routing (optimal path across pools) [D:7/B:8/U:7 → Eff:1.07?] 📋 |
 | Task 29 `[P]` | ✅ | 🎁 **dex** · *Onchain.MEV* · MEV protection (private transaction submission) [D:6/B:8/U:7 → Eff:1.25?] 📋 |
-| Task 80 | ⬜ | 🎁 **dex** · *Onchain.MEV* · Audit-surfaced: Onchain.MEV accepts block tags where a concrete block is required [D:3/B:4/U:4 → Eff:1.33] 📋 |
+| Task 80 | ✅ | 🎁 **dex** · *Onchain.MEV* · Audit-surfaced: Onchain.MEV accepts block tags where a concrete block is required [D:3/B:4/U:4 → Eff:1.33] 📋 |
 <!-- TASKS:END -->
 
 ---

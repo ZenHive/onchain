@@ -40,6 +40,13 @@ defmodule Onchain.MEVTest do
     test "rejects an invalid :max_block_number" do
       assert {:error, {:invalid_block, -1}} = MEV.build_private_transaction_params(@raw_tx, max_block_number: -1)
     end
+
+    test "rejects block tags for :max_block_number" do
+      for tag <- ~w(latest pending finalized earliest safe) do
+        assert {:error, {:invalid_block, ^tag}} =
+                 MEV.build_private_transaction_params(@raw_tx, max_block_number: tag)
+      end
+    end
   end
 
   describe "build_bundle_params/2" do
@@ -79,6 +86,12 @@ defmodule Onchain.MEVTest do
 
     test "rejects an invalid target block" do
       assert {:error, {:invalid_block, :soon}} = MEV.build_bundle_params([@raw_tx], block_number: :soon)
+    end
+
+    test "rejects block tags for :block_number" do
+      for tag <- ~w(latest pending finalized earliest safe) do
+        assert {:error, {:invalid_block, ^tag}} = MEV.build_bundle_params([@raw_tx], block_number: tag)
+      end
     end
 
     test "rejects a bundle containing a non-hex tx" do

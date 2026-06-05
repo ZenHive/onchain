@@ -58,7 +58,7 @@ defmodule Onchain.MEV do
 
   use Descripex, namespace: "/mev"
 
-  import Onchain.RPC.Helpers, only: [ensure_hex_data: 1, normalize_block: 1]
+  import Onchain.RPC.Helpers, only: [ensure_hex_data: 1, normalize_block_number: 1]
 
   @default_timeout_ms 30_000
 
@@ -149,7 +149,7 @@ defmodule Onchain.MEV do
   def build_bundle_params(raw_txs, opts) do
     with {:ok, txs} <- validate_raw_txs(raw_txs),
          {:ok, block} <- require_block_number(opts),
-         {:ok, hex_block} <- normalize_block(block) do
+         {:ok, hex_block} <- normalize_block_number(block) do
       param =
         %{"txs" => txs, "blockNumber" => hex_block}
         |> maybe_put("minTimestamp", Keyword.get(opts, :min_timestamp))
@@ -202,7 +202,7 @@ defmodule Onchain.MEV do
 
   @spec normalize_optional_block(term()) :: {:ok, String.t() | nil} | {:error, term()}
   defp normalize_optional_block(nil), do: {:ok, nil}
-  defp normalize_optional_block(value), do: normalize_block(value)
+  defp normalize_optional_block(value), do: normalize_block_number(value)
 
   @spec require_block_number(keyword()) :: {:ok, term()} | {:error, :missing_block_number}
   defp require_block_number(opts) do

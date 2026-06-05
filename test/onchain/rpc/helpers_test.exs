@@ -1,7 +1,27 @@
 defmodule Onchain.RPC.HelpersTest do
   use ExUnit.Case, async: true
 
+  alias Onchain.Hex
   alias Onchain.RPC.Helpers
+
+  describe "normalize_block_number/1" do
+    test "accepts non-negative integers and 0x hex" do
+      hex_block = Hex.from_integer(19_000_000)
+      assert {:ok, ^hex_block} = Helpers.normalize_block_number(19_000_000)
+      assert {:ok, ^hex_block} = Helpers.normalize_block_number(hex_block)
+    end
+
+    test "rejects block tags" do
+      for tag <- Helpers.block_tags() do
+        assert {:error, {:invalid_block, ^tag}} = Helpers.normalize_block_number(tag)
+      end
+    end
+
+    test "rejects invalid quantities" do
+      assert {:error, {:invalid_block, -1}} = Helpers.normalize_block_number(-1)
+      assert {:error, {:invalid_block, "0xZZ"}} = Helpers.normalize_block_number("0xZZ")
+    end
+  end
 
   describe "maybe_put_revert_data_hex/1" do
     test "adds :data as 0x hex when :revert binary present and :data absent" do

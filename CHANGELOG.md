@@ -6,6 +6,12 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Fixed — MEV block fields reject tags (Task 80)
+
+- **`Onchain.RPC.Helpers.normalize_block_number/1`** — stricter block normalization for RPC params that require a concrete quantity (non-negative integer or `0x` hex only; rejects `"latest"`, `"pending"`, and other block tags).
+- **`Onchain.MEV`** — `max_block_number` (`eth_sendPrivateTransaction`) and `block_number` (`eth_sendBundle`) now route through `normalize_block_number/1` instead of tag-accepting `normalize_block/1`, failing fast with `{:error, {:invalid_block, tag}}` rather than sending invalid relay payloads.
+- **Tests:** `test/onchain/mev_test.exs` and `test/onchain/rpc/helpers_test.exs` assert all standard block tags are rejected.
+
 ### Added — differential RPC test harness (Task 65)
 
 - **`test/onchain/differential/rpc_cartouche_test.exs`** — 15 `@tag :differential` cases compare `Onchain.RPC` against `Cartouche.RPC.send_rpc/3` on the same node (cartouche replaced signet as the zero-infra oracle per Task 67). Covers chain id, balance/nonce/code at a historical block, `eth_call` map params, block tags (`earliest`/`safe`/`finalized`), log filter maps, tx/receipt sparse decoding, fee history, proof (latest block — nodes cap proof window), and generic `call/3` passthrough. Gated by `ONCHAIN_DIFFERENTIAL_TESTS=1` plus `ETHEREUM_API_URL`; excluded from the default suite via `@moduletag :integration`.

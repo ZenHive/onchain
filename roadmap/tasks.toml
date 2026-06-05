@@ -575,7 +575,7 @@ scored_at = "2026-06-05"
 id = 80
 phase = 7
 bundle = "dex"
-status = "pending"
+status = "done"
 title = "Audit-surfaced: Onchain.MEV accepts block tags where a concrete block is required"
 assignee = "cursor"
 scores = { d = 3, b = 4, u = 4 }

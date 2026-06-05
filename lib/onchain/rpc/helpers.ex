@@ -94,6 +94,18 @@ defmodule Onchain.RPC.Helpers do
   def normalize_block(other), do: {:error, {:invalid_block, other}}
 
   @doc false
+  # Normalizes a concrete block number for RPC params that require a quantity (not a tag).
+  # Accepts non-negative integers (converted to hex) and "0x..." hex strings; rejects block tags.
+  @spec normalize_block_number(term()) :: {:ok, String.t()} | {:error, term()}
+  def normalize_block_number(n) when is_integer(n) and n >= 0, do: {:ok, Onchain.Hex.from_integer(n)}
+
+  def normalize_block_number("0x" <> _ = hex) do
+    if Onchain.Hex.valid?(hex), do: {:ok, hex}, else: {:error, {:invalid_block, hex}}
+  end
+
+  def normalize_block_number(other), do: {:error, {:invalid_block, other}}
+
+  @doc false
   # Validates that a value is a 0x-prefixed hex string of exactly 32 bytes (66 chars).
   @spec ensure_tx_hash(term()) :: {:ok, String.t()} | {:error, term()}
   def ensure_tx_hash("0x" <> _ = hash) do
