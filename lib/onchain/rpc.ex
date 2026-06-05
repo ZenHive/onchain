@@ -948,14 +948,23 @@ defmodule Onchain.RPC do
   @spec retry_rpc(String.t(), list(), keyword(), map()) :: {:ok, term()} | {:error, term()}
   defp retry_rpc(method, params, opts, %{max_retries: max_retries, backoff_ms: backoff_ms}) do
     case Helpers.do_rpc(method, params, opts) do
-      {:error, _reason} when max_retries > @no_retry_max_retries ->
-        sleep_before_retry(backoff_ms)
-        retry_rpc(method, params, opts, %{max_retries: max_retries - 1, backoff_ms: backoff_ms})
+      {:error, _} = err ->
+        if max_retries > @no_retry_max_retries and retryable_rpc_error?(err) do
+          sleep_before_retry(backoff_ms)
+          retry_rpc(method, params, opts, %{max_retries: max_retries - 1, backoff_ms: backoff_ms})
+        else
+          err
+        end
 
       result ->
         result
     end
   end
+
+  # JSON-RPC application errors (node responded with a code) are final; retry transport failures only.
+  @spec retryable_rpc_error?({:error, {:rpc_error, map()}}) :: boolean()
+  defp retryable_rpc_error?({:error, {:rpc_error, %{code: _}}}), do: false
+  defp retryable_rpc_error?({:error, {:rpc_error, _}}), do: true
 
   @spec sleep_before_retry(non_neg_integer()) :: :ok
   defp sleep_before_retry(@no_backoff_ms), do: :ok

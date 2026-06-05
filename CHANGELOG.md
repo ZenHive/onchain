@@ -6,6 +6,11 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Added — opt-in RPC retry/backoff (Task 54)
+
+- **`Onchain.RPC`** — single-call path (`do_rpc/3`, all named wrappers and `call/3`) accepts opt-in `retry: [max_retries: n, backoff_ms: ms]`. Omit `:retry` (or pass `retry: false`) for one attempt — same as underlying `Cartouche.RPC.send_rpc/3`. Retries only transport-level `{:rpc_error, _}` errors without a JSON-RPC `:code`; node application errors (reverts, invalid params, etc.) return immediately.
+- **Tests:** `test/onchain/rpc_retry_test.exs` stubs `:cartouche` client for default no-retry, retry-to-success, exhausted retries, and no-retry on JSON-RPC errors.
+
 ### Added — `Onchain.RPC.batch/2` (Task 51)
 
 - **`Onchain.RPC.batch/2`** — JSON-RPC 2.0 array batching: send many `{method, params}` calls in one HTTP POST and return raw decoded results in request order (reorders out-of-order node responses by `id`). Empty list returns `{:ok, []}`; first per-item JSON-RPC error halts with `{:rpc_error, map}` (revert `:data` hex enrichment matches single-call path). Uses `Cartouche.RPC.get_body/3` for request bodies and the same `:rpc_url`/`:timeout` opts as other RPC helpers.

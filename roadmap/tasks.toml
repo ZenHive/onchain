@@ -209,7 +209,7 @@ shipped_in = "8701bb9"
 id = 54
 phase = 10
 bundle = "rpc_composition"
-status = "pending"
+status = "done"
 title = "Opt-in retry/backoff wrapper over Signet.RPC.send_rpc/3"
 module = "Onchain.RPC"
 scores = { d = 4, b = 5, u = 4 }

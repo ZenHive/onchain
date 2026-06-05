@@ -85,6 +85,16 @@ defmodule Onchain.RPC.RetryTest do
       )
       |> assert_rpc_error_message("timeout")
     end
+
+    test "does not retry JSON-RPC application errors" do
+      StubClient.queue_responses([rpc_error_response(-32_000, "execution reverted"), rpc_success("0x1")])
+
+      assert {:error, {:rpc_error, %{code: -32_000, message: "execution reverted"}}} =
+               RPC.call("eth_blockNumber", [],
+                 rpc_url: @stub_rpc_url,
+                 retry: [max_retries: 1, backoff_ms: @no_backoff_ms]
+               )
+    end
   end
 
   defp assert_rpc_error_message(result, expected_message) do
@@ -99,6 +109,22 @@ defmodule Onchain.RPC.RetryTest do
          status: 200,
          headers: [],
          body: Jason.encode!(%{"id" => body["id"], "jsonrpc" => "2.0", "result" => result})
+       }}
+    end
+  end
+
+  defp rpc_error_response(code, message) do
+    fn body ->
+      {:ok,
+       %Finch.Response{
+         status: 200,
+         headers: [],
+         body:
+           Jason.encode!(%{
+             "id" => body["id"],
+             "jsonrpc" => "2.0",
+             "error" => %{"code" => code, "message" => message}
+           })
        }}
     end
   end
