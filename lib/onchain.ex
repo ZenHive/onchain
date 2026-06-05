@@ -21,6 +21,7 @@ defmodule Onchain do
       Onchain.RPC,
       Onchain.Block,
       Onchain.Contract,
+      Onchain.DEX.Router,
       Onchain.ERC20,
       Onchain.ERC721,
       Onchain.ERC1155,
