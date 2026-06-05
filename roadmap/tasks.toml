@@ -331,23 +331,24 @@ shipped_in = "2dfd0c6"
 id = 66
 phase = 12
 bundle = "rpc_codegen"
-status = "pending"
+status = "in_progress"
 title = "Tree-sitter scrape of Erigon Go source for trace_* / ots_* method enumeration"
-module = "Mix.Task (dev-only)"
 scores = { d = 5, b = 4, u = 3 }
 depends_on = [64]
-assignee = "codex"
-domains = ["rpc", "codegen", "tooling"]
-created_at = "2026-04-23"
-scored_at = "2026-04-23"
-body = """
-OpenRPC doesn't cover Erigon-specific namespaces (trace_* ~18 methods, ots_* ~12). Vendor a pinned commit of erigon/turbo/jsonrpc/ under priv/specs/erigon-COMMIT/; tree-sitter grammar matches function defs on *TraceAPIImpl / *OtterscanAPIImpl receivers; emit a JSON list to priv/specs/erigon-methods.json. Tree-sitter is a NIF — violates the pure-Elixir invariant, so run the scrape as a DEV-ONLY Mix.Task producing vendored JSON; runtime stays pure-Elixir reading the JSON. Only worth pursuing if (a) Task 64 ships and the OpenRPC pipeline is proven, (b) consumers actually call trace_*/ots_* enough to motivate named wrappers, (c) hand-maintenance produced >=1 staleness bug. Gated on Task 64 + actual consumer demand.
-"""
 acceptance_criteria = [
   "mix onchain.scrape_erigon_methods produces priv/specs/erigon-methods.json from a pinned Erigon commit",
   "CHANGELOG documents the pinned Erigon commit",
   "Resulting JSON is consumable by Task 63's defrpc (or hand-mapped if 63 hasn't shipped); the scrape stays a dev-only Mix.Task — runtime stays pure-Elixir",
 ]
+domains = ["rpc", "codegen", "tooling"]
+assignee = "codex"
+module = "Mix.Task (dev-only)"
+body = """
+OpenRPC doesn't cover Erigon-specific namespaces (trace_* ~18 methods, ots_* ~12). Vendor a pinned commit of erigon/turbo/jsonrpc/ under priv/specs/erigon-COMMIT/; tree-sitter grammar matches function defs on *TraceAPIImpl / *OtterscanAPIImpl receivers; emit a JSON list to priv/specs/erigon-methods.json. Tree-sitter is a NIF — violates the pure-Elixir invariant, so run the scrape as a DEV-ONLY Mix.Task producing vendored JSON; runtime stays pure-Elixir reading the JSON. Only worth pursuing if (a) Task 64 ships and the OpenRPC pipeline is proven, (b) consumers actually call trace_*/ots_* enough to motivate named wrappers, (c) hand-maintenance produced >=1 staleness bug. Gated on Task 64 + actual consumer demand.
+"""
+created_at = "2026-04-23"
+started_at = "2026-06-05"
+scored_at = "2026-04-23"
 
 [[task]]
 id = 41
