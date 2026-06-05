@@ -224,15 +224,15 @@ defmodule Onchain.RPC.Differential.CartoucheTest do
     assert actual == expected
   end
 
+  # Nodes cap eth_getProof to a recent proof window; use "latest" so both sides succeed.
   test "eth_getProof map params and sparse fields match the oracle", %{rpc_url: rpc_url} do
-    opts = onchain_opts(rpc_url, block: @test_block)
-
-    assert {:ok, actual} = RPC.get_proof(@aave_v3_pool_proxy, [@eip1967_impl_slot], opts)
+    assert {:ok, actual} =
+             RPC.get_proof(@aave_v3_pool_proxy, [@eip1967_impl_slot], onchain_opts(rpc_url))
 
     expected =
       "eth_getProof"
       |> reference!(
-        [String.downcase(@aave_v3_pool_proxy), [@eip1967_impl_slot], @test_block_hex],
+        [String.downcase(@aave_v3_pool_proxy), [@eip1967_impl_slot], "latest"],
         rpc_url
       )
       |> expected_proof()
@@ -248,7 +248,7 @@ defmodule Onchain.RPC.Differential.CartoucheTest do
   end
 
   defp require_differential_enabled! do
-    unless System.get_env("ONCHAIN_DIFFERENTIAL_TESTS") in @enabled_values do
+    if System.get_env("ONCHAIN_DIFFERENTIAL_TESTS") not in @enabled_values do
       flunk("""
       Differential RPC tests are disabled.
 

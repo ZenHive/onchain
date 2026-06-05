@@ -6,6 +6,10 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Added — differential RPC test harness (Task 65)
+
+- **`test/onchain/differential/rpc_cartouche_test.exs`** — 15 `@tag :differential` cases compare `Onchain.RPC` against `Cartouche.RPC.send_rpc/3` on the same node (cartouche replaced signet as the zero-infra oracle per Task 67). Covers chain id, balance/nonce/code at a historical block, `eth_call` map params, block tags (`earliest`/`safe`/`finalized`), log filter maps, tx/receipt sparse decoding, fee history, proof (latest block — nodes cap proof window), and generic `call/3` passthrough. Gated by `ONCHAIN_DIFFERENTIAL_TESTS=1` plus `ETHEREUM_API_URL`; excluded from the default suite via `@moduletag :integration`.
+
 ### Added — opt-in RPC retry/backoff (Task 54)
 
 - **`Onchain.RPC`** — single-call path (`do_rpc/3`, all named wrappers and `call/3`) accepts opt-in `retry: [max_retries: n, backoff_ms: ms]`. Omit `:retry` (or pass `retry: false`) for one attempt — same as underlying `Cartouche.RPC.send_rpc/3`. Retries only transport-level `{:rpc_error, _}` errors without a JSON-RPC `:code`; node application errors (reverts, invalid params, etc.) return immediately.

@@ -175,6 +175,14 @@ mix test.json --quiet                          # Unit tests (no RPC needed)
 mix test.json --quiet --include integration    # Integration tests (requires RPC)
 ```
 
+Differential tests compare `Onchain.RPC` against `Cartouche.RPC` on the same node (opt-in, requires mainnet RPC):
+
+```bash
+export ONCHAIN_DIFFERENTIAL_TESTS=1
+export ETHEREUM_API_URL="https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY"
+mix test.json --quiet --include differential test/onchain/differential
+```
+
 Integration tests require an Ethereum RPC endpoint:
 
 ```bash
