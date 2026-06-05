@@ -348,10 +348,20 @@ acceptance_criteria = [
 id = 41
 phase = 12
 bundle = "ens"
-status = "in_progress"
+status = "done"
 title = "ENS enhancements: CCIP-Read, ENSIP-10 wildcard, UTS-46/ENSIP-15 normalization, multi-coin"
 scores = { d = 6, b = 6, u = 5 }
 markers = ["parallel"]
+assignee = "claude"
+model = "claude-opus-4-8"
+domains = ["ens", "rpc"]
+created_at = "2026-04-19"
+scored_at = "2026-04-19"
+implemented = "Onchain.ENS gains normalize/1+! (UTS-46/ENSIP-15 deterministic subset via Onchain.ENS.Normalize: case-fold + NFC + ignored/disallowed code points — namehash/1 now normalizes first), dns_encode/1+! (ENSIP-10 DNS wire format), evm_coin_type/1 (ENSIP-11), and address/3+! (ENSIP-9 multi-coin) routed through a resolver engine that does ENSIP-10 wildcard discovery + extended resolve(bytes,bytes) + EIP-3668 CCIP-Read. Onchain.ENS.CCIP holds the pure EIP-3668 helpers + injectable round-trip loop. Tests: ens_normalize_test (16), ens_ccip_test (14), expanded ens_test, live address/3 integration. dialyzer 0 warnings. NOTE: ENSIP-15 confusable/script-mixing/NSM security filters intentionally out of scope (need generated data tables) — documented in Onchain.ENS.Normalize."
+delivered_by = "claude-opus-4-8"
+body = """
+Extend ENS beyond the current ETH-only addr(bytes32) resolution: CCIP-Read / EIP-3668 off-chain lookups, ENSIP-10 wildcard resolution, full UTS-46 / ENSIP-15 Unicode normalization, and multi-coin address resolution. The Unicode normalization (UTS-46/ENSIP-15) and the EIP-3668 off-chain-gateway round-trip are the spec-heavy, easy-to-get-wrong parts — research the reference implementations (ensjs, eth-ens-namehash) before asserting byte behavior. Include tests covering each new resolution path.
+"""
 acceptance_criteria = [
   "CCIP-Read / EIP-3668 off-chain lookups resolve via the gateway round-trip (OffchainLookup revert -> gateway call -> callback)",
   "ENSIP-10 wildcard resolution supported for subdomains under a wildcard resolver",

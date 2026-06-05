@@ -8,30 +8,41 @@ defmodule Onchain.ENS do
   - Normalize names (lowercase ASCII, strip trailing dot)
   - Validate name structure (reject empty labels, non-ASCII)
   - Forward resolution: ENS name → ETH address (`resolve/2`)
+  - Multi-coin address resolution via `addr(bytes32,uint256)` (`address/3`, ENSIP-9/11)
+  - ENSIP-10 wildcard resolution + EIP-3668 CCIP-Read off-chain lookups (`address/3`)
   - Reverse resolution: ETH address → ENS name (`reverse/2`)
   - Text record queries (`text/3`), contenthash, ABI, pubkey retrieval
   - Look up resolver contracts (`resolver/2`)
+  - UTS-46 / ENSIP-15 name normalization before namehash (`normalize/1`)
+  - DNS wire-format name encoding (`dns_encode/1`, ENSIP-10)
   - Configurable registry address via `:registry` opt
 
   ## Does Not
 
-  - CCIP-Read / EIP-3668 off-chain lookups (future enhancement)
-  - Wildcard resolution (ENSIP-10)
   - ENS name registration or management (write operations)
-  - Full UTS-46 / ENSIP-15 Unicode normalization (internationalized names)
   - Caching — consumers manage their own cache
-  - Multi-coin address resolution (only ETH via `addr(bytes32)`)
+  - The ENSIP-15 *security* filters (confusable / script-mixing / NSM checks) —
+    `normalize/1` applies the deterministic Unicode steps (NFC, case-fold,
+    ignored/disallowed code points) but not the data-table-driven confusable
+    detection. See `Onchain.ENS.Normalize` for the scope boundary.
 
   ## Functions
 
   | Function | Purpose |
   |----------|---------|
-  | `namehash/1` | ENS name -> 32-byte EIP-137 node hash |
+  | `namehash/1` | ENS name -> 32-byte EIP-137 node hash (normalized first) |
   | `namehash!/1` | Same, raises on error |
+  | `normalize/1` | Apply UTS-46 / ENSIP-15 normalization to a name |
+  | `normalize!/1` | Same, raises on error |
+  | `dns_encode/1` | ENS name -> DNS wire format (ENSIP-10) |
+  | `dns_encode!/1` | Same, raises on error |
+  | `evm_coin_type/1` | EVM chain id -> ENSIP-11 coin type |
   | `resolver/2` | ENS name -> resolver contract address |
   | `resolver!/2` | Same, raises on error |
   | `resolve/2` | ENS name -> ETH address (forward resolution) |
   | `resolve!/2` | Same, raises on error |
+  | `address/3` | ENS name + coin type -> raw address bytes (multi-coin, wildcard + CCIP) |
+  | `address!/3` | Same, raises on error |
   | `reverse/2` | ETH address -> ENS name (reverse resolution) |
   | `reverse!/2` | Same, raises on error |
   | `text/3` | Retrieve a text record (avatar, url, etc.) |
@@ -44,21 +55,34 @@ defmodule Onchain.ENS do
   | `abi!/3` | Same, raises on error |
   """
 
-  # TODO: CCIP-Read / EIP-3668 off-chain lookups — needed for names using off-chain resolvers
-  # TODO: Wildcard resolution (ENSIP-10) — needed for *.subdomain patterns
-  # TODO: Full UTS-46 / ENSIP-15 Unicode normalization — needed for internationalized names
-  # TODO: Multi-coin address resolution — currently only ETH via addr(bytes32)
-
   use Descripex, namespace: "/ens"
 
+  import Bitwise, only: [bor: 2]
+
+  alias Onchain.ABI
   alias Onchain.Address
   alias Onchain.Contract
+  alias Onchain.ENS.CCIP
+  alias Onchain.ENS.Normalize
   alias Onchain.Hex
+  alias Onchain.RPC
 
   @ens_registry "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
   @addr_reverse_suffix "addr.reverse"
   @zero_address <<0::160>>
   @zero_node <<0::256>>
+
+  # SLIP-44 coin type for Ethereum mainnet (ENSIP-9 default for addr/3).
+  @eth_coin_type 60
+  # ENSIP-10 "extended resolver" interface id = keccak256("resolve(bytes,bytes)")[0..3].
+  @ensip10_interface_id <<0x90, 0x61, 0xB9, 0x23>>
+  # ENSIP-11 derives an EVM chain's coin type from its chain id with this bit set.
+  @evm_coin_type_flag 0x80000000
+
+  # HTTP plumbing for CCIP-Read gateway requests (mirrors Onchain.RPC.batch/2).
+  @default_finch_name CartoucheFinch
+  @default_gateway_timeout_ms 30_000
+  @content_type_json {"Content-Type", "application/json"}
 
   # --- namehash ---
 
@@ -72,23 +96,11 @@ defmodule Onchain.ENS do
     }
   )
 
-  @spec namehash(String.t()) :: {:ok, binary()} | {:error, {:invalid_name, String.t()}}
+  @spec namehash(String.t()) :: {:ok, binary()} | {:error, {:invalid_name, term()}}
   def namehash(name) when is_binary(name) do
-    normalized = normalize_name(name)
-
-    # After normalization, "." becomes "" — reject this rather than silently
-    # returning the zero node hash. Callers who want the root node can pass "".
-    if name != "" and normalized == "" do
-      {:error, {:invalid_name, name}}
-    else
-      case validate_name(normalized) do
-        :ok ->
-          hash = compute_namehash(normalized)
-          {:ok, hash}
-
-        {:error, _} = error ->
-          error
-      end
+    case Normalize.normalize(name) do
+      {:ok, normalized} -> {:ok, compute_namehash(normalized)}
+      {:error, _} = error -> error
     end
   end
 
@@ -107,6 +119,94 @@ defmodule Onchain.ENS do
       {:ok, hash} -> hash
       {:error, reason} -> raise "namehash failed: #{inspect(reason)}"
     end
+  end
+
+  # --- normalize ---
+
+  api(:normalize, "Apply UTS-46 / ENSIP-15 normalization to an ENS name.",
+    params: [
+      name: [kind: :value, description: ~s(ENS name, e.g. "VITALIK.eth" or "café.eth")]
+    ],
+    returns: %{
+      type: "{:ok, String.t()} | {:error, {:invalid_name, term()}}",
+      description:
+        "Normalized name (case-folded, NFC, ignored code points stripped). See Onchain.ENS.Normalize for the scope boundary — the ENSIP-15 confusable/script-mixing filters are NOT applied."
+    }
+  )
+
+  @spec normalize(String.t()) :: {:ok, String.t()} | {:error, {:invalid_name, term()}}
+  def normalize(name), do: Normalize.normalize(name)
+
+  # --- normalize! ---
+
+  api(:normalize!, "Apply UTS-46 / ENSIP-15 normalization. Raises on error.",
+    params: [
+      name: [kind: :value, description: "ENS name to normalize"]
+    ],
+    returns: %{type: "String.t()", description: "Normalized name"}
+  )
+
+  @spec normalize!(String.t()) :: String.t()
+  def normalize!(name) do
+    case Normalize.normalize(name) do
+      {:ok, normalized} -> normalized
+      {:error, reason} -> raise "normalize failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- dns_encode ---
+
+  api(:dns_encode, "Encode an ENS name to DNS wire format (ENSIP-10).",
+    params: [
+      name: [kind: :value, description: "ENS name, e.g. \"foo.eth\""]
+    ],
+    returns: %{
+      type: "{:ok, binary()} | {:error, term()}",
+      description:
+        ~s|Length-prefixed labels with a null terminator, e.g. "foo.eth" -> <<3, "foo", 3, "eth", 0>>. The name is normalized first.|
+    }
+  )
+
+  @spec dns_encode(String.t()) :: {:ok, binary()} | {:error, term()}
+  def dns_encode(name) do
+    with {:ok, normalized} <- Normalize.normalize(name) do
+      encode_dns_labels(normalized)
+    end
+  end
+
+  # --- dns_encode! ---
+
+  api(:dns_encode!, "Encode an ENS name to DNS wire format. Raises on error.",
+    params: [
+      name: [kind: :value, description: "ENS name to encode"]
+    ],
+    returns: %{type: "binary()", description: "DNS wire-format encoded name"}
+  )
+
+  @spec dns_encode!(String.t()) :: binary()
+  def dns_encode!(name) do
+    case dns_encode(name) do
+      {:ok, encoded} -> encoded
+      {:error, reason} -> raise "dns_encode failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- evm_coin_type ---
+
+  api(:evm_coin_type, "Derive an ENSIP-11 coin type from an EVM chain id.",
+    params: [
+      chain_id: [kind: :value, description: "EVM chain id, e.g. 1 (mainnet), 10 (Optimism), 8453 (Base)"]
+    ],
+    returns: %{
+      type: "pos_integer()",
+      description:
+        "ENSIP-11 coin type = 0x80000000 | chain_id. Pass this to address/3 to resolve an L2 address. Note Ethereum mainnet's canonical coin type is the SLIP-44 value 60, not the ENSIP-11 form."
+    }
+  )
+
+  @spec evm_coin_type(pos_integer()) :: pos_integer()
+  def evm_coin_type(chain_id) when is_integer(chain_id) and chain_id > 0 do
+    bor(@evm_coin_type_flag, chain_id)
   end
 
   # --- resolver ---
@@ -190,6 +290,66 @@ defmodule Onchain.ENS do
     case resolve(name, opts) do
       {:ok, addr} -> addr
       {:error, reason} -> raise "resolve failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- address (multi-coin, ENSIP-9/10/11 + EIP-3668) ---
+
+  api(:address, "Resolve an ENS name to a chain-specific address (ENSIP-9 multi-coin).",
+    params: [
+      name: [kind: :value, description: "ENS name (e.g., \"vitalik.eth\")"],
+      coin_type: [
+        kind: :value,
+        default: 60,
+        description:
+          "SLIP-44 / ENSIP-11 coin type. 60 = Ethereum mainnet (default), 0 = Bitcoin, 2147483658 = Optimism (via evm_coin_type/1)."
+      ],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout, :registry"]
+    ],
+    returns: %{
+      type: "{:ok, binary()} | {:error, term()}",
+      description:
+        "Raw address bytes for the coin type (20 bytes for EVM chains). Resolution walks parent labels for a wildcard resolver (ENSIP-10) and follows EIP-3668 OffchainLookup reverts through the gateway when present."
+    }
+  )
+
+  @doc """
+  Resolve an ENS name to a chain-specific address (ENSIP-9 `addr(bytes32,uint256)`).
+
+  Unlike `resolve/2` (which returns an EIP-55 checksummed string for Ethereum
+  mainnet only), this returns the raw address bytes for any SLIP-44 / ENSIP-11
+  coin type. Resolution goes through the ENSIP-10 extended-resolver path when the
+  resolver supports it (interface `0x9061b923`), which transparently handles
+  wildcard subdomains and EIP-3668 CCIP-Read off-chain lookups.
+  """
+  @spec address(String.t(), non_neg_integer(), keyword()) :: {:ok, binary()} | {:error, term()}
+  def address(name, coin_type \\ @eth_coin_type, opts \\ []) when is_integer(coin_type) and coin_type >= 0 do
+    resolve_record(name, "addr(bytes32,uint256)", [coin_type], "(bytes)", opts, fn
+      [addr_bytes] ->
+        if addr_bytes == <<>> do
+          {:error, {:no_address, {name, coin_type}}}
+        else
+          {:ok, addr_bytes}
+        end
+    end)
+  end
+
+  # --- address! ---
+
+  api(:address!, "Resolve an ENS name to a chain-specific address. Raises on error.",
+    params: [
+      name: [kind: :value, description: "ENS name (e.g., \"vitalik.eth\")"],
+      coin_type: [kind: :value, default: 60, description: "SLIP-44 / ENSIP-11 coin type (default 60 = ETH)"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout, :registry"]
+    ],
+    returns: %{type: "binary()", description: "Raw address bytes for the coin type"}
+  )
+
+  @spec address!(String.t(), non_neg_integer(), keyword()) :: binary()
+  def address!(name, coin_type \\ @eth_coin_type, opts \\ []) do
+    case address(name, coin_type, opts) do
+      {:ok, addr} -> addr
+      {:error, reason} -> raise "address resolution failed: #{inspect(reason)}"
     end
   end
 
@@ -469,32 +629,195 @@ defmodule Onchain.ENS do
     end
   end
 
-  @doc false
-  # Lowercase and strip trailing dot for DNS-style compatibility
-  defp normalize_name(name) do
-    name
-    |> String.downcase()
-    |> String.trim_trailing(".")
-  end
+  # --- Resolution engine (ENSIP-9/10 + EIP-3668) ---
 
-  @doc false
-  # Validate that all labels are non-empty and ASCII-only
-  defp validate_name(""), do: :ok
-
-  defp validate_name(name) do
-    labels = String.split(name, ".")
-
-    if Enum.all?(labels, &valid_label?/1) do
-      :ok
+  # Resolves a record by (1) normalizing + namehashing, (2) walking parent labels
+  # for a resolver (ENSIP-10 wildcard discovery), (3) using the extended
+  # resolve(bytes,bytes) path with CCIP-Read when the resolver supports interface
+  # 0x9061b923, else the legacy direct call. `on_result` interprets the decoded
+  # return values list.
+  @spec resolve_record(String.t(), String.t(), list(), String.t(), keyword(), (list() ->
+                                                                                 {:ok, term()}
+                                                                                 | {:error, term()})) ::
+          {:ok, term()} | {:error, term()}
+  defp resolve_record(name, inner_sig, extra_args, return_type, opts, on_result) do
+    with {:ok, normalized} <- Normalize.normalize(name),
+         node = compute_namehash(normalized),
+         {:ok, resolver_addr} <- find_resolver(normalized, opts) do
+      if extended_resolver?(resolver_addr, opts) do
+        resolve_extended(resolver_addr, normalized, node, inner_sig, extra_args, return_type, opts, on_result)
+      else
+        resolve_legacy(resolver_addr, node, inner_sig, extra_args, return_type, opts, on_result)
+      end
     else
-      {:error, {:invalid_name, name}}
+      {:error, :no_resolver} -> {:error, {:no_resolver, name}}
+      error -> error
     end
   end
 
-  @doc false
-  # A valid label is non-empty, ASCII alphanumeric with hyphens only in the middle.
-  defp valid_label?(""), do: false
-  defp valid_label?(label), do: String.match?(label, ~r/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$/)
+  # ENSIP-10 wildcard discovery: try the full name, then strip the leftmost label
+  # and retry, until a resolver is registered or the name is exhausted.
+  @spec find_resolver(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
+  defp find_resolver(name, opts) do
+    name
+    |> String.split(".")
+    |> do_find_resolver(opts)
+  end
+
+  @spec do_find_resolver([String.t()], keyword()) :: {:ok, String.t()} | {:error, term()}
+  defp do_find_resolver([], _opts), do: {:error, :no_resolver}
+
+  defp do_find_resolver(labels, opts) do
+    node = labels |> Enum.join(".") |> compute_namehash()
+
+    case get_resolver(node, opts) do
+      {:ok, resolver_addr} -> {:ok, resolver_addr}
+      {:error, :no_resolver} -> do_find_resolver(tl(labels), opts)
+      error -> error
+    end
+  end
+
+  # Returns true when the resolver implements ENSIP-10 (interface 0x9061b923).
+  @spec extended_resolver?(String.t(), keyword()) :: boolean()
+  defp extended_resolver?(resolver_addr, opts) do
+    case Contract.call(resolver_addr, "supportsInterface(bytes4)", [@ensip10_interface_id], "(bool)", opts) do
+      {:ok, [true]} -> true
+      _ -> false
+    end
+  end
+
+  # ENSIP-10 extended path: resolve(dnsEncode(name), innerCall) with CCIP-Read.
+  # The outer call returns the ABI-encoded inner result as `bytes`.
+  @spec resolve_extended(String.t(), String.t(), binary(), String.t(), list(), String.t(), keyword(), (list() ->
+                                                                                                         {:ok, term()}
+                                                                                                         | {:error,
+                                                                                                            term()})) ::
+          {:ok, term()} | {:error, term()}
+  defp resolve_extended(resolver_addr, normalized, node, inner_sig, extra_args, return_type, opts, on_result) do
+    with {:ok, dns} <- encode_dns_labels(normalized),
+         {:ok, inner_call} <- ABI.encode_call(inner_sig, [node | extra_args]),
+         {:ok, inner_bytes} <- Hex.decode(inner_call),
+         {:ok, outer_call} <- ABI.encode_call("resolve(bytes,bytes)", [dns, inner_bytes]),
+         {:ok, outer_hex} <- ccip_eth_call(resolver_addr, outer_call, opts),
+         {:ok, [inner_result]} <- ABI.decode_response("(bytes)", outer_hex),
+         {:ok, decoded} <- ABI.decode_response(return_type, Hex.encode(inner_result)) do
+      on_result.(decoded)
+    end
+  end
+
+  # Legacy path for resolvers that predate ENSIP-10 (exact-match only).
+  @spec resolve_legacy(String.t(), binary(), String.t(), list(), String.t(), keyword(), (list() ->
+                                                                                           {:ok, term()}
+                                                                                           | {:error, term()})) ::
+          {:ok, term()} | {:error, term()}
+  defp resolve_legacy(resolver_addr, node, inner_sig, extra_args, return_type, opts, on_result) do
+    case Contract.call(resolver_addr, inner_sig, [node | extra_args], return_type, opts) do
+      {:ok, decoded} -> on_result.(decoded)
+      error -> error
+    end
+  end
+
+  # Wires real eth_call + gateway closures into the CCIP round-trip. The eth_call
+  # closure surfaces execution-revert bytes as {:revert, bytes} so the loop can
+  # detect an OffchainLookup.
+  @spec ccip_eth_call(String.t(), String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
+  defp ccip_eth_call(resolver_addr, data_hex, opts) do
+    call_fun = fn target, calldata ->
+      case RPC.eth_call(target, calldata, opts) do
+        {:ok, hex} -> {:ok, hex}
+        {:error, {:rpc_error, %{revert: revert}}} when is_binary(revert) -> {:revert, revert}
+        {:error, _reason} = error -> error
+      end
+    end
+
+    gateway_fun = fn lookup -> gateway_fetch(lookup, opts) end
+
+    CCIP.fetch(call_fun, gateway_fun, resolver_addr, data_hex)
+  end
+
+  # Fetches the first responsive CCIP-Read gateway from the OffchainLookup urls,
+  # returning the decoded `data` response bytes.
+  @spec gateway_fetch(CCIP.lookup(), keyword()) :: {:ok, binary()} | {:error, term()}
+  defp gateway_fetch(%{urls: urls} = lookup, opts) do
+    try_gateways(urls, lookup, opts)
+  end
+
+  @spec try_gateways([String.t()], CCIP.lookup(), keyword()) :: {:ok, binary()} | {:error, term()}
+  defp try_gateways([], _lookup, _opts), do: {:error, :ccip_no_gateway}
+
+  defp try_gateways([url | rest], lookup, opts) do
+    {method, full_url, body} = CCIP.build_gateway_request(lookup, url)
+
+    case gateway_http(method, full_url, body, opts) do
+      {:ok, data_hex} ->
+        case Hex.decode(data_hex) do
+          {:ok, bytes} -> {:ok, bytes}
+          {:error, _reason} -> try_gateways(rest, lookup, opts)
+        end
+
+      {:error, _reason} ->
+        try_gateways(rest, lookup, opts)
+    end
+  end
+
+  # Finch is intentionally excluded from the PLT (`plt_add_deps: :apps_direct`);
+  # mirrors the Finch.build pattern in Onchain.RPC.batch/2.
+  @dialyzer {:nowarn_function, gateway_http: 4}
+  @spec gateway_http(:get | :post, String.t(), binary() | nil, keyword()) ::
+          {:ok, String.t()} | {:error, term()}
+  defp gateway_http(method, url, body, opts) do
+    headers = if method == :post, do: [@content_type_json], else: []
+    request = Finch.build(method, url, headers, body)
+    client = Application.get_env(:cartouche, :client, Finch)
+    finch_name = Application.get_env(:cartouche, :finch_name, @default_finch_name)
+    timeout = Keyword.get(opts, :timeout, @default_gateway_timeout_ms)
+
+    [receive_timeout: timeout]
+    |> then(&client.request(request, finch_name, &1))
+    |> Cartouche.HTTP.normalize_finch_result()
+    |> case do
+      {:ok, %Finch.Response{status: status, body: resp_body}} when status in 200..299 ->
+        parse_gateway_body(resp_body)
+
+      {:ok, %Finch.Response{status: status}} ->
+        {:error, {:gateway_status, status}}
+
+      {:error, other} ->
+        {:error, {:gateway_error, inspect(other)}}
+    end
+  end
+
+  @spec parse_gateway_body(binary()) :: {:ok, String.t()} | {:error, term()}
+  defp parse_gateway_body(body) do
+    case Jason.decode(body) do
+      {:ok, %{"data" => data}} when is_binary(data) -> {:ok, data}
+      {:ok, other} -> {:error, {:gateway_body, other}}
+      {:error, reason} -> {:error, {:gateway_body, inspect(reason)}}
+    end
+  end
+
+  # ENSIP-10 DNS wire format: each label prefixed by its byte length, terminated
+  # by a zero octet. The root name ("") encodes as a single null byte.
+  @spec encode_dns_labels(String.t()) :: {:ok, binary()} | {:error, term()}
+  defp encode_dns_labels(""), do: {:ok, <<0>>}
+
+  defp encode_dns_labels(name) do
+    name
+    |> String.split(".")
+    |> Enum.reduce_while({:ok, <<>>}, fn label, {:ok, acc} ->
+      size = byte_size(label)
+
+      if size > 255 do
+        {:halt, {:error, {:label_too_long, label}}}
+      else
+        {:cont, {:ok, acc <> <<size>> <> label}}
+      end
+    end)
+    |> case do
+      {:ok, encoded} -> {:ok, encoded <> <<0>>}
+      error -> error
+    end
+  end
 
   @doc false
   # EIP-137 namehash: fold right over dot-separated labels with keccak256

@@ -53,6 +53,27 @@ defmodule Onchain.ENSIntegrationTest do
     end
   end
 
+  describe "address/3 (multi-coin, ENSIP-9/10)" do
+    # Exercises the live ENSIP-10 extended-resolver path end to end: wildcard
+    # resolver discovery -> supportsInterface(0x9061b923) -> resolve(dnsName,
+    # addr(node, coinType)). The EIP-3668 CCIP-Read round-trip itself is covered
+    # offline in test/onchain/ens_ccip_test.exs.
+    test "resolves vitalik.eth ETH address (coin type 60) to raw bytes" do
+      expected = Onchain.Hex.decode!(@vitalik_address)
+      assert {:ok, ^expected} = ENS.address("vitalik.eth", 60, rpc_opts())
+    end
+
+    test "address!/3 returns the raw bytes directly" do
+      expected = Onchain.Hex.decode!(@vitalik_address)
+      assert ^expected = ENS.address!("vitalik.eth", 60, rpc_opts())
+    end
+
+    test "returns no_resolver for a non-existent name" do
+      assert {:error, {:no_resolver, _}} =
+               ENS.address("thisnamedoesnotexist12345678.eth", 60, rpc_opts())
+    end
+  end
+
   describe "reverse/2" do
     test "resolves vitalik's address back to vitalik.eth" do
       assert {:ok, "vitalik.eth"} = ENS.reverse(@vitalik_address, rpc_opts())

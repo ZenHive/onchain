@@ -41,8 +41,22 @@ defmodule Onchain.ENSTest do
       assert {:error, {:invalid_name, ".eth"}} = ENS.namehash(".eth")
     end
 
-    test "rejects non-ASCII characters" do
-      assert {:error, {:invalid_name, _}} = ENS.namehash("viталик.eth")
+    test "normalizes (case-folds) Unicode labels rather than rejecting them" do
+      # Under ENSIP-15 a well-formed Unicode label is normalized, not rejected
+      # (the old ASCII-only rule is gone). Case folding makes upper/lower agree.
+      assert {:ok, lower} = ENS.namehash("виталик.eth")
+      assert {:ok, ^lower} = ENS.namehash("ВИТАЛИК.eth")
+      assert byte_size(lower) == 32
+    end
+
+    test "rejects names containing disallowed code points" do
+      # A C0 control character (U+0007 BELL) is disallowed by ENSIP-15.
+      control_name = "foo" <> <<0x07::utf8>> <> "bar.eth"
+      assert {:error, {:invalid_name, _}} = ENS.namehash(control_name)
+
+      # A zero-width joiner (U+200D) outside an emoji sequence is disallowed.
+      zwj_name = "foo" <> <<0x200D::utf8>> <> "bar.eth"
+      assert {:error, {:invalid_name, _}} = ENS.namehash(zwj_name)
     end
 
     test "rejects bare dot (normalizes to empty but is not a valid name)" do
@@ -50,21 +64,24 @@ defmodule Onchain.ENSTest do
     end
   end
 
-  describe "namehash/1 — hyphen validation" do
-    test "rejects label starting with hyphen" do
-      assert {:error, {:invalid_name, "-foo.eth"}} = ENS.namehash("-foo.eth")
+  describe "namehash/1 — hyphen handling (ENSIP-15 CheckHyphens=false)" do
+    test "accepts label starting with hyphen" do
+      assert {:ok, hash} = ENS.namehash("-foo.eth")
+      assert byte_size(hash) == 32
     end
 
-    test "rejects label ending with hyphen" do
-      assert {:error, {:invalid_name, "foo-.eth"}} = ENS.namehash("foo-.eth")
+    test "accepts label ending with hyphen" do
+      assert {:ok, hash} = ENS.namehash("foo-.eth")
+      assert byte_size(hash) == 32
     end
 
     test "accepts hyphen in middle of label" do
       assert {:ok, _} = ENS.namehash("my-name.eth")
     end
 
-    test "rejects label that is only a hyphen" do
-      assert {:error, {:invalid_name, "-.eth"}} = ENS.namehash("-.eth")
+    test "accepts label that is only a hyphen" do
+      assert {:ok, hash} = ENS.namehash("-.eth")
+      assert byte_size(hash) == 32
     end
   end
 
@@ -77,6 +94,105 @@ defmodule Onchain.ENSTest do
       assert {:ok, hash} = ENS.namehash(reverse_name)
       assert byte_size(hash) == 32
       assert hash != <<0::256>>
+    end
+  end
+
+  describe "normalize/1" do
+    test "passes through canonical ASCII names" do
+      assert {:ok, "vitalik.eth"} = ENS.normalize("vitalik.eth")
+    end
+
+    test "case-folds to lowercase" do
+      assert {:ok, "vitalik.eth"} = ENS.normalize("VITALIK.ETH")
+    end
+
+    test "strips a trailing dot" do
+      assert {:ok, "foo.eth"} = ENS.normalize("foo.eth.")
+    end
+
+    test "applies NFC so composed and decomposed forms agree" do
+      composed = "café.eth"
+      decomposed = "cafe" <> <<0x0301::utf8>> <> ".eth"
+      assert {:ok, normalized} = ENS.normalize(decomposed)
+      assert {:ok, ^normalized} = ENS.normalize(composed)
+    end
+
+    test "strips ignored code points (soft hyphen, variation selector)" do
+      with_soft_hyphen = "ab" <> <<0x00AD::utf8>> <> "c.eth"
+      assert {:ok, "abc.eth"} = ENS.normalize(with_soft_hyphen)
+    end
+
+    test "rejects empty labels" do
+      assert {:error, {:invalid_name, "a..b"}} = ENS.normalize("a..b")
+    end
+
+    test "the empty string is the root name" do
+      assert {:ok, ""} = ENS.normalize("")
+    end
+  end
+
+  describe "normalize!/1" do
+    test "returns the normalized name directly" do
+      assert "vitalik.eth" = ENS.normalize!("Vitalik.ETH")
+    end
+
+    test "raises on an invalid name" do
+      assert_raise RuntimeError, ~r/normalize failed/, fn -> ENS.normalize!("a..b") end
+    end
+  end
+
+  describe "dns_encode/1" do
+    test "encodes labels as length-prefixed with a null terminator (ENSIP-10)" do
+      assert {:ok, <<3, "foo", 3, "eth", 0>>} = ENS.dns_encode("foo.eth")
+    end
+
+    test "normalizes before encoding" do
+      assert {:ok, <<3, "foo", 3, "eth", 0>>} = ENS.dns_encode("FOO.eth")
+    end
+
+    test "encodes the root name as a single null byte" do
+      assert {:ok, <<0>>} = ENS.dns_encode("")
+    end
+
+    test "rejects an invalid name" do
+      assert {:error, {:invalid_name, "a..b"}} = ENS.dns_encode("a..b")
+    end
+  end
+
+  describe "dns_encode!/1" do
+    test "returns the encoding directly" do
+      assert <<3, "foo", 3, "eth", 0>> = ENS.dns_encode!("foo.eth")
+    end
+
+    test "raises on an invalid name" do
+      assert_raise RuntimeError, ~r/dns_encode failed/, fn -> ENS.dns_encode!("a..b") end
+    end
+  end
+
+  describe "evm_coin_type/1" do
+    test "derives the ENSIP-11 coin type from a chain id" do
+      # 0x80000000 | 1 = 2147483649 (Ethereum mainnet, ENSIP-11 form)
+      assert ENS.evm_coin_type(1) == 2_147_483_649
+      # 0x80000000 | 10 = 2147483658 (Optimism)
+      assert ENS.evm_coin_type(10) == 2_147_483_658
+      # 0x80000000 | 8453 = 2147492101 (Base)
+      assert ENS.evm_coin_type(8453) == 2_147_492_101
+    end
+  end
+
+  describe "address/3 input validation" do
+    test "rejects an invalid name" do
+      assert {:error, {:invalid_name, "a..b"}} = ENS.address("a..b")
+    end
+
+    test "rejects an invalid name for a non-default coin type" do
+      assert {:error, {:invalid_name, "a..b"}} = ENS.address("a..b", 0)
+    end
+  end
+
+  describe "address!/3" do
+    test "raises on an invalid name" do
+      assert_raise RuntimeError, ~r/address resolution failed/, fn -> ENS.address!("a..b") end
     end
   end
 

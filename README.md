@@ -48,8 +48,13 @@ Or pass the URL per-call to `Onchain.RPC` functions.
 usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
 {:ok, balance} = Onchain.ERC20.balance_of(usdc, "0xYourAddress")
 
-# Resolve an ENS name
+# Resolve an ENS name (UTS-46/ENSIP-15 normalized before namehash)
 {:ok, address} = Onchain.ENS.resolve("vitalik.eth")
+
+# Multi-coin / wildcard / CCIP-Read resolution: walks parent labels for a
+# wildcard resolver (ENSIP-10) and follows EIP-3668 OffchainLookup reverts.
+{:ok, eth_bytes} = Onchain.ENS.address("vitalik.eth", 60)
+{:ok, op_bytes} = Onchain.ENS.address("name.eth", Onchain.ENS.evm_coin_type(10))
 
 # Generic contract call (encode -> eth_call -> decode)
 {:ok, [name]} = Onchain.Contract.call(usdc, "name()", [], "(string)")
@@ -104,7 +109,9 @@ balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
 | `Onchain.Wallet` | Classify address (EOA/contract), native ETH balance |
 | `Onchain.Transfer` | Parse ERC-20/721/1155 Transfer events into normalized structs |
 | `Onchain.MEV` | MEV protection — submit signed txs/bundles to a Flashbots-style private relay (`send_private_transaction/2`, `send_bundle/2`); caller-supplied `:endpoint` (no public-node fallback) + `:headers` auth |
-| `Onchain.ENS` | ENS name resolution (forward, reverse, text records, contenthash) |
+| `Onchain.ENS` | ENS name resolution: forward (`resolve/2`), multi-coin + wildcard + CCIP-Read (`address/3`, ENSIP-9/10 + EIP-3668), reverse, text records, contenthash, ABI, pubkey; UTS-46/ENSIP-15 `normalize/1`, ENSIP-10 `dns_encode/1`, ENSIP-11 `evm_coin_type/1` |
+| `Onchain.ENS.Normalize` | UTS-46 / ENSIP-15 name normalization (deterministic subset: case-fold + NFC + ignored/disallowed code points; not the confusable/script-mixing security filters) |
+| `Onchain.ENS.CCIP` | EIP-3668 CCIP-Read pure helpers (OffchainLookup parse, gateway-request shaping, callback calldata) + bounded gateway round-trip loop |
 | `Onchain.Subscription` | Real-time streaming via eth_subscribe (newHeads, pendingTx, logs) |
 | `Onchain.Subscription.Parser` | Pure parsing for eth_subscribe notification payloads (newHeads, pendingTx, logs) |
 

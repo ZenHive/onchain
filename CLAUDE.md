@@ -96,7 +96,10 @@ lib/onchain/
   wallet.ex         # classify (EOA/contract), native ETH balance
   multicall.ex      # batched calls via Multicall3
   sleuth.ex         # Compound-style deploy-as-call: ship bytecode in eth_call, decode returned bytes
-  ens.ex            # ENS name resolution
+  ens.ex            # ENS resolution: namehash, resolve, reverse, records; address/3 multi-coin (ENSIP-9/10 wildcard + EIP-3668 CCIP-Read); normalize/1, dns_encode/1, evm_coin_type/1
+  ens/
+    normalize.ex    # UTS-46/ENSIP-15 name normalization (deterministic subset: case-fold + NFC + ignored/disallowed code points)
+    ccip.ex         # EIP-3668 CCIP-Read pure helpers + injectable gateway round-trip loop
   transfer.ex       # ERC-20 Transfer event parsing
   mev.ex            # private tx submission via Flashbots-style relays (eth_sendPrivateTransaction / eth_sendBundle)
   subscription.ex   # real-time eth_subscribe (newHeads, pendingTx, logs)
