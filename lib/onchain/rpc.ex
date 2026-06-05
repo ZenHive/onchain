@@ -228,11 +228,7 @@ defmodule Onchain.RPC do
   )
 
   @spec eth_send_raw_transaction(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
-  def eth_send_raw_transaction(data, opts \\ []) do
-    with {:ok, _hex_data} <- ensure_hex_data(data) do
-      do_rpc("eth_sendRawTransaction", [data], to_rpc_opts(opts))
-    end
-  end
+  defrpc(:eth_send_raw_transaction, method: "eth_sendRawTransaction", arg: :data)
 
   # --- eth_send_raw_transaction! ---
 
@@ -245,12 +241,7 @@ defmodule Onchain.RPC do
   )
 
   @spec eth_send_raw_transaction!(String.t(), keyword()) :: String.t()
-  def eth_send_raw_transaction!(data, opts \\ []) do
-    case eth_send_raw_transaction(data, opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "eth_send_raw_transaction failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:eth_send_raw_transaction, args: [:data])
 
   # --- get_balance ---
 
@@ -265,13 +256,9 @@ defmodule Onchain.RPC do
     }
   )
 
-  @spec get_balance(String.t() | binary(), keyword()) :: {:ok, non_neg_integer()} | {:error, term()}
-  def get_balance(address, opts \\ []) do
-    with {:ok, hex_addr} <- ensure_hex_address(address),
-         {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")) do
-      do_rpc("eth_getBalance", [hex_addr, block], Keyword.put(to_rpc_opts(opts), :decode, :hex_unsigned))
-    end
-  end
+  @spec get_balance(String.t() | binary(), keyword()) ::
+          {:ok, non_neg_integer()} | {:error, term()}
+  defrpc(:get_balance, method: "eth_getBalance", arg: :address, decode: :hex_unsigned)
 
   # --- get_balance! ---
 
@@ -284,12 +271,7 @@ defmodule Onchain.RPC do
   )
 
   @spec get_balance!(String.t() | binary(), keyword()) :: non_neg_integer()
-  def get_balance!(address, opts \\ []) do
-    case get_balance(address, opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "get_balance failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:get_balance, args: [:address])
 
   # --- block_number ---
 
@@ -520,20 +502,17 @@ defmodule Onchain.RPC do
 
   @spec get_transaction_count(String.t() | binary(), keyword()) ::
           {:ok, non_neg_integer()} | {:error, term()}
-  def get_transaction_count(address, opts \\ []) do
-    with {:ok, hex_addr} <- ensure_hex_address(address),
-         {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")) do
-      do_rpc(
-        "eth_getTransactionCount",
-        [hex_addr, block],
-        Keyword.put(to_rpc_opts(opts), :decode, :hex_unsigned)
-      )
-    end
-  end
+  defrpc(:get_transaction_count,
+    method: "eth_getTransactionCount",
+    arg: :address,
+    decode: :hex_unsigned
+  )
 
   # --- get_transaction_count! ---
 
-  api(:get_transaction_count!, "Get the transaction count (nonce) of an address. Raises on error.",
+  api(
+    :get_transaction_count!,
+    "Get the transaction count (nonce) of an address. Raises on error.",
     params: [
       address: [kind: :value, description: "Account address as 0x hex string or 20-byte binary"],
       opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout, :block"]
@@ -542,12 +521,7 @@ defmodule Onchain.RPC do
   )
 
   @spec get_transaction_count!(String.t() | binary(), keyword()) :: non_neg_integer()
-  def get_transaction_count!(address, opts \\ []) do
-    case get_transaction_count(address, opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "get_transaction_count failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:get_transaction_count, args: [:address])
 
   # --- eth_get_code ---
 
@@ -564,12 +538,7 @@ defmodule Onchain.RPC do
   )
 
   @spec eth_get_code(String.t() | binary(), keyword()) :: {:ok, String.t()} | {:error, term()}
-  def eth_get_code(address, opts \\ []) do
-    with {:ok, hex_addr} <- ensure_hex_address(address),
-         {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")) do
-      do_rpc("eth_getCode", [hex_addr, block], to_rpc_opts(opts))
-    end
-  end
+  defrpc(:eth_get_code, method: "eth_getCode", arg: :address)
 
   # --- eth_get_code! ---
 
@@ -582,16 +551,13 @@ defmodule Onchain.RPC do
   )
 
   @spec eth_get_code!(String.t() | binary(), keyword()) :: String.t()
-  def eth_get_code!(address, opts \\ []) do
-    case eth_get_code(address, opts) do
-      {:ok, result} -> result
-      {:error, reason} -> raise "eth_get_code failed: #{inspect(reason)}"
-    end
-  end
+  defrpc_bang(:eth_get_code, args: [:address])
 
   # --- get_transaction_by_hash ---
 
-  api(:get_transaction_by_hash, "Get full transaction details by hash (eth_getTransactionByHash).",
+  api(
+    :get_transaction_by_hash,
+    "Get full transaction details by hash (eth_getTransactionByHash).",
     params: [
       tx_hash: [kind: :value, description: "0x-prefixed hex transaction hash"],
       opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
@@ -656,9 +622,14 @@ defmodule Onchain.RPC do
     with :ok <- validate_log_filter_keys(normalized),
          {:ok, rpc_filter} <- build_log_filter(normalized) do
       case do_rpc("eth_getLogs", [rpc_filter], to_rpc_opts(opts)) do
-        {:ok, logs} when is_list(logs) -> {:ok, Enum.map(logs, &parse_log/1)}
-        {:ok, other} -> {:error, {:rpc_error, %{message: "unexpected response: #{inspect(other)}"}}}
-        error -> error
+        {:ok, logs} when is_list(logs) ->
+          {:ok, Enum.map(logs, &parse_log/1)}
+
+        {:ok, other} ->
+          {:error, {:rpc_error, %{message: "unexpected response: #{inspect(other)}"}}}
+
+        error ->
+          error
       end
     end
   end
@@ -786,7 +757,9 @@ defmodule Onchain.RPC do
 
   # --- fee_history (eth_feeHistory) ---
 
-  api(:fee_history, "Fetch base-fee history and per-block priority-fee percentiles (eth_feeHistory).",
+  api(
+    :fee_history,
+    "Fetch base-fee history and per-block priority-fee percentiles (eth_feeHistory).",
     params: [
       block_count: [
         kind: :value,
@@ -814,7 +787,8 @@ defmodule Onchain.RPC do
     with {:ok, hex_count} <- ensure_block_count(block_count),
          {:ok, newest} <- normalize_block(Keyword.get(opts, :newest_block, "latest")),
          :ok <- ensure_reward_percentiles(percentiles),
-         {:ok, raw} <- do_rpc("eth_feeHistory", [hex_count, newest, percentiles], to_rpc_opts(opts)) do
+         {:ok, raw} <-
+           do_rpc("eth_feeHistory", [hex_count, newest, percentiles], to_rpc_opts(opts)) do
       {:ok, Cartouche.FeeHistory.deserialize(raw)}
     end
   end
@@ -865,7 +839,8 @@ defmodule Onchain.RPC do
     with {:ok, hex_addr} <- ensure_hex_address(address),
          {:ok, normalized_keys} <- validate_storage_keys(storage_keys),
          {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")),
-         {:ok, raw} <- do_rpc("eth_getProof", [hex_addr, normalized_keys, block], to_rpc_opts(opts)) do
+         {:ok, raw} <-
+           do_rpc("eth_getProof", [hex_addr, normalized_keys, block], to_rpc_opts(opts)) do
       {:ok, parse_proof(raw)}
     end
   end
@@ -913,7 +888,8 @@ defmodule Onchain.RPC do
   end
 
   @spec normalize_retry_policy(term()) ::
-          {:ok, %{max_retries: non_neg_integer(), backoff_ms: non_neg_integer()}} | {:error, term()}
+          {:ok, %{max_retries: non_neg_integer(), backoff_ms: non_neg_integer()}}
+          | {:error, term()}
   defp normalize_retry_policy(retry) when retry in [nil, false] do
     {:ok, %{max_retries: @no_retry_max_retries, backoff_ms: @default_retry_backoff_ms}}
   end
@@ -1116,7 +1092,8 @@ defmodule Onchain.RPC do
          {:ok, result} <- put_filter_address(%{}, filter),
          {:ok, result} <- put_filter_topics(result, filter),
          {:ok, result} <- put_filter_block_hash(result, filter),
-         {:ok, result} <- put_block_param(result, "fromBlock", :fromBlock, Map.get(filter, :from_block)) do
+         {:ok, result} <-
+           put_block_param(result, "fromBlock", :fromBlock, Map.get(filter, :from_block)) do
       put_block_param(result, "toBlock", :toBlock, Map.get(filter, :to_block))
     end
   end
@@ -1129,8 +1106,11 @@ defmodule Onchain.RPC do
       conflicts = Enum.filter([:from_block, :to_block], &Map.has_key?(filter, &1))
 
       case conflicts do
-        [] -> :ok
-        _ -> {:error, {:invalid_filter, {:block_hash_mutually_exclusive, [:block_hash | conflicts]}}}
+        [] ->
+          :ok
+
+        _ ->
+          {:error, {:invalid_filter, {:block_hash_mutually_exclusive, [:block_hash | conflicts]}}}
       end
     else
       :ok
@@ -1141,8 +1121,11 @@ defmodule Onchain.RPC do
   @spec put_filter_address(map(), map()) :: {:ok, map()} | {:error, term()}
   defp put_filter_address(result, filter) do
     case Map.get(filter, :address) do
-      nil -> {:ok, result}
-      addr -> with {:ok, hex} <- ensure_hex_address(addr), do: {:ok, Map.put(result, "address", hex)}
+      nil ->
+        {:ok, result}
+
+      addr ->
+        with {:ok, hex} <- ensure_hex_address(addr), do: {:ok, Map.put(result, "address", hex)}
     end
   end
 

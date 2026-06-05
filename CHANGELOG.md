@@ -6,6 +6,11 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Fixed — wire `defrpc` macro call sites for uniform RPC wrappers (Task 76)
+
+- **`Onchain.RPC`** — imports `Onchain.RPC.Codegen` and declares the uniform wrappers through `defrpc/2` + `defrpc_bang/2`: `eth_send_raw_transaction`, `get_balance`, `block_number`, `syncing`, `chain_id`, `get_transaction_count`, and `eth_get_code`, plus their `!` variants. Public `api/3`, `@doc`, and `@spec` surfaces remain hand-authored; the macro owns only the duplicated wrapper bodies.
+- **Tests** — `test/onchain/rpc_codegen_test.exs` parses `lib/onchain/rpc.ex` and asserts the expected `defrpc`/`defrpc_bang` declarations exist, catching the audited dead-macro regression that public behavior tests could not see.
+
 ### Fixed — ERC-7730 binding/descriptor hardening (Task 78)
 
 - **`Onchain.ERC7730.Binding`** — EIP-712 domain constraints now fail with `:domain_mismatch` when a constrained field is missing; EIP-712 formats match by `primaryType`/`encodeType` rather than ABI selector parsing; EIP-712 field types are derived from payload `types` or descriptor schemas for formatter coercion; duplicate calldata format selectors now return `{:invalid_descriptor, {:duplicate_format_selector, selector}}`.
@@ -83,9 +88,9 @@ Completed roadmap tasks.
 - **Endpoint + auth are caller-supplied, with no public-node fallback.** The relay URL is a required `:endpoint` option (omitting it returns `{:error, :missing_endpoint}` rather than silently broadcasting to the configured public RPC — the whole point of MEV protection). Relay auth (e.g. Flashbots' `X-Flashbots-Signature`) is passed through verbatim via `:headers`; the searcher-key signature is not computed here. Transport reuses `Cartouche.RPC.send_rpc/3` (`:ethereum_node` + `:headers`), so no new HTTP dependency.
 - **Tests** — `test/onchain/mev_test.exs` covers request shaping (with/without optional fields, tx ordering) and every error envelope (missing/invalid endpoint, invalid tx hex, empty bundle, missing/invalid block number, transport-failure `:rpc_error` wrapping). `test/onchain/mev_integration_test.exs` is `@tag :integration` (excluded by default), gated on `MEV_RELAY_URL`, and asserts a real relay round-trip parses to a structured JSON-RPC response.
 
-### Changed — `defrpc` macro codegen for uniform RPC wrappers (Task 63)
+### Changed — `defrpc` macro codegen for uniform RPC wrappers (Task 63, completed by Task 76)
 
-- **`Onchain.RPC.Codegen`** — compile-time `defrpc/2` and `defrpc_bang/2` macros backed by NimbleOptions schemas (`method`, `arg`, `decode` for reads; `args` for bangs), capturing the uniform "(optionally validate one arg) → `do_rpc` → maybe decode" wrapper shape and its mechanical `!` variant. **Audit correction (2026-06-05):** the macros are defined but **not yet wired into `Onchain.RPC`** — every named wrapper (`eth_getBalance`, `eth_blockNumber`, `eth_syncing`, `eth_chainId`, `eth_getTransactionCount`, `eth_getCode`, `eth_sendRawTransaction`) and its `!` variant is still hand-written; `defrpc`/`defrpc_bang` have no call sites outside the macro module. (The prior wording claimed the wrappers "now expand from declarative specs" — that was inaccurate.) Migrating the uniform wrappers, or removing the unused prototype, is tracked as a ROADMAP "Audit-surfaced" follow-up.
+- **`Onchain.RPC.Codegen`** — compile-time `defrpc/2` and `defrpc_bang/2` macros backed by NimbleOptions schemas (`method`, `arg`, `decode` for reads; `args` for bangs), capturing the uniform "(optionally validate one arg) → `do_rpc` → maybe decode" wrapper shape and its mechanical `!` variant. **Audit correction (2026-06-05):** the initial Task 63 implementation defined these macros without call sites; Task 76 wires the uniform named wrappers through the declarations instead of removing the prototype.
 - **`Onchain.RPC`** — no public API change: `@doc`, `@spec`, and Descripex `api/3` hints remain hand-authored for byte-identical agent contracts; macro output is function bodies only.
 - **`.doctor.exs`** — ignore `Onchain.RPC.Codegen` (Doctor counts quoted `def`s inside macro modules as undocumented public functions).
 - **`nimble_options`** — new compile-time dependency for macro option validation.
