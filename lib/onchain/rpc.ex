@@ -86,6 +86,7 @@ defmodule Onchain.RPC do
   | `get_transaction_by_hash!/2` | Same, raises on error |
   | `call/3` | Generic JSON-RPC passthrough — any method, raw result |
   | `call!/3` | Same, raises on error |
+  | `batch/2` | Generic JSON-RPC array batch — one HTTP round-trip for many raw calls |
   | `fee_history/2` | EIP-1559 fee history (`eth_feeHistory`) → `Cartouche.FeeHistory.t()` |
   | `fee_history!/2` | Same, raises on error |
   | `get_proof/3` | Account + storage Merkle proofs (`eth_getProof`) |
@@ -99,6 +100,11 @@ defmodule Onchain.RPC do
   alias Onchain.RPC.Helpers
 
   @rpc_request_event [:onchain, :rpc, :request]
+  @json_rpc_version "2.0"
+  @batch_method "batch"
+  @content_type_json {"Content-Type", "application/json"}
+  @default_ethereum_node "https://mainnet.infura.io"
+  @default_finch_name CartoucheFinch
 
   # --- eth_call ---
 
@@ -744,6 +750,42 @@ defmodule Onchain.RPC do
     end
   end
 
+  # --- batch (generic JSON-RPC array batch) ---
+
+  api(:batch, "Generic JSON-RPC array batch — invoke many methods in one HTTP request.",
+    params: [
+      requests: [
+        kind: :value,
+        description:
+          ~s|List of {method, params} tuples, e.g. [{"eth_blockNumber", []}, {"eth_chainId", []}]. Results are returned in the same order as requests even if the node responds out of order.|
+      ],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{
+      type: "{:ok, [term]} | {:error, term}",
+      description:
+        "Raw decoded JSON results in request order, or a wrapped RPC/transport error. If any response item is a JSON-RPC error, the batch returns that error."
+    }
+  )
+
+  @doc """
+  Invoke many raw JSON-RPC calls in one HTTP request.
+
+  Each request is a `{method, params}` tuple. Results are returned in request
+  order even when the node returns the JSON-RPC response array out of order.
+  """
+  @spec batch([{String.t(), [term()]}], keyword()) :: {:ok, [term()]} | {:error, term()}
+  def batch(requests, opts \\ [])
+
+  def batch([], _opts), do: {:ok, []}
+
+  def batch(requests, opts) when is_list(requests) do
+    :telemetry.span(@rpc_request_event, %{method: @batch_method}, fn ->
+      result = do_batch(requests, to_rpc_opts(opts))
+      {result, rpc_request_stop_metadata(@batch_method, result)}
+    end)
+  end
+
   # --- fee_history (eth_feeHistory) ---
 
   api(:fee_history, "Fetch base-fee history and per-block priority-fee percentiles (eth_feeHistory).",
@@ -867,6 +909,146 @@ defmodule Onchain.RPC do
   defp rpc_request_stop_metadata(method, {:error, reason}) do
     %{method: method, status: :error, error: reason}
   end
+
+  @spec do_batch([{String.t(), [term()]}], keyword()) :: {:ok, [term()]} | {:error, term()}
+  defp do_batch(requests, opts) do
+    with {:ok, rpc_requests} <- build_batch_requests(requests),
+         {:ok, encoded_body} <- encode_json(rpc_requests),
+         {:ok, body} <- send_batch_request(encoded_body, opts) do
+      decode_batch_body(body, Enum.map(rpc_requests, & &1["id"]))
+    end
+  end
+
+  @spec build_batch_requests([{String.t(), [term()]}]) :: {:ok, [map()]} | {:error, term()}
+  defp build_batch_requests(requests) do
+    requests
+    |> Enum.with_index(1)
+    |> Enum.reduce_while({:ok, []}, fn
+      {{method, params}, id}, {:ok, acc} when is_binary(method) and is_list(params) ->
+        request = %{
+          "jsonrpc" => @json_rpc_version,
+          "id" => id,
+          "method" => method,
+          "params" => params
+        }
+
+        {:cont, {:ok, [request | acc]}}
+
+      {request, _id}, {:ok, _acc} ->
+        {:halt, {:error, {:invalid_batch_request, request}}}
+    end)
+    |> case do
+      {:ok, rpc_requests} -> {:ok, Enum.reverse(rpc_requests)}
+      error -> error
+    end
+  end
+
+  @spec encode_json(term()) :: {:ok, binary()} | {:error, term()}
+  defp encode_json(term) do
+    case Jason.encode(term) do
+      {:ok, encoded} -> {:ok, encoded}
+      {:error, reason} -> {:error, {:rpc_error, %{message: inspect(reason)}}}
+    end
+  end
+
+  @spec send_batch_request(binary(), keyword()) :: {:ok, binary()} | {:error, term()}
+  defp send_batch_request(encoded_body, opts) do
+    request = Finch.build(:post, ethereum_node(opts), [@content_type_json], encoded_body)
+    client = Application.get_env(:cartouche, :client, Finch)
+    finch_name = Application.get_env(:cartouche, :finch_name, @default_finch_name)
+
+    [receive_timeout: Keyword.fetch!(opts, :timeout)]
+    |> then(&client.request(request, finch_name, &1))
+    |> Cartouche.HTTP.normalize_finch_result()
+    |> case do
+      {:ok, %Finch.Response{body: body}} -> {:ok, body}
+      {:error, %Finch.Response{body: body}} -> {:error, {:rpc_error, %{message: body}}}
+      {:error, other} -> {:error, {:rpc_error, %{message: inspect(other)}}}
+    end
+  end
+
+  @spec ethereum_node(keyword()) :: String.t()
+  defp ethereum_node(opts) do
+    Keyword.get(opts, :ethereum_node) ||
+      Application.get_env(:cartouche, :ethereum_node, @default_ethereum_node)
+  end
+
+  @spec decode_batch_body(binary(), [pos_integer()]) :: {:ok, [term()]} | {:error, term()}
+  defp decode_batch_body(body, ids) do
+    case Jason.decode(body) do
+      {:ok, responses} when is_list(responses) ->
+        decode_batch_responses(responses, ids)
+
+      {:ok, %{"error" => error}} ->
+        {:error, normalize_rpc_error(error)}
+
+      {:ok, other} ->
+        {:error, {:rpc_error, %{message: "unexpected batch response: #{inspect(other)}"}}}
+
+      {:error, reason} ->
+        {:error, {:rpc_error, %{message: inspect(reason)}}}
+    end
+  end
+
+  @spec decode_batch_responses([map()], [pos_integer()]) :: {:ok, [term()]} | {:error, term()}
+  defp decode_batch_responses(responses, ids) do
+    responses_by_id = Map.new(responses, &{&1["id"], &1})
+
+    ids
+    |> Enum.map(&Map.get(responses_by_id, &1))
+    |> collect_batch_results()
+  end
+
+  @spec collect_batch_results([map() | nil]) :: {:ok, [term()]} | {:error, term()}
+  defp collect_batch_results(responses) do
+    responses
+    |> Enum.reduce_while({:ok, []}, fn
+      %{"result" => result}, {:ok, acc} ->
+        {:cont, {:ok, [result | acc]}}
+
+      %{"error" => error}, {:ok, _acc} ->
+        {:halt, {:error, normalize_rpc_error(error)}}
+
+      nil, {:ok, _acc} ->
+        {:halt, {:error, {:rpc_error, %{message: "missing batch response"}}}}
+
+      other, {:ok, _acc} ->
+        {:halt, {:error, {:rpc_error, %{message: "unexpected batch item: #{inspect(other)}"}}}}
+    end)
+    |> case do
+      {:ok, results} -> {:ok, Enum.reverse(results)}
+      error -> error
+    end
+  end
+
+  @spec normalize_rpc_error(term()) :: {:rpc_error, map()}
+  defp normalize_rpc_error(%{} = error) do
+    normalized =
+      %{}
+      |> maybe_put_error_field(:code, Map.get(error, "code"))
+      |> maybe_put_error_field(:message, Map.get(error, "message"))
+      |> maybe_put_error_field(:data, Map.get(error, "data"))
+      |> maybe_put_revert_from_error_data()
+      |> Helpers.maybe_put_revert_data_hex()
+
+    {:rpc_error, normalized}
+  end
+
+  defp normalize_rpc_error(other), do: {:rpc_error, %{message: inspect(other)}}
+
+  @spec maybe_put_error_field(map(), atom(), term()) :: map()
+  defp maybe_put_error_field(map, _key, nil), do: map
+  defp maybe_put_error_field(map, key, value), do: Map.put(map, key, value)
+
+  @spec maybe_put_revert_from_error_data(map()) :: map()
+  defp maybe_put_revert_from_error_data(%{code: 3, data: data} = map) when is_binary(data) do
+    case Onchain.Hex.decode(data) do
+      {:ok, revert} -> Map.put_new(map, :revert, revert)
+      {:error, _reason} -> map
+    end
+  end
+
+  defp maybe_put_revert_from_error_data(map), do: map
 
   @doc false
   # Builds a JSON-RPC filter object from an Elixir map.
