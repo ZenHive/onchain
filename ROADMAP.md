@@ -38,7 +38,7 @@
 | Task | Status | Notes |
 |------|--------|-------|
 | Task 69 `[P]` | ✅ | 🎁 **account_abstraction** · *Onchain.AA* · ERC-4337 UserOperation construction, signing, and bundler RPC [D:7/B:8/U:7 → Eff:1.07] 📋 |
-| Task 79 | ⬜ | 🎁 **account_abstraction** · *Onchain.AA* · Audit-surfaced: ERC-4337 to_rpc_params validation can diverge from user_op_hash [D:4/B:5/U:5 → Eff:1.25] 📋 |
+| Task 79 | ✅ | 🎁 **account_abstraction** · *Onchain.AA* · Audit-surfaced: ERC-4337 to_rpc_params validation can diverge from user_op_hash [D:4/B:5/U:5 → Eff:1.25] 📋 |
 <!-- TASKS:END -->
 
 ---
@@ -67,16 +67,16 @@
 |------|--------|-------|
 | Task 57 | ✅ | 🎁 **rpc_shapes** · *Onchain.RPC* · Unify get_block_* / get_transaction_* RPC return shapes [D:4/B:6/U:6 → Eff:1.5?] 🚀 |
 | Task 63 | ✅ | 🎁 **rpc_codegen** · *Onchain.RPC* · defrpc macro — codegen named JSON-RPC wrappers from declarative specs [D:4/B:6/U:5 → Eff:1.38?] 📋 |
-| Task 64 | ⬜ | 🎁 **rpc_codegen** · *Onchain.RPC.Specs* · Vendor openrpc.json + emit Onchain.RPC.Specs lookup feeding defrpc [D:4/B:6/U:5 → Eff:1.38?] 📋 |
+| Task 64 | ✅ | 🎁 **rpc_codegen** · *Onchain.RPC.Specs* · Vendor openrpc.json + emit Onchain.RPC.Specs lookup feeding defrpc [D:4/B:6/U:5 → Eff:1.38?] 📋 |
 | Task 66 | ⬜ | 🎁 **rpc_codegen** · *Mix.Task (dev-only)* · Tree-sitter scrape of Erigon Go source for trace_* / ots_* method enumeration [D:5/B:4/U:3 → Eff:0.7?] ⚠️ |
 | Task 41 `[P]` | ✅ | 🎁 **ens** · *Onchain.ENS* · ENS enhancements: CCIP-Read, ENSIP-10 wildcard, UTS-46/ENSIP-15 normalization, multi-coin [D:6/B:6/U:5 → Eff:0.92?] ⚠️ |
 | Task 65 `[P]` | ✅ | 🎁 **differential_testing** · *test/onchain/differential/* · Differential test harness: Onchain.RPC vs reference impl (signet first) [D:6/B:5/U:3 → Eff:0.67?] ⚠️ |
 | Task 70 `[P]` | ✅ | 🎁 **subscription_hardening** · *Onchain.Subscription* · Harden Onchain.Subscription.lookup_or_buffer/3 against unsolicited sub_id keys [D:3/B:4/U:3 → Eff:1.17] 📋 |
 | Task 74 `[P]` | ✅ | 🎁 **erc_standards** · *Onchain.ERC7730* · ERC-7730 clear-signing descriptor parser + binding evaluator [D:6/B:7/U:6 → Eff:1.08] 📋 |
 | Task 75 | ✅ | 🎁 **rpc_shapes** · Stop dialyzer cold-building the PLT per harness worktree (it OOM'd the host twice) [D:2/B:3/U:5 → Eff:2.0] 🎯 |
-| Task 76 | ⬜ | 🎁 **rpc_codegen** · *Onchain.RPC* · Audit-surfaced: Task 63 defrpc macro is unused — wrappers still hand-written [D:4/B:5/U:5 → Eff:1.25] 📋 |
-| Task 77 | ⬜ | 🎁 **erc_standards** · *Onchain.ERC7730.Formatter* · Audit-surfaced: ERC-7730 tokenAmount renders wrong token symbol (clear-signing safety) [D:4/B:7/U:6 → Eff:1.62] 🚀 |
-| Task 78 | ⬜ | 🎁 **erc_standards** · *Onchain.ERC7730.Binding* · Audit-surfaced: ERC-7730 binding/descriptor hardening (domain match, EIP-712 type, malformed input) [D:5/B:5/U:5 → Eff:1.0] 📋 |
+| Task 76 | ✅ | 🎁 **rpc_codegen** · *Onchain.RPC* · Audit-surfaced: Task 63 defrpc macro is unused — wrappers still hand-written [D:4/B:5/U:5 → Eff:1.25] 📋 |
+| Task 77 | ✅ | 🎁 **erc_standards** · *Onchain.ERC7730.Formatter* · Audit-surfaced: ERC-7730 tokenAmount renders wrong token symbol (clear-signing safety) [D:4/B:7/U:6 → Eff:1.62] 🚀 |
+| Task 78 | ✅ | 🎁 **erc_standards** · *Onchain.ERC7730.Binding* · Audit-surfaced: ERC-7730 binding/descriptor hardening (domain match, EIP-712 type, malformed input) [D:5/B:5/U:5 → Eff:1.0] 📋 |
 <!-- TASKS:END -->
 
 ---

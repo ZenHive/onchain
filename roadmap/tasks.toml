@@ -304,23 +304,28 @@ shipped_in = "a4d9d64d3139f12cd6b1666461741f72927f5a5e"
 id = 64
 phase = 12
 bundle = "rpc_codegen"
-status = "pending"
+status = "done"
 title = "Vendor openrpc.json + emit Onchain.RPC.Specs lookup feeding defrpc"
-module = "Onchain.RPC.Specs"
 scores = { d = 4, b = 6, u = 5 }
 depends_on = [63]
-assignee = "codex"
-domains = ["rpc", "codegen"]
-created_at = "2026-04-23"
-scored_at = "2026-04-23"
-body = """
-Vendor a pinned openrpc.json built from ethereum/execution-apis (make build resolves all $refs into one self-contained JSON) under priv/specs/openrpc-v1.0.0-betaN.json — covers 93 methods across eth_* (57), engine_* (26), debug_* (5), txpool_* (3), net_* (1), testing_* (1). Write a Mix.Task (or Onchain.RPC.SpecLoader) that parses it with Jason at compile time and emits a compile-time map %{\"eth_blockNumber\" => %{params, returns, description}, ...}. Optionally wire into Task 63's defrpc so `defrpc :block_number, \"eth_blockNumber\"` pulls params/returns/description from the spec. Refresh procedure: wget latest tagged release, diff, bump pin, re-run tests (~once per hardfork cycle).
-"""
 acceptance_criteria = [
   "Vendored JSON + version pin documented in CHANGELOG",
   "Onchain.RPC.Specs.lookup(\"eth_blockNumber\") returns the parsed spec",
   "If Task 63 has landed, at least 3 existing wrappers reimplemented through defrpc with byte-identical behavior",
 ]
+domains = ["rpc", "codegen"]
+assignee = "codex"
+module = "Onchain.RPC.Specs"
+body = """
+Vendor a pinned openrpc.json built from ethereum/execution-apis (make build resolves all $refs into one self-contained JSON) under priv/specs/openrpc-v1.0.0-betaN.json — covers 93 methods across eth_* (57), engine_* (26), debug_* (5), txpool_* (3), net_* (1), testing_* (1). Write a Mix.Task (or Onchain.RPC.SpecLoader) that parses it with Jason at compile time and emits a compile-time map %{\"eth_blockNumber\" => %{params, returns, description}, ...}. Optionally wire into Task 63's defrpc so `defrpc :block_number, \"eth_blockNumber\"` pulls params/returns/description from the spec. Refresh procedure: wget latest tagged release, diff, bump pin, re-run tests (~once per hardfork cycle).
+"""
+implemented = "Vendored priv/specs/openrpc-v1.0.0-beta.4.json (78 methods) + Onchain.RPC.Specs compile-time lookup (all/0, lookup/1). Onchain.RPC.Codegen.defrpc/2 now validates declared method names against the spec at compile time (raises on unknown). block_number/syncing/chain_id expand through the macro. priv/specs added to package files (mix.exs). specs_test.exs."
+delivered_by = "codex"
+verified = true
+created_at = "2026-04-23"
+scored_at = "2026-04-23"
+done_at = "2026-06-05"
+shipped_in = "2dfd0c6"
 
 [[task]]
 id = 66
@@ -489,11 +494,11 @@ done_at = "2026-06-04"
 id = 76
 phase = 12
 bundle = "rpc_codegen"
-status = "pending"
+status = "done"
 title = "Audit-surfaced: Task 63 defrpc macro is unused — wrappers still hand-written"
-assignee = "codex"
 scores = { d = 4, b = 5, u = 5 }
 domains = ["rpc", "macros"]
+assignee = "codex"
 module = "Onchain.RPC"
 body = """
 Task 63's acceptance criterion #2 — "Existing 11 wrappers reimplemented through it with byte-identical public behavior" — is UNMET. `grep -rn 'defrpc' lib/` returns zero call sites outside lib/onchain/rpc/codegen.ex: every wrapper (block_number, chain_id, syncing, get_balance, get_transaction_count, get_code, eth_send_raw_transaction, and all `!` variants) is still a hand-written `def`. The `Onchain.RPC.Codegen` macro module, the `nimble_options` dep, and the `.doctor.exs` ignore entry were all added to support a macro that is never invoked — dead code.
@@ -502,18 +507,23 @@ The CHANGELOG (b67f5cc/a4d9d64, "### Changed — defrpc macro codegen") claims t
 
 Corroborated by Claude (grep verification) + Codex. Filed by audit-review against commits b67f5cc/a4d9d64 on 2026-06-05; see .audit/b67f5cc-*.md.
 """
+implemented = "Onchain.RPC now imports Onchain.RPC.Codegen and declares the uniform wrappers (eth_send_raw_transaction, get_balance, block_number, syncing, chain_id, get_transaction_count, eth_get_code + bangs) via defrpc/2 + defrpc_bang/2 instead of hand-written bodies; api/3, @doc, @spec stay hand-authored. rpc_codegen_test.exs asserts the macro call sites exist (catches the dead-macro regression)."
+delivered_by = "cursor"
+verified = true
 created_at = "2026-06-05"
 scored_at = "2026-06-05"
+done_at = "2026-06-05"
+shipped_in = "6390517"
 
 [[task]]
 id = 77
 phase = 12
 bundle = "erc_standards"
-status = "pending"
+status = "done"
 title = "Audit-surfaced: ERC-7730 tokenAmount renders wrong token symbol (clear-signing safety)"
-assignee = "codex"
 scores = { d = 4, b = 7, u = 6 }
 domains = ["erc", "security"]
+assignee = "codex"
 module = "Onchain.ERC7730.Formatter"
 body = """
 `Onchain.ERC7730.Formatter.from_metadata/2` (lib/onchain/erc7730/formatter.ex:314) ignores its `_token` argument and unconditionally returns the descriptor's `metadata.token` decimals/symbol whenever `metadata.token.decimals` is present. When a `tokenAmount` field references a different token than the descriptor's `metadata.token` (e.g. via `tokenPath`, and the token is absent from `opts[:tokens]`), the amount is rendered with the WRONG token's symbol — e.g. a DAI amount shown as "1 USDC". For a clear-signing engine whose entire purpose is showing users what they sign, displaying the wrong token is a safety-relevant correctness bug.
@@ -522,18 +532,23 @@ Fix: `from_metadata` should only apply when the requested token matches `metadat
 
 Corroborated by Codex + Claude (read formatter.ex, confirmed `_token` unused). Filed by audit-review against commit a82235d on 2026-06-05; see .audit/a82235d-*.md.
 """
+implemented = "Onchain.ERC7730.Formatter.from_metadata/2 now only applies descriptor metadata.token decimals/ticker when the metadata token address matches the tokenPath-resolved token (Address.equal?/2); a tokenAmount pointing at a different token falls back to raw rendering instead of mislabeling with the wrong symbol (clear-signing safety). Test asserts DAI amount with USDC metadata renders raw (formatter_test.exs)."
+delivered_by = "cursor"
+verified = true
 created_at = "2026-06-05"
 scored_at = "2026-06-05"
+done_at = "2026-06-05"
+shipped_in = "b54359e"
 
 [[task]]
 id = 78
 phase = 12
 bundle = "erc_standards"
-status = "pending"
+status = "done"
 title = "Audit-surfaced: ERC-7730 binding/descriptor hardening (domain match, EIP-712 type, malformed input)"
-assignee = "codex"
 scores = { d = 5, b = 5, u = 5 }
 domains = ["erc"]
+assignee = "codex"
 module = "Onchain.ERC7730.Binding"
 body = """
 Codex second-opinion surfaced a cluster of ERC-7730 binding/descriptor robustness gaps (Claude verified the first two against source):
@@ -545,18 +560,23 @@ Codex second-opinion surfaced a cluster of ERC-7730 binding/descriptor robustnes
 
 Corroborated: Codex (all) + Claude (items 1-2 verified in source). Filed by audit-review against commit a82235d on 2026-06-05; see .audit/a82235d-*.md.
 """
+implemented = "Onchain.ERC7730 binding/descriptor hardening: domain constraints fail :domain_mismatch when a constrained field is missing; EIP-712 formats match by primaryType/encodeType (not ABI selector) with field types derived from payload types/descriptor schemas; duplicate calldata format selectors return {:invalid_descriptor,{:duplicate_format_selector,_}}; Descriptor returns validation errors (not crashes) for non-string format, non-list excluded, non-map params, empty deployments (binding_test.exs, descriptor_test.exs)."
+delivered_by = "cursor"
+verified = true
 created_at = "2026-06-05"
 scored_at = "2026-06-05"
+done_at = "2026-06-05"
+shipped_in = "e8b084d"
 
 [[task]]
 id = 79
 phase = 9
 bundle = "account_abstraction"
-status = "pending"
+status = "done"
 title = "Audit-surfaced: ERC-4337 to_rpc_params validation can diverge from user_op_hash"
-assignee = "codex"
 scores = { d = 4, b = 5, u = 5 }
 domains = ["account_abstraction"]
+assignee = "codex"
 module = "Onchain.AA"
 body = """
 `Onchain.AA` derives the v0.7 packed `initCode`/`paymasterAndData` independently in two places — the hash path (`resolve_init_code`/`resolve_paymaster_and_data` in `pack/2`) and the RPC path (`maybe_put_factory_fields`/`maybe_put_paymaster_fields` in `rpc_map/3`). They handle invalid/malformed input inconsistently:
@@ -568,8 +588,13 @@ Valid inputs agree (verified by the reference-vector + derivation-equivalence te
 
 Codex-flagged; Claude verified the inconsistency in aa.ex. Filed by audit-review against commits 3e58c57/222f3c0 on 2026-06-05; see .audit/3e58c57-*.md.
 """
+implemented = "Onchain.AA v0.7 to_rpc_params and pack now single-source factory/paymaster fields through derive_v0_7_fields/1, so RPC params can no longer diverge from the hashed PackedUserOperation. Malformed factory/paymaster addresses and short init_code/paymaster_and_data surface identical {:invalid_*} errors from both user_op_hash and to_rpc_params (aa_test.exs)."
+delivered_by = "cursor"
+verified = true
 created_at = "2026-06-05"
 scored_at = "2026-06-05"
+done_at = "2026-06-05"
+shipped_in = "7a87ad0"
 
 [[task]]
 id = 80
