@@ -331,7 +331,7 @@ shipped_in = "2dfd0c6"
 id = 66
 phase = 12
 bundle = "rpc_codegen"
-status = "pending"
+status = "in_progress"
 title = "Tree-sitter scrape of Erigon Go source for trace_* / ots_* method enumeration"
 scores = { d = 5, b = 4, u = 3 }
 depends_on = [64]
