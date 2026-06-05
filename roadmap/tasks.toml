@@ -108,25 +108,28 @@ acceptance_criteria = [
 id = 29
 phase = 7
 bundle = "dex"
-status = "pending"
+status = "done"
 title = "MEV protection (private transaction submission)"
-module = "Onchain.MEV"
 scores = { d = 6, b = 8, u = 7 }
 markers = ["parallel"]
-assignee = "claude"
-model = "claude-sonnet-4-6"
-domains = ["dex", "rpc"]
-created_at = "2026-04-23"
-scored_at = "2026-04-23"
-body = """
-Private transaction submission via Flashbots-style APIs to prevent front-running on DEX trades. Lower priority until DEX trading is active (gated by real Task 28 consumer pressure). Include tests.
-"""
 acceptance_criteria = [
   "Onchain.MEV submits a transaction (or bundle) via a Flashbots-style private endpoint, returning the protect/bundle response",
   "Endpoint URL + auth are caller-configurable (no hardcoded RPC)",
   "Unit tests cover request shaping + error envelopes; integration test env-gated",
   "Public functions carry Descripex api() annotations + @spec",
 ]
+domains = ["dex", "rpc"]
+assignee = "claude"
+module = "Onchain.MEV"
+model = "claude-sonnet-4-6"
+body = """
+Private transaction submission via Flashbots-style APIs to prevent front-running on DEX trades. Lower priority until DEX trading is active (gated by real Task 28 consumer pressure). Include tests.
+"""
+implemented = "lib/onchain/mev.ex — Onchain.MEV.send_private_transaction/2 + send_bundle/2 via Flashbots-style JSON-RPC (eth_sendPrivateTransaction / eth_sendBundle) over Cartouche.RPC.send_rpc; caller-supplied :endpoint (no public-node fallback) + :headers auth. Unit tests (request shaping + error envelopes) + env-gated integration test."
+delivered_by = "claude-opus-4-8"
+created_at = "2026-04-23"
+scored_at = "2026-04-23"
+done_at = "2026-06-05"
 
 # ============================================================================
 # Phase 9 — Account Abstraction (ERC-4337)

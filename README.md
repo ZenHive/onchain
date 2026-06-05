@@ -102,6 +102,7 @@ balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
 |--------|---------|
 | `Onchain.Wallet` | Classify address (EOA/contract), native ETH balance |
 | `Onchain.Transfer` | Parse ERC-20/721/1155 Transfer events into normalized structs |
+| `Onchain.MEV` | MEV protection — submit signed txs/bundles to a Flashbots-style private relay (`send_private_transaction/2`, `send_bundle/2`); caller-supplied `:endpoint` (no public-node fallback) + `:headers` auth |
 | `Onchain.ENS` | ENS name resolution (forward, reverse, text records, contenthash) |
 | `Onchain.Subscription` | Real-time streaming via eth_subscribe (newHeads, pendingTx, logs) |
 | `Onchain.Subscription.Parser` | Pure parsing for eth_subscribe notification payloads (newHeads, pendingTx, logs) |

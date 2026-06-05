@@ -87,6 +87,7 @@ lib/onchain/
   sleuth.ex         # Compound-style deploy-as-call: ship bytecode in eth_call, decode returned bytes
   ens.ex            # ENS name resolution
   transfer.ex       # ERC-20 Transfer event parsing
+  mev.ex            # private tx submission via Flashbots-style relays (eth_sendPrivateTransaction / eth_sendBundle)
   subscription.ex   # real-time eth_subscribe (newHeads, pendingTx, logs)
   subscription/
     parser.ex       # pure parsing for subscription notification payloads
