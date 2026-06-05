@@ -36,7 +36,7 @@
 <!-- TASKS:BEGIN phase=9 -->
 | Task | Status | Notes |
 |------|--------|-------|
-| Task 69 `[P]` | ⬜ | 🎁 **account_abstraction** · *Onchain.AA* · ERC-4337 UserOperation construction, signing, and bundler RPC [D:7/B:8/U:7 → Eff:1.07] 📋 |
+| Task 69 `[P]` | ✅ | 🎁 **account_abstraction** · *Onchain.AA* · ERC-4337 UserOperation construction, signing, and bundler RPC [D:7/B:8/U:7 → Eff:1.07] 📋 |
 <!-- TASKS:END -->
 
 ---

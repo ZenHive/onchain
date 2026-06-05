@@ -99,6 +99,9 @@ lib/onchain/
     parser.ex       # pure parsing for subscription notification payloads
   dex/
     router.ex       # DEX swap routing — optimal path across Uniswap v2/v3 pools (pure-Elixir v2 math + on-chain QuoterV2 for v3); Onchain.DEX.Router + Pool/Route structs
+  aa.ex             # ERC-4337: UserOperation hashing/signing + bundler RPC (v0.6 + v0.7 EntryPoint)
+  aa/
+    user_operation.ex # ERC-4337 UserOperation struct (unpacked, version-agnostic)
 ```
 
 **Moved to onchain_aave:** `aave/` (math, contracts, pool, oracle, faucet, ui_pool_data_provider, types/)

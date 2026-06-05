@@ -114,6 +114,13 @@ balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
 |--------|---------|
 | `Onchain.DEX.Router` | Optimal swap-path routing across Uniswap v2/v3-style pools — pure-Elixir constant-product math for v2, on-chain QuoterV2 `eth_call` for v3 (`route/5`, `quote_pool/4`, `amount_out_v2/4`) |
 
+### Account Abstraction (ERC-4337)
+
+| Module | Purpose |
+|--------|---------|
+| `Onchain.AA` | ERC-4337 UserOperation hashing (`user_op_hash/4`), signing (`sign_user_operation/5` — `:eip191`/`:raw`), and bundler JSON-RPC (`send_user_operation/3`, `estimate_user_operation_gas/3`, `get_user_operation_by_hash/2`, `get_user_operation_receipt/2`, `supported_entry_points/1`). Handles both v0.6 and v0.7 EntryPoint wire formats; `user_op_hash` verified against viem reference vectors |
+| `Onchain.AA.UserOperation` | Version-agnostic UserOperation struct (numeric fields as integers, byte fields as `0x` hex, optional v0.7 `factory`/`paymaster` fields). Build with `Onchain.AA.new/1` |
+
 All public functions have `function!/1` bang variants that raise on error instead of returning `{:error, reason}` tuples.
 
 ## Real-time Subscriptions

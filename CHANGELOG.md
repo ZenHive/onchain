@@ -18,6 +18,16 @@ Completed roadmap tasks.
 - **Limitations (documented):** no split routing (single best path, amount not split across pools); v3 hops require `opts[:rpc_url]`.
 - **Tests:** `test/onchain/dex/router_test.exs` — 24 unit tests + doctests covering `amount_out_v2` formula/monotonicity/error paths, v2 direction resolution, direct vs multi-hop selection, `max_hops`, `:no_route`/`:identical_tokens`/`:invalid_amount`/invalid-address. `test/onchain/dex/router_integration_test.exs` (`@tag :integration`) routes live USDC→WETH through the real v2 pair, quotes the real v3 pool via QuoterV2, and asserts the router picks the max of the two.
 
+### Added — ERC-4337 Account Abstraction `Onchain.AA` (Task 69)
+
+- **`Onchain.AA`** — UserOperation construction, hashing, signing, and bundler JSON-RPC for both EntryPoint versions. v0.6 (`UserOperation`, EntryPoint `0x5FF1…2789`) and v0.7 (`PackedUserOperation`, EntryPoint `0x0000…a032`) differ on the wire: v0.7 packs `accountGasLimits = verificationGasLimit(high 128) ‖ callGasLimit(low 128)` and `gasFees = maxPriorityFeePerGas(high 128) ‖ maxFeePerGas(low 128)`, and derives `initCode`/`paymasterAndData` from the unpacked `factory*`/`paymaster*` fields. Version selected per-call via `:version` (`:v0_6` | `:v0_7`, default `:v0_7`).
+- **`Onchain.AA.UserOperation`** — version-agnostic struct (`@enforce_keys [:sender]`): integer numeric fields, `0x`-hex byte fields, plus optional v0.7 `factory`/`paymaster` fields.
+- **`user_op_hash/4`** — `keccak256(abi.encode(keccak256(packed), entryPoint, chainId))` matching `EntryPoint.getUserOpHash`, computed via primitive 32-byte-word concatenation. **Verified byte-exact against viem reference vectors** (v0.6 `0xe331…fcba`, v0.7 `0x1903…40d`).
+- **`sign_user_operation/5`** — signs the userOpHash; `:eip191` (default, canonical `SimpleAccount` `toEthSignedMessageHash`) or `:raw` scheme; returns the op with a 65-byte `r‖s‖v` (`v ∈ {27,28}`) signature.
+- **Bundler RPC wrappers** — `send_user_operation/3` (`eth_sendUserOperation`), `estimate_user_operation_gas/3` (`eth_estimateUserOperationGas`), `get_user_operation_by_hash/2`, `get_user_operation_receipt/2`, `supported_entry_points/1`; bundler URL via `:bundler_url` (or `:rpc_url`). `to_rpc_params/2` serializes a UserOperation to the version-specific JSON-RPC object (v0.7 stays unpacked).
+- **mix.exs** — added `:curvy` to dialyzer `plt_add_apps` (now called directly for digest-level recid recovery, same pattern as `:hieroglyph`).
+- **Tests:** `test/onchain/aa_test.exs` (31 unit tests: reference-vector hashing, factory/paymaster derivation equivalence, sign→recover round-trips for both versions and schemes, `new/1` validation, RPC param shapes); `test/onchain/aa_integration_test.exs` (env-gated `BUNDLER_RPC_URL`, read-only bundler calls).
+
 ### Added — `Onchain.RPC.batch/2` (Task 51)
 
 - **`Onchain.RPC.batch/2`** — JSON-RPC 2.0 array batching: send many `{method, params}` calls in one HTTP POST and return raw decoded results in request order (reorders out-of-order node responses by `id`). Empty list returns `{:ok, []}`; first per-item JSON-RPC error halts with `{:rpc_error, map}` (revert `:data` hex enrichment matches single-call path). Uses `Cartouche.RPC.get_body/3` for request bodies and the same `:rpc_url`/`:timeout` opts as other RPC helpers.
