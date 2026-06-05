@@ -4,7 +4,11 @@ defmodule Onchain.RPC do
 
   Provides a curated API for common Ethereum RPC methods with consistent
   error tuples and option handling. All functions accept `:rpc_url`,
-  `:timeout`, and `:block` options.
+  `:timeout`, and `:block` options. Single RPC calls also accept an opt-in
+  `:retry` policy. Omit `:retry` to preserve the underlying
+  `Cartouche.RPC.send_rpc/3` single-attempt behavior. Pass
+  `retry: [max_retries: 2, backoff_ms: 100]` to retry RPC/network errors before
+  returning the final normalized error.
 
   ## Error Format
 
@@ -104,6 +108,10 @@ defmodule Onchain.RPC do
   @content_type_json {"Content-Type", "application/json"}
   @default_ethereum_node "https://mainnet.infura.io"
   @default_finch_name CartoucheFinch
+  @default_retry_max_retries 2
+  @default_retry_backoff_ms 100
+  @no_retry_max_retries 0
+  @no_backoff_ms 0
 
   # --- eth_call ---
 
@@ -898,10 +906,60 @@ defmodule Onchain.RPC do
   @spec do_rpc(String.t(), list(), keyword()) :: {:ok, term()} | {:error, term()}
   defp do_rpc(method, params, opts) do
     :telemetry.span(@rpc_request_event, %{method: method}, fn ->
-      result = Helpers.do_rpc(method, params, opts)
+      result = do_rpc_with_retry(method, params, opts)
       {result, rpc_request_stop_metadata(method, result)}
     end)
   end
+
+  @spec do_rpc_with_retry(String.t(), list(), keyword()) :: {:ok, term()} | {:error, term()}
+  defp do_rpc_with_retry(method, params, opts) do
+    {retry, rpc_opts} = Keyword.pop(opts, :retry)
+
+    case normalize_retry_policy(retry) do
+      {:ok, policy} -> retry_rpc(method, params, rpc_opts, policy)
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @spec normalize_retry_policy(term()) ::
+          {:ok, %{max_retries: non_neg_integer(), backoff_ms: non_neg_integer()}} | {:error, term()}
+  defp normalize_retry_policy(retry) when retry in [nil, false] do
+    {:ok, %{max_retries: @no_retry_max_retries, backoff_ms: @default_retry_backoff_ms}}
+  end
+
+  defp normalize_retry_policy(policy) when is_list(policy) do
+    max_retries = Keyword.get(policy, :max_retries, @default_retry_max_retries)
+    backoff_ms = Keyword.get(policy, :backoff_ms, @default_retry_backoff_ms)
+
+    if valid_retry_policy?(max_retries, backoff_ms) do
+      {:ok, %{max_retries: max_retries, backoff_ms: backoff_ms}}
+    else
+      {:error, {:invalid_retry_policy, policy}}
+    end
+  end
+
+  defp normalize_retry_policy(policy), do: {:error, {:invalid_retry_policy, policy}}
+
+  @spec valid_retry_policy?(term(), term()) :: boolean()
+  defp valid_retry_policy?(max_retries, backoff_ms) do
+    is_integer(max_retries) and max_retries >= 0 and is_integer(backoff_ms) and backoff_ms >= 0
+  end
+
+  @spec retry_rpc(String.t(), list(), keyword(), map()) :: {:ok, term()} | {:error, term()}
+  defp retry_rpc(method, params, opts, %{max_retries: max_retries, backoff_ms: backoff_ms}) do
+    case Helpers.do_rpc(method, params, opts) do
+      {:error, _reason} when max_retries > @no_retry_max_retries ->
+        sleep_before_retry(backoff_ms)
+        retry_rpc(method, params, opts, %{max_retries: max_retries - 1, backoff_ms: backoff_ms})
+
+      result ->
+        result
+    end
+  end
+
+  @spec sleep_before_retry(non_neg_integer()) :: :ok
+  defp sleep_before_retry(@no_backoff_ms), do: :ok
+  defp sleep_before_retry(backoff_ms), do: Process.sleep(backoff_ms)
 
   defp rpc_request_stop_metadata(method, {:ok, _result}), do: %{method: method, status: :ok}
 
