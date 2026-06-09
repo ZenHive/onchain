@@ -19,7 +19,7 @@ Pick what you need — consumers who only need `eth_call` never compile Rust or 
 ```elixir
 def deps do
   [
-    {:onchain, "~> 0.6"},
+    {:onchain, "~> 0.7"},
     # Add if you need Aave:
     {:onchain_aave, "~> 0.1"},
     # Add if you need EVM simulation / Solidity parsing:

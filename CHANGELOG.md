@@ -6,6 +6,8 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+## v0.7.0 — Account abstraction, clear-signing, ENS wildcard/CCIP, DEX routing (2026-06-09)
+
 ### Added — Erigon trace/otterscan RPC method scrape (Task 66)
 
 - **`priv/specs/erigon-3578acb3a63d34ca746ff03c5350584c1a4eed0f/jsonrpc`** — vendored Erigon JSON-RPC Go source from `erigontech/erigon@3578acb3a63d34ca746ff03c5350584c1a4eed0f`. The task originally referenced the older `turbo/jsonrpc` path; this pin stores the same RPC package under `rpc/jsonrpc`.
@@ -22,6 +24,16 @@ Completed roadmap tasks.
 - **`Onchain.ERC7730.Binding`** — EIP-712 domain constraints now fail with `:domain_mismatch` when a constrained field is missing; EIP-712 formats match by `primaryType`/`encodeType` rather than ABI selector parsing; EIP-712 field types are derived from payload `types` or descriptor schemas for formatter coercion; duplicate calldata format selectors now return `{:invalid_descriptor, {:duplicate_format_selector, selector}}`.
 - **`Onchain.ERC7730.Descriptor`** — malformed display/deployment shapes now return validation errors instead of crashing or loading invalid data: non-string field `format`, non-list format `excluded`, non-map field `params`, and empty contract `deployments`.
 - **Tests:** binding and descriptor regression coverage for all audit-surfaced cases, including bare primary-type and nested `encodeType` EIP-712 format keys.
+
+### Fixed — ERC-7730 `tokenAmount` metadata token mismatch (Task 77, clear-signing safety)
+
+- **`Onchain.ERC7730.Formatter.from_metadata/2`** — `tokenAmount` formatting no longer pulls `decimals`/`ticker` from `metadata.token` without confirming it describes the *same* token. The metadata token is used only when its `address` is present **and** `Address.equal?/2` matches the resolved `tokenPath` address; otherwise it falls through to `:miss` (live `:rpc_url` / `:tokens` lookup). Prevents a clear-signing display from rendering an amount with the **wrong** token's symbol/decimals when the descriptor's `metadata.token` differs from the bound token address.
+- **Tests:** `test/onchain/erc7730/formatter_test.exs` covers the address-match, address-mismatch, and missing-address paths.
+
+### Fixed — ERC-4337 `to_rpc_params` / `user_op_hash` field consistency (Task 79)
+
+- **`Onchain.AA`** — `to_rpc_params/2` and `user_op_hash/4` now derive the v0.7 `factory`/`factoryData` and `paymaster`/`paymasterAndData` fields through shared `derive_factory_fields/1` + `derive_paymaster_fields/1` helpers, so the bundler JSON-RPC params can no longer diverge from the hashed `PackedUserOperation`. A `factory: nil` op carrying non-empty `init_code` (or `paymaster: nil` with non-empty `paymaster_and_data`) that can't be unpacked now fails with `{:error, {:invalid_field, :init_code | :paymaster_and_data, value}}` instead of silently producing RPC params inconsistent with the signed hash.
+- **Tests:** `test/onchain/aa_test.exs` adds divergence/validation coverage for the factory/paymaster derivation paths.
 
 ### Fixed — MEV block fields reject tags (Task 80)
 
