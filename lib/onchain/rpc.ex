@@ -38,7 +38,7 @@ defmodule Onchain.RPC do
   When `eth_call` reverts, the node returns a JSON-RPC error with `code: 3`. The
   inner map is widened with extra fields populated by cartouche
   (see `t:Cartouche.RPC.rpc_error/0`) plus `:data` mirrored by Onchain
-  (see `Onchain.RPC.Helpers.maybe_put_revert_data_hex/1`):
+  (enriched internally by the Onchain.RPC.Helpers module):
 
   - `:revert` — the raw revert-data binary (present on `code: 3` when the node
     returned a `data` field; absent if the node omitted it). Use this for

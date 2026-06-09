@@ -24,7 +24,7 @@ defmodule Onchain.ENS do
   - The ENSIP-15 *security* filters (confusable / script-mixing / NSM checks) —
     `normalize/1` applies the deterministic Unicode steps (NFC, case-fold,
     ignored/disallowed code points) but not the data-table-driven confusable
-    detection. See `Onchain.ENS.Normalize` for the scope boundary.
+    detection. See the internal Onchain.ENS.Normalize module for the scope boundary.
 
   ## Functions
 
