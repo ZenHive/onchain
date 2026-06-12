@@ -6,6 +6,12 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+## v0.8.0 — descripex 0.9 / cartouche 0.3 dependency line (2026-06-12)
+
+### Changed
+
+- Dependency floor moved to the descripex-0.9 / cartouche-0.3 line: `descripex ~> 0.7.0` → `~> 0.9`, `cartouche ~> 0.2.2` → `~> 0.3`. Both upstreams are additive for Onchain's call surface (descripex 0.8/0.9 fill JSON Schema from `@spec`/`type:`; the descripex 0.9.1 `safe_convert` robustness fix lets the manifest/`describe` build skip — rather than crash on — unconvertible spec types; cartouche 0.3.0 only relaxes its own descripex/hieroglyph floors). No Onchain code changes; compile clean under `--warnings-as-errors`, 769 offline tests green against the new chain. Minor bump because the public dependency floor changed.
+
 ## v0.7.0 — Account abstraction, clear-signing, ENS wildcard/CCIP, DEX routing (2026-06-09)
 
 ### Added — Erigon trace/otterscan RPC method scrape (Task 66)
