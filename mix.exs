@@ -47,7 +47,7 @@ defmodule Onchain.MixProject do
       {:zen_websocket, "~> 0.4.2"},
 
       # Dev/test tooling
-      {:tidewave, "~> 0.5.6", only: :dev},
+      {:tidewave, "~> 0.6", only: :dev},
       {:bandit, "~> 1.0", only: :dev},
       {:ex_unit_json, "~> 0.5.0", only: [:dev, :test], runtime: false},
       {:dialyzer_json, "~> 0.2.0", only: [:dev, :test], runtime: false},
