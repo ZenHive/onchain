@@ -176,7 +176,7 @@ defmodule Onchain.RPC.Helpers do
   @spec to_rpc_opts(keyword()) :: keyword()
   def to_rpc_opts(opts) do
     opts
-    |> Keyword.take([:rpc_url, :timeout, :errors, :retry])
+    |> Keyword.take([:rpc_url, :timeout, :errors, :retry, :req_options])
     |> Keyword.put_new(:timeout, @default_timeout_ms)
     |> rename_key(:rpc_url, :ethereum_node)
   end

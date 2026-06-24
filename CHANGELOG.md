@@ -4,6 +4,12 @@ Completed roadmap tasks.
 
 ---
 
+## [Unreleased]
+
+### Fixed — per-call `:req_options` transport override was silently dropped (audit-surfaced)
+
+- **`Onchain.RPC.Helpers.to_rpc_opts/1`** whitelisted only `[:rpc_url, :timeout, :errors, :retry]`, stripping `:req_options` before it reached the transport. As a result the per-call override documented as highest-precedence by both `Onchain.HTTP.req_options/3` (batch path) and `Cartouche.RPC.send_rpc/3` (single-call path) was ignored on **every** `Onchain.RPC` call — `RPC.batch(..., req_options: [plug: fun])` hit the network instead of the supplied plug. The 6 migrated transport-stub tests passed regardless because they inject via the app-config seam (`config :onchain, Onchain.RPC` / `config :cartouche, Cartouche.RPC`), which is unaffected. Added `:req_options` to the whitelist (threads through both paths) and a regression test exercising the per-call seam in isolation. Surfaced by the post-merge audit of Task 83 (Claude + Codex dual-reviewer).
+
 ## v0.10.0 — Req HTTP transport (cartouche 0.5.0 Finch→Req); differential suite tag fix (2026-06-24)
 
 ### Changed — HTTP transport migrated off cartouche's removed Finch seams to Req (cartouche 0.5.0, Task 83)

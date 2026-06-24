@@ -97,5 +97,25 @@ defmodule Onchain.RPC.BatchTest do
                  rpc_url: "http://stub.invalid"
                )
     end
+
+    test "honors a per-call :req_options transport override (regression: to_rpc_opts dropped it)" do
+      # Remove the app-config seam so the ONLY way the stub plug reaches Req is
+      # the per-call `req_options:` (Onchain.HTTP.req_options/3 level 4). Before
+      # the fix, to_rpc_opts/1 stripped :req_options and this hit the network.
+      previous = Application.get_env(:onchain, RPC)
+      Application.delete_env(:onchain, RPC)
+      on_exit(fn -> if previous, do: Application.put_env(:onchain, RPC, previous) end)
+
+      StubClient.queue_response(fn _body ->
+        [%{"id" => 1, "jsonrpc" => "2.0", "result" => "0x2a"}]
+      end)
+
+      assert {:ok, ["0x2a"]} =
+               RPC.batch(
+                 [{"eth_blockNumber", []}],
+                 rpc_url: "http://stub.invalid",
+                 req_options: [plug: &StubClient.call/1]
+               )
+    end
   end
 end
