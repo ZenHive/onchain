@@ -80,7 +80,6 @@ defmodule Onchain.ENS do
   @evm_coin_type_flag 0x80000000
 
   # HTTP plumbing for CCIP-Read gateway requests (mirrors Onchain.RPC.batch/2).
-  @default_finch_name CartoucheFinch
   @default_gateway_timeout_ms 30_000
   @content_type_json {"Content-Type", "application/json"}
 
@@ -775,26 +774,34 @@ defmodule Onchain.ENS do
     end
   end
 
-  # Finch is intentionally excluded from the PLT (`plt_add_deps: :apps_direct`);
-  # mirrors the Finch.build pattern in Onchain.RPC.batch/2.
-  @dialyzer {:nowarn_function, gateway_http: 4}
+  # Req transport (mirrors Onchain.RPC.batch/2). normalize_response/1 already maps
+  # 2xx -> {:ok, resp} and non-2xx -> {:error, resp}; retry: false keeps a single
+  # gateway attempt so try_gateways/3 controls fallback across the URL list.
   @spec gateway_http(:get | :post, String.t(), binary() | nil, keyword()) ::
           {:ok, String.t()} | {:error, term()}
   defp gateway_http(method, url, body, opts) do
     headers = if method == :post, do: [@content_type_json], else: []
-    request = Finch.build(method, url, headers, body)
-    client = Application.get_env(:cartouche, :client, Finch)
-    finch_name = Application.get_env(:cartouche, :finch_name, @default_finch_name)
     timeout = Keyword.get(opts, :timeout, @default_gateway_timeout_ms)
 
-    [receive_timeout: timeout]
-    |> then(&client.request(request, finch_name, &1))
-    |> Cartouche.HTTP.normalize_finch_result()
+    base = [
+      method: method,
+      url: url,
+      headers: headers,
+      body: body,
+      receive_timeout: timeout,
+      decode_body: false,
+      retry: false
+    ]
+
+    __MODULE__
+    |> Onchain.HTTP.req_options(base, opts)
+    |> Req.request()
+    |> Cartouche.HTTP.normalize_response()
     |> case do
-      {:ok, %Finch.Response{status: status, body: resp_body}} when status in 200..299 ->
+      {:ok, %Req.Response{body: resp_body}} ->
         parse_gateway_body(resp_body)
 
-      {:ok, %Finch.Response{status: status}} ->
+      {:error, %Req.Response{status: status}} ->
         {:error, {:gateway_status, status}}
 
       {:error, other} ->

@@ -4,25 +4,23 @@ defmodule Onchain.RPC.EstimateGasTest do
 
   alias Onchain.RPC
 
-  # Stub HTTP client returning canned Finch responses from a queued payload, and
-  # capturing the decoded JSON-RPC request so tests can assert on the serialized
-  # call object.
+  # Req function plug returning canned JSON-RPC responses from a queued payload,
+  # capturing the decoded request so tests can assert on the serialized call
+  # object. Injected via cartouche's `config :cartouche, Cartouche.RPC, plug:`.
   defmodule StubClient do
     @moduledoc false
 
     @stub_key :onchain_rpc_estimate_gas_stub_response
     @request_key :onchain_rpc_estimate_gas_last_request
 
-    @spec request(Finch.Request.t(), atom(), keyword()) ::
-            {:ok, Finch.Response.t()} | {:error, term()}
-    def request(%Finch.Request{body: encoded_body}, _name, _opts) do
-      decoded = Jason.decode!(IO.iodata_to_binary(encoded_body))
+    def call(conn) do
+      decoded = conn |> Req.Test.raw_body() |> IO.iodata_to_binary() |> Jason.decode!()
       Process.put(@request_key, decoded)
 
       case Process.get(@stub_key) do
-        nil -> {:error, :stub_not_configured}
-        {:result, result} -> json_response(decoded, %{"result" => result})
-        {:error, payload} -> json_response(decoded, %{"error" => payload})
+        nil -> raise "StubClient: no response queued"
+        {:result, result} -> json(conn, decoded, %{"result" => result})
+        {:error, payload} -> json(conn, decoded, %{"error" => payload})
       end
     end
 
@@ -41,20 +39,19 @@ defmodule Onchain.RPC.EstimateGasTest do
     @spec last_params() :: list()
     def last_params, do: Process.get(@request_key)["params"]
 
-    defp json_response(%{"id" => id}, extra) do
-      response = Map.merge(%{"jsonrpc" => "2.0", "id" => id}, extra)
-      {:ok, %Finch.Response{status: 200, body: Jason.encode!(response), headers: []}}
+    defp json(conn, %{"id" => id}, extra) do
+      Req.Test.json(conn, Map.merge(%{"jsonrpc" => "2.0", "id" => id}, extra))
     end
   end
 
   setup_all do
-    previous_client = Application.get_env(:cartouche, :client)
-    Application.put_env(:cartouche, :client, StubClient)
+    previous = Application.get_env(:cartouche, Cartouche.RPC)
+    Application.put_env(:cartouche, Cartouche.RPC, plug: &StubClient.call/1)
 
     on_exit(fn ->
-      case previous_client do
-        nil -> Application.delete_env(:cartouche, :client)
-        client -> Application.put_env(:cartouche, :client, client)
+      case previous do
+        nil -> Application.delete_env(:cartouche, Cartouche.RPC)
+        config -> Application.put_env(:cartouche, Cartouche.RPC, config)
       end
     end)
 

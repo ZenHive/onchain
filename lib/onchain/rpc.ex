@@ -119,7 +119,6 @@ defmodule Onchain.RPC do
   @batch_method "batch"
   @content_type_json {"Content-Type", "application/json"}
   @default_ethereum_node "https://mainnet.infura.io"
-  @default_finch_name CartoucheFinch
   @default_retry_max_retries 2
   @default_retry_backoff_ms 100
   @no_retry_max_retries 0
@@ -1027,22 +1026,31 @@ defmodule Onchain.RPC do
     end
   end
 
-  # Finch is intentionally excluded from the PLT (`plt_add_deps: :apps_direct` in mix.exs);
-  # cartouche uses the same Finch.build pattern in Cartouche.RPC.send_rpc/3.
-  @dialyzer {:nowarn_function, send_batch_request: 2}
+  # Single-call RPC flows through Cartouche.RPC.send_rpc/3 (cartouche's Req
+  # transport); only this batch POST builds its own request. retry: false keeps
+  # the no-retry contract (onchain's opt-in retry wraps the whole call), and the
+  # :onchain transport seam (Onchain.HTTP.req_options/3) replaces the removed
+  # :cartouche, :client / :finch_name config.
   @spec send_batch_request(binary(), keyword()) :: {:ok, binary()} | {:error, term()}
   defp send_batch_request(encoded_body, opts) do
-    request = Finch.build(:post, ethereum_node(opts), [@content_type_json], encoded_body, [])
-    client = Application.get_env(:cartouche, :client, Finch)
-    finch_name = Application.get_env(:cartouche, :finch_name, @default_finch_name)
+    base = [
+      method: :post,
+      url: ethereum_node(opts),
+      headers: [@content_type_json],
+      body: encoded_body,
+      receive_timeout: Keyword.fetch!(opts, :timeout),
+      decode_body: false,
+      retry: false
+    ]
 
-    [receive_timeout: Keyword.fetch!(opts, :timeout)]
-    |> then(&client.request(request, finch_name, &1))
-    |> Cartouche.HTTP.normalize_finch_result()
+    __MODULE__
+    |> Onchain.HTTP.req_options(base, opts)
+    |> Req.request()
+    |> Cartouche.HTTP.normalize_response()
     |> case do
-      {:ok, %Finch.Response{body: body}} -> {:ok, body}
-      {:error, %Finch.Response{body: body}} -> {:error, {:rpc_error, %{message: body}}}
-      {:error, other} -> {:error, {:rpc_error, %{message: inspect(other)}}}
+      {:ok, %Req.Response{body: body}} -> {:ok, body}
+      {:error, %Req.Response{body: body}} -> {:error, {:rpc_error, %{message: body}}}
+      {:error, message} -> {:error, {:rpc_error, %{message: message}}}
     end
   end
 

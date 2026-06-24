@@ -675,3 +675,40 @@ verified = true
 created_at = "2026-06-24"
 scored_at = "2026-06-24"
 done_at = "2026-06-24"
+
+[[task]]
+id = 83
+phase = 12
+bundle = "rpc_composition"
+status = "done"
+title = "Migrate HTTP transport off cartouche's removed Finch seams (cartouche 0.5.0)"
+scores = { d = 4, b = 8, u = 8 }
+acceptance_criteria = ["mix.exs requires cartouche ~> 0.5 and the suite compiles", "Onchain.RPC and Onchain.ENS no longer read :cartouche, :client / :finch_name and no longer dispatch against CartoucheFinch", "No call to the removed Cartouche.HTTP.normalize_finch_result/1 remains (use the surviving normalize_response/1) — onchain compiles clean against cartouche 0.5.0", "A live-node integration RPC call succeeds (no missing-pool crash)", "onchain exposes its own transport-stub seam; the 6 listed test files stub via that seam and pass", "Full offline suite green; dialyzer 0 warnings (drop the now-moot @dialyzer nowarn_function Finch suppressions in rpc.ex/ens.ex)"]
+out_of_scope = ["onchain_tempo's builder_estimate_test.exs :cartouche,:client stub — tracked in onchain_tempo's own roadmap, depends on this task shipping first", "Any change to cartouche itself (already shipped in 0.5.0)"]
+domains = ["rpc"]
+assignee = "cursor"
+module = "Onchain.RPC"
+model = "composer-2.5"
+body = """
+cartouche 0.5.0 swaps its HTTP transport from Finch to Req and, as part of that, **stops starting the `CartoucheFinch` connection pool** and removes the `config :cartouche, :client | :finch_name | :start_finch` seams. onchain has no Finch supervision of its own — `Onchain.RPC` (lib/onchain/rpc.ex, the `Finch.build/4` + `client.request(.., finch_name, ..)` path around the batch/single-request helper) and `Onchain.ENS` (lib/onchain/ens.ex, same pattern) both read `Application.get_env(:cartouche, :client, Finch)` / `Application.get_env(:cartouche, :finch_name, CartoucheFinch)` and dispatch against the now-unstarted `CartoucheFinch` pool. After the cartouche bump every onchain RPC and ENS call **raises at runtime** (no such pool).
+
+Migrate onchain's transport off the removed seams. Preferred: move `Onchain.RPC` and `Onchain.ENS` to Req, mirroring `Cartouche.RPC.send_rpc/3`'s new approach (`Req.request/1` + the `Cartouche.HTTP.req_options/3`-style precedence merge, transport-error mapping). Alternatively, start and supervise onchain's own Finch pool from an `Onchain.Application` and stop reading cartouche's config. Either way, define onchain's own transport-override seam (a `config :onchain, :req_options` or per-module key) so consumers and tests stop depending on `:cartouche, :client`.
+
+Bump `{:cartouche, "~> 0.5"}` in mix.exs. Update the test files that stub the old `:cartouche, :client` seam to onchain's new mechanism (Req.Test / function plug if Req, or the new onchain seam): onchain/test/onchain/signer_gas_estimate_test.exs, rpc_batch_test.exs, rpc_revert_test.exs, rpc_retry_test.exs, rpc_telemetry_test.exs, rpc_estimate_gas_test.exs.
+
+REFINED SCOPE (2026-06-24, after reading cartouche 0.5.0 + onchain source) — three corrections to the above:
+
+1. Production blast radius is exactly TWO functions, not "all RPC/ENS calls". The single-call path (`do_rpc` -> `Onchain.RPC.Helpers.do_rpc/3`, helpers.ex:29) ALREADY delegates to `Cartouche.RPC.send_rpc/3`, which is Req-based in 0.5.0 — single calls are production-safe after the bump with no code change. Only these drive Finch directly and must be rewritten to Req: `Onchain.RPC.send_batch_request/2` (rpc.ex:1033-1047, the JSON-RPC array-batch POST) and `Onchain.ENS.gateway_http/4` (ens.ex:783-803, the CCIP-read gateway).
+
+2. Extra HARD COMPILE break, independent of the runtime-pool issue: both functions call `Cartouche.HTTP.normalize_finch_result/1`, but cartouche 0.5.0's `Cartouche.HTTP` exposes only `normalize_response/1` + `req_options/3` — `normalize_finch_result/1` is GONE. onchain will fail to compile on bump until both callsites move to `normalize_response/1` (or onchain's own normalizer). Also drop the two `@dialyzer {:nowarn_function, ...}` Finch suppressions (rpc.ex:1032, ens.ex:780).
+
+3. The test-seam break is BROADER than the 2-function lib change. All 6 test files stub via a Finch-shaped StubClient + `Application.put_env(:cartouche, :client, ...)`. After the bump cartouche's `send_rpc` no longer reads `:cartouche, :client`, so even the SINGLE-CALL tests (rpc_revert, rpc_retry, rpc_estimate_gas, rpc_telemetry, signer_gas_estimate) break via a dead stub seam despite their production path being unchanged. All 6 migrate regardless of which lib path they exercise.
+
+Concrete impl: add `Onchain.HTTP.req_options/3` mirroring `Cartouche.HTTP.req_options/3` (merge base <- `config :onchain, <owner>` <- `config :onchain, :req_options` <- per-call `:req_options`); reuse the still-public `Cartouche.HTTP.normalize_response/1`. Rewrite the 2 functions to `Req.request/1` (`method: :post, decode_body: false, retry: false`). Migrate the 6 tests to the Req.Test plug seam — copy cartouche's proven pattern verbatim from cartouche/test/filter_test.exs:16,38,136 and sleuth_test.exs: a plug fn doing `conn |> Req.Test.raw_body() |> Jason.decode!()` then `Req.Test.json(conn, resp)`, injected via `req_options: [plug: &StubClient.call/1]`.
+"""
+implemented = "Bumped cartouche ~> 0.5. Rewrote Onchain.RPC.send_batch_request/2 + Onchain.ENS.gateway_http/4 to Req.request/1 (decode_body: false, retry: false) via new Onchain.HTTP.req_options/3 (:onchain transport seam) + Cartouche.HTTP.normalize_response/1. Dropped @default_finch_name, :cartouche,:client/:finch_name reads, normalize_finch_result calls, and the Finch @dialyzer nowarn suppressions. Migrated 6 stub tests to Req.Test plugs via owner-config seams; added {:plug, only: [:dev,:test]}. Offline 808 pass, RPC integration 30/30, dialyzer 0."
+delivered_by = "claude-opus-4-8"
+verified = true
+created_at = "2026-06-24"
+scored_at = "2026-06-24"
+done_at = "2026-06-24"

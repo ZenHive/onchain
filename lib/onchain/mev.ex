@@ -163,8 +163,8 @@ defmodule Onchain.MEV do
   # --- RPC dispatch ---
 
   # Cartouche.RPC.send_rpc/3 narrowly types errors, but runtime transport errors
-  # (Finch timeouts, connection refused) surface non-map values. Mirror the
-  # suppression used in Onchain.RPC.Helpers.do_rpc/3.
+  # (Req transport failures — timeouts, connection refused) surface non-map
+  # values. Mirror the suppression used in Onchain.RPC.Helpers.do_rpc/3.
   @dialyzer {:no_match, do_mev_rpc: 3}
   @spec do_mev_rpc(String.t(), [map()], keyword()) :: {:ok, term()} | {:error, term()}
   defp do_mev_rpc(method, params, opts) do

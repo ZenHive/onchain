@@ -6,27 +6,31 @@ defmodule Onchain.RPC.RetryTest do
   @stub_rpc_url "http://stub.invalid"
   @no_backoff_ms 0
 
+  # Req function plug driven by a queue of responses in the calling test's process
+  # dictionary. A `{:transport_error, reason}` entry simulates a connection-level
+  # failure (Req.Test.transport_error/2 -> %Req.TransportError{}); a 1-arity fun
+  # builds a JSON-RPC response map from the decoded request body. Injected via
+  # cartouche's `config :cartouche, Cartouche.RPC, plug:` single-call seam.
   defmodule StubClient do
     @moduledoc false
 
     @stub_key :onchain_rpc_retry_stub_responses
 
-    @type stub_response :: {:ok, Finch.Response.t()} | {:error, term()} | (map() -> {:ok, Finch.Response.t()})
+    @type stub_response :: {:transport_error, term()} | (map() -> map())
 
-    @spec request(Finch.Request.t(), atom(), keyword()) ::
-            {:ok, Finch.Response.t()} | {:error, term()}
-    def request(%Finch.Request{body: encoded_body}, _name, _opts) do
+    def call(conn) do
+      body = conn |> Req.Test.raw_body() |> IO.iodata_to_binary() |> Jason.decode!()
+
       case Process.get(@stub_key) do
         nil ->
-          {:error, :stub_not_configured}
+          raise "StubClient: no responses queued"
 
         [] ->
-          {:error, :stub_exhausted}
+          raise "StubClient: responses exhausted"
 
         [response | remaining] ->
           Process.put(@stub_key, remaining)
-          body = encoded_body |> IO.iodata_to_binary() |> Jason.decode!()
-          evaluate_response(response, body)
+          emit(conn, response, body)
       end
     end
 
@@ -36,19 +40,21 @@ defmodule Onchain.RPC.RetryTest do
       :ok
     end
 
-    @spec evaluate_response(stub_response(), map()) :: {:ok, Finch.Response.t()} | {:error, term()}
-    defp evaluate_response(response_fun, body) when is_function(response_fun, 1), do: response_fun.(body)
-    defp evaluate_response(response, _body), do: response
+    defp emit(conn, {:transport_error, reason}, _body), do: Req.Test.transport_error(conn, reason)
+
+    defp emit(conn, response_fun, body) when is_function(response_fun, 1) do
+      Req.Test.json(conn, response_fun.(body))
+    end
   end
 
   setup do
-    previous_client = Application.get_env(:cartouche, :client)
-    Application.put_env(:cartouche, :client, StubClient)
+    previous = Application.get_env(:cartouche, Cartouche.RPC)
+    Application.put_env(:cartouche, Cartouche.RPC, plug: &StubClient.call/1)
 
     on_exit(fn ->
-      case previous_client do
-        nil -> Application.delete_env(:cartouche, :client)
-        client -> Application.put_env(:cartouche, :client, client)
+      case previous do
+        nil -> Application.delete_env(:cartouche, Cartouche.RPC)
+        config -> Application.put_env(:cartouche, Cartouche.RPC, config)
       end
     end)
 
@@ -57,7 +63,7 @@ defmodule Onchain.RPC.RetryTest do
 
   describe "retry policy" do
     test "does not retry by default" do
-      StubClient.queue_responses([{:error, :closed}, rpc_success("0x1")])
+      StubClient.queue_responses([{:transport_error, :closed}, rpc_success("0x1")])
 
       assert_rpc_error_message(
         RPC.call("eth_blockNumber", [], rpc_url: @stub_rpc_url),
@@ -66,7 +72,7 @@ defmodule Onchain.RPC.RetryTest do
     end
 
     test "retries opted-in RPC errors and returns a later success" do
-      StubClient.queue_responses([{:error, :closed}, rpc_success("0x2a")])
+      StubClient.queue_responses([{:transport_error, :closed}, rpc_success("0x2a")])
 
       assert {:ok, "0x2a"} =
                RPC.call("eth_blockNumber", [],
@@ -76,7 +82,7 @@ defmodule Onchain.RPC.RetryTest do
     end
 
     test "returns the final RPC error after retries are exhausted" do
-      StubClient.queue_responses([{:error, :closed}, {:error, :timeout}])
+      StubClient.queue_responses([{:transport_error, :closed}, {:transport_error, :timeout}])
 
       "eth_blockNumber"
       |> RPC.call([],
@@ -103,29 +109,12 @@ defmodule Onchain.RPC.RetryTest do
   end
 
   defp rpc_success(result) do
-    fn body ->
-      {:ok,
-       %Finch.Response{
-         status: 200,
-         headers: [],
-         body: Jason.encode!(%{"id" => body["id"], "jsonrpc" => "2.0", "result" => result})
-       }}
-    end
+    fn body -> %{"id" => body["id"], "jsonrpc" => "2.0", "result" => result} end
   end
 
   defp rpc_error_response(code, message) do
     fn body ->
-      {:ok,
-       %Finch.Response{
-         status: 200,
-         headers: [],
-         body:
-           Jason.encode!(%{
-             "id" => body["id"],
-             "jsonrpc" => "2.0",
-             "error" => %{"code" => code, "message" => message}
-           })
-       }}
+      %{"id" => body["id"], "jsonrpc" => "2.0", "error" => %{"code" => code, "message" => message}}
     end
   end
 end

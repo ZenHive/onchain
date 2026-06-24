@@ -665,6 +665,7 @@ This repo is part of a multi-library portfolio. The boundary is **ephemeral vs d
 ```
 lib/onchain/
   hex.ex            # hex<->binary, hex<->integer, 0x prefix
+  http.ex           # req_options/3 — onchain's Req transport-override seam (:onchain app config) for batch + CCIP gateway
   address.ex        # validate, checksum (EIP-55), normalize
   abi.ex            # encode_call/2, decode_response/2, decode_types/2, decode_call/3, decode_error/2
   decimal.ex        # to_decimal/2, to_basis_points/1, div_pow10/2

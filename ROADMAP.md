@@ -78,6 +78,7 @@
 | Task 76 | ✅ | 🎁 **rpc_codegen** · *Onchain.RPC* · Audit-surfaced: Task 63 defrpc macro is unused — wrappers still hand-written [D:4/B:5/U:5 → Eff:1.25] 📋 |
 | Task 77 | ✅ | 🎁 **erc_standards** · *Onchain.ERC7730.Formatter* · Audit-surfaced: ERC-7730 tokenAmount renders wrong token symbol (clear-signing safety) [D:4/B:7/U:6 → Eff:1.62] 🚀 |
 | Task 78 | ✅ | 🎁 **erc_standards** · *Onchain.ERC7730.Binding* · Audit-surfaced: ERC-7730 binding/descriptor hardening (domain match, EIP-712 type, malformed input) [D:5/B:5/U:5 → Eff:1.0] 📋 |
+| Task 83 | ✅ | 🎁 **rpc_composition** · *Onchain.RPC* · Migrate HTTP transport off cartouche's removed Finch seams (cartouche 0.5.0) [D:4/B:8/U:8 → Eff:2.0] 🎯 |
 <!-- TASKS:END -->
 
 ---

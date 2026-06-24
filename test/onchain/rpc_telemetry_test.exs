@@ -15,7 +15,8 @@ defmodule Onchain.RPC.TelemetryTest do
   defmodule RaisingClient do
     @moduledoc false
 
-    def request(_request, _name, _opts), do: raise("test RPC client failure")
+    # Req function plug that raises, so the RPC span emits an :exception event.
+    def call(_conn), do: raise("test RPC client failure")
   end
 
   setup do
@@ -55,14 +56,13 @@ defmodule Onchain.RPC.TelemetryTest do
 
     test "emits exception event and preserves the raised exception" do
       method = "eth_blockNumber"
-      previous_client = Application.get_env(:cartouche, :client)
-      Application.put_env(:cartouche, :client, RaisingClient)
+      previous = Application.get_env(:cartouche, Cartouche.RPC)
+      Application.put_env(:cartouche, Cartouche.RPC, plug: &RaisingClient.call/1)
 
       on_exit(fn ->
-        if previous_client do
-          Application.put_env(:cartouche, :client, previous_client)
-        else
-          Application.delete_env(:cartouche, :client)
+        case previous do
+          nil -> Application.delete_env(:cartouche, Cartouche.RPC)
+          config -> Application.put_env(:cartouche, Cartouche.RPC, config)
         end
       end)
 

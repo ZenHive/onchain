@@ -38,15 +38,19 @@ defmodule Onchain.MixProject do
 
   defp deps do
     [
-      {:cartouche, "~> 0.4.1"},
+      {:cartouche, "~> 0.5"},
       {:decimal, "~> 3.1.1"},
       {:descripex, "~> 0.9"},
       {:jason, "~> 1.4"},
       {:nimble_options, "~> 1.0"},
+      {:req, "~> 0.6"},
       {:telemetry, "~> 1.4"},
       {:zen_websocket, "~> 0.4.2"},
 
       # Dev/test tooling
+      # Req.Test plug-based transport stubbing (req's :plug is optional);
+      # tidewave (dev) also needs plug, so it spans :dev and :test.
+      {:plug, "~> 1.17", only: [:dev, :test]},
       {:tidewave, "~> 0.6", only: :dev},
       {:bandit, "~> 1.0", only: :dev},
       {:ex_unit_json, "~> 0.6.0", only: [:dev, :test], runtime: false},

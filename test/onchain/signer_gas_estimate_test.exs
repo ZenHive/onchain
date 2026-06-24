@@ -11,8 +11,9 @@ defmodule Onchain.Signer.GasEstimateTest do
   @dummy_to "0x" <> String.duplicate("ab", 20)
   @fake_tx_hash "0x" <> String.duplicate("cd", 32)
 
-  # Stub HTTP client that dispatches on the JSON-RPC method, pops responses from a
+  # Req function plug that dispatches on the JSON-RPC method, pops responses from a
   # per-process queue, records the methods seen, and captures the raw tx broadcast.
+  # Injected via cartouche's `config :cartouche, Cartouche.RPC, plug:` single-call seam.
   defmodule StubClient do
     @moduledoc false
 
@@ -21,11 +22,9 @@ defmodule Onchain.Signer.GasEstimateTest do
     @raw_tx_key :onchain_signer_gas_estimate_raw_tx
     @estimate_call_key :onchain_signer_gas_estimate_call
 
-    @spec request(Finch.Request.t(), atom(), keyword()) ::
-            {:ok, Finch.Response.t()} | {:error, term()}
-    def request(%Finch.Request{body: encoded_body}, _name, _opts) do
+    def call(conn) do
       %{"id" => id, "method" => method, "params" => params} =
-        encoded_body |> IO.iodata_to_binary() |> Jason.decode!()
+        conn |> Req.Test.raw_body() |> IO.iodata_to_binary() |> Jason.decode!()
 
       Process.put(@methods_key, Process.get(@methods_key, []) ++ [method])
       if method == "eth_sendRawTransaction", do: Process.put(@raw_tx_key, hd(params))
@@ -37,8 +36,7 @@ defmodule Onchain.Signer.GasEstimateTest do
           result -> %{"result" => result}
         end
 
-      response = Map.merge(%{"jsonrpc" => "2.0", "id" => id}, extra)
-      {:ok, %Finch.Response{status: 200, body: Jason.encode!(response), headers: []}}
+      Req.Test.json(conn, Map.merge(%{"jsonrpc" => "2.0", "id" => id}, extra))
     end
 
     @spec queue(keyword()) :: :ok
@@ -73,13 +71,13 @@ defmodule Onchain.Signer.GasEstimateTest do
   end
 
   setup_all do
-    previous_client = Application.get_env(:cartouche, :client)
-    Application.put_env(:cartouche, :client, StubClient)
+    previous = Application.get_env(:cartouche, Cartouche.RPC)
+    Application.put_env(:cartouche, Cartouche.RPC, plug: &StubClient.call/1)
 
     on_exit(fn ->
-      case previous_client do
-        nil -> Application.delete_env(:cartouche, :client)
-        client -> Application.put_env(:cartouche, :client, client)
+      case previous do
+        nil -> Application.delete_env(:cartouche, Cartouche.RPC)
+        config -> Application.put_env(:cartouche, Cartouche.RPC, config)
       end
     end)
 

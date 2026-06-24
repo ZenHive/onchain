@@ -3,22 +3,23 @@ defmodule Onchain.RPC.BatchTest do
 
   alias Onchain.RPC
 
+  # Req function plug (`fun(conn) -> conn`). It runs inside the test process that
+  # issues the batch request, so Process.get here reads that process's queued
+  # response. Injected via `config :onchain, Onchain.RPC, plug:` — onchain's own
+  # transport seam (Onchain.HTTP.req_options/3), not cartouche's removed one.
   defmodule StubClient do
     @moduledoc false
 
     @stub_key :onchain_rpc_batch_stub_response
 
-    @spec request(Finch.Request.t(), atom(), keyword()) ::
-            {:ok, Finch.Response.t()} | {:error, term()}
-    def request(%Finch.Request{body: encoded_body}, _name, _opts) do
+    def call(conn) do
       case Process.get(@stub_key) do
         nil ->
-          {:error, :stub_not_configured}
+          raise "StubClient: no response queued"
 
         response_fun when is_function(response_fun, 1) ->
-          body = encoded_body |> IO.iodata_to_binary() |> Jason.decode!()
-
-          {:ok, %Finch.Response{status: 200, body: Jason.encode!(response_fun.(body)), headers: []}}
+          body = conn |> Req.Test.raw_body() |> IO.iodata_to_binary() |> Jason.decode!()
+          Req.Test.json(conn, response_fun.(body))
       end
     end
 
@@ -30,13 +31,13 @@ defmodule Onchain.RPC.BatchTest do
   end
 
   setup_all do
-    previous_client = Application.get_env(:cartouche, :client)
-    Application.put_env(:cartouche, :client, StubClient)
+    previous = Application.get_env(:onchain, RPC)
+    Application.put_env(:onchain, RPC, plug: &StubClient.call/1)
 
     on_exit(fn ->
-      case previous_client do
-        nil -> Application.delete_env(:cartouche, :client)
-        client -> Application.put_env(:cartouche, :client, client)
+      case previous do
+        nil -> Application.delete_env(:onchain, RPC)
+        config -> Application.put_env(:onchain, RPC, config)
       end
     end)
 

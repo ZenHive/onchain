@@ -4,28 +4,26 @@ defmodule Onchain.RPC.RevertTest do
 
   alias Onchain.RPC
 
-  # The stub HTTP client below returns canned Finch responses based on a
-  # response queued in the calling test's process dictionary. When no response
-  # is queued it returns a benign error so any other code paths that happen to
-  # hit it during the brief env-mutation window still receive a recognisable
-  # `{:error, _}` from cartouche.
+  # Req function plug returning canned JSON-RPC responses queued in the calling
+  # test's process dictionary. Single-call RPC flows through Cartouche.RPC, so the
+  # stub is injected via cartouche's `config :cartouche, Cartouche.RPC, plug:` seam.
   defmodule StubClient do
     @moduledoc false
 
     @stub_key :onchain_rpc_revert_stub_response
 
-    @spec request(Finch.Request.t(), atom(), keyword()) ::
-            {:ok, Finch.Response.t()} | {:error, term()}
-    def request(%Finch.Request{body: encoded_body}, _name, _opts) do
+    def call(conn) do
+      %{"id" => id} = conn |> Req.Test.raw_body() |> IO.iodata_to_binary() |> Jason.decode!()
+
       case Process.get(@stub_key) do
         nil ->
-          {:error, :stub_not_configured}
+          raise "StubClient: no response queued"
 
         {:revert, %{} = error_payload} ->
-          json_response(encoded_body, %{"error" => Map.put_new(error_payload, "message", "execution reverted")})
+          json(conn, id, %{"error" => Map.put_new(error_payload, "message", "execution reverted")})
 
         {:result, result} ->
-          json_response(encoded_body, %{"result" => result})
+          json(conn, id, %{"result" => result})
       end
     end
 
@@ -41,21 +39,19 @@ defmodule Onchain.RPC.RevertTest do
       :ok
     end
 
-    defp json_response(encoded_body, extra) do
-      %{"id" => id} = Jason.decode!(IO.iodata_to_binary(encoded_body))
-      response = Map.merge(%{"jsonrpc" => "2.0", "id" => id}, extra)
-      {:ok, %Finch.Response{status: 200, body: Jason.encode!(response), headers: []}}
+    defp json(conn, id, extra) do
+      Req.Test.json(conn, Map.merge(%{"jsonrpc" => "2.0", "id" => id}, extra))
     end
   end
 
   setup_all do
-    previous_client = Application.get_env(:cartouche, :client)
-    Application.put_env(:cartouche, :client, StubClient)
+    previous = Application.get_env(:cartouche, Cartouche.RPC)
+    Application.put_env(:cartouche, Cartouche.RPC, plug: &StubClient.call/1)
 
     on_exit(fn ->
-      case previous_client do
-        nil -> Application.delete_env(:cartouche, :client)
-        client -> Application.put_env(:cartouche, :client, client)
+      case previous do
+        nil -> Application.delete_env(:cartouche, Cartouche.RPC)
+        config -> Application.put_env(:cartouche, Cartouche.RPC, config)
       end
     end)
 
