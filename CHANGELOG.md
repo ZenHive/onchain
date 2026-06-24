@@ -4,7 +4,7 @@ Completed roadmap tasks.
 
 ---
 
-## [Unreleased]
+## v0.10.0 — Req HTTP transport (cartouche 0.5.0 Finch→Req); differential suite tag fix (2026-06-24)
 
 ### Changed — HTTP transport migrated off cartouche's removed Finch seams to Req (cartouche 0.5.0, Task 83)
 
