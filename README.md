@@ -67,6 +67,16 @@ balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
 {:ok, history} = Onchain.RPC.fee_history(20, reward_percentiles: [50])
 {:ok, {base_fee, max_priority, max_fee}} = Onchain.Fees.suggest_fees(history)
 
+# Gas-limit estimation (eth_estimateGas) over a tx-params map
+{:ok, gas} = Onchain.RPC.eth_estimate_gas(%{from: from, to: token, data: calldata})
+
+# send_transaction auto-estimates the gas limit (with 1.25x headroom) when :gas_limit
+# is omitted — so stale hardcoded limits can't OOG-revert. Pass :gas_limit to opt out.
+{:ok, tx_hash} =
+  Onchain.ERC20.transfer(token, recipient, amount,
+    private_key: key, nonce: nonce, chain_id: 1, rpc_url: url
+  )
+
 # Decode a Solidity 0.8.4+ custom-error revert against a list of candidate signatures
 {:ok, %{error: "OwnableUnauthorizedAccount", args: [_addr]}} =
   Onchain.ABI.decode_error(
@@ -89,7 +99,7 @@ balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
 | `Onchain.Address` | Address validation, EIP-55 checksum, normalization |
 | `Onchain.Decimal` | Decimal precision helpers (to_decimal, div_pow10, to_basis_points) |
 | `Onchain.Fees` | EIP-1559 fee recommendation (`suggest_fees/2`) over `Cartouche.FeeHistory.t()` — pure function, returns `{base_fee, max_priority, max_fee}` |
-| `Onchain.RPC` | Ethereum JSON-RPC wrapper (eth_call, eth_getLogs, receipts, nonces, balances, block_number, chain_id, **decoded** `get_block_by_number`, `get_transaction_by_hash`, eth_get_code, eth_send_raw_transaction, syncing, fee_history, get_proof; `call/3` for any other method; `batch/2` for JSON-RPC array batching). Opt-in `retry: [max_retries: n, backoff_ms: ms]` on single-call paths retries transport failures only (default: no retry). `get_block_by_number/2` returns atom-keyed maps (quantities as integers — aligned with `get_transaction_by_hash/2`). `eth_get_logs/2` accepts atom keys or canonical camelCase string aliases (`"fromBlock"`, `"toBlock"`, `"blockHash"`, `"address"`, `"topics"`); `:block_hash` is mutually exclusive with `:from_block`/`:to_block` per EIP-1474 |
+| `Onchain.RPC` | Ethereum JSON-RPC wrapper (eth_call, `eth_estimate_gas`, eth_getLogs, receipts, nonces, balances, block_number, chain_id, **decoded** `get_block_by_number`, `get_transaction_by_hash`, eth_get_code, eth_send_raw_transaction, syncing, fee_history, get_proof; `call/3` for any other method; `batch/2` for JSON-RPC array batching). Opt-in `retry: [max_retries: n, backoff_ms: ms]` on single-call paths retries transport failures only (default: no retry). `get_block_by_number/2` returns atom-keyed maps (quantities as integers — aligned with `get_transaction_by_hash/2`). `eth_get_logs/2` accepts atom keys or canonical camelCase string aliases (`"fromBlock"`, `"toBlock"`, `"blockHash"`, `"address"`, `"topics"`); `:block_hash` is mutually exclusive with `:from_block`/`:to_block` per EIP-1474 |
 | `Onchain.RPC.Helpers` | Shared RPC helpers (hex normalization, block tags, tx hash validation; `parse_block_response/1`, `parse_transaction_map/1`; execution-revert maps get `:data` hex for `decode_error/2`) |
 | `Onchain.Block` | Block fetching with parsed fields, timestamp-based binary search |
 | `Onchain.Contract` | Generic contract call (encode -> eth_call -> decode in one function) |

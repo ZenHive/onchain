@@ -6,6 +6,13 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Added — eth_estimateGas RPC helper + auto-estimate gas in send_transaction (Task 82)
+
+- **`Onchain.RPC.eth_estimate_gas/2`** (+ `eth_estimate_gas!/2`) — wraps `eth_estimateGas` over an atom-keyed tx-params map (`:from`, `:to`, `:data`, `:value`, plus optional `:gas`/`:gas_price`/`:max_fee_per_gas`/`:max_priority_fee_per_gas`). Addresses and `:data` serialize as big-hex (bytes-preserving), integer quantities as quantity-hex (no leading zeros); absent keys are omitted from the call object. Returns `{:ok, gas}` (decoded integer); accepts an optional `:block` tag (default `"latest"`).
+- **`Onchain.Signer.send_transaction/3`** now auto-estimates the gas limit when `:gas_limit` is omitted: it derives the `from` address from the signing key, calls `eth_estimateGas`, and applies a 1.25× safety-headroom multiplier so a transaction is never sized exactly at the node estimate (which would OOG-revert if on-chain accounting drifts up before inclusion). An explicit `:gas_limit` is still honored verbatim with **no** estimation call. A failed estimate propagates as an error — never a silent fallback to the legacy 100k default. `Onchain.ERC20.transfer/4` and `approve/4` inherit this automatically (they pass `opts` through unchanged).
+- **Estimate fidelity (review hardening):** a `{n, :wei | :gwei | :eth}` tuple `:value` is normalized to wei for the estimate (matching the explicit-`gas_limit` path) instead of crashing; `:access_list` is forwarded and serialized into the `eth_estimateGas` call object so the estimate covers the exact transaction submitted; and a negative/non-integer quantity or malformed access-list entry returns `{:error, _}` rather than raising a `FunctionClauseError`.
+- **Dependency:** requires **cartouche `~> 0.4.1`** — 0.4.1 fixes EIP-1559 access-list signing (the unsigned signing-digest encode now normalizes tuple access-list entries; previously any access-list transaction crashed at sign time).
+
 ## v0.8.0 — descripex 0.9 / cartouche 0.3 dependency line (2026-06-12)
 
 ### Changed

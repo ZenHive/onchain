@@ -654,3 +654,24 @@ scored_at = "2026-06-05"
 started_at = "2026-06-05"
 done_at = "2026-06-05"
 shipped_in = "1a316e3c4e5eb64cae751de55adbfd2990549998"
+
+[[task]]
+id = 82
+phase = 10
+bundle = "rpc_composition"
+status = "done"
+title = "Add eth_estimateGas RPC helper + auto-estimate gas in send_transaction"
+scores = { d = 3, b = 5, u = 6 }
+acceptance_criteria = ["An eth_estimateGas RPC wrapper exists and returns {:ok, gas} for a transaction-params map (to/from/data/value)", "Signer.send_transaction auto-estimates gas (with a headroom multiplier) when :gas_limit is omitted", "An explicit :gas_limit is still honored unchanged (no estimation call)", "Integration test against a live node confirms a cold TIP-20 transfer is sized correctly and does not OOG-revert"]
+out_of_scope = ["Changing the onchain_tempo Builder default (tracked in onchain_tempo's roadmap)", "Per-chain gas-price oracle / EIP-1559 fee estimation (this task is gas LIMIT estimation only)"]
+body = """
+Onchain exposes no `eth_estimateGas`. Every caller that builds a transaction — `Onchain.ERC20.transfer`, `Onchain.Signer.send_transaction`, and the downstream `onchain_tempo` Builder — must hardcode `:gas_limit`. Those constants go silently stale when on-chain gas accounting shifts: Moderato now charges a TIP-20 protocol fee (a Transfer to the `0xfeec…` collector) that pushed a cold-storage TIP-20 transfer from the old ~272k estimate to a measured ~560k, OOG-reverting at the hardcoded 400k/500k ceilings (`gas_used == gas_limit` exactly). The reference MPP SDKs (mppx) size every transaction via `eth_estimateGas` instead of a constant — see refs/mppx Session.ts / Charge.ts.
+
+Add an `eth_estimateGas` wrapper at the RPC layer returning `{:ok, gas}` for a tx-params map. Then have `Signer.send_transaction` auto-estimate (apply a safety headroom multiplier, e.g. 1.25×) when `:gas_limit` is omitted, while still honoring an explicit `:gas_limit`. This is the foundational capability the onchain_tempo Builder will consume to stop hardcoding its own default.
+"""
+implemented = "eth_estimate_gas/2 + bang wrapper in Onchain.RPC; Signer.send_transaction auto-estimates gas (1.25x headroom) when :gas_limit omitted, honors explicit limit verbatim. Unit + integration tests; Signer 97% / RPC 88% coverage."
+delivered_by = "claude-opus-4-8"
+verified = true
+created_at = "2026-06-24"
+scored_at = "2026-06-24"
+done_at = "2026-06-24"

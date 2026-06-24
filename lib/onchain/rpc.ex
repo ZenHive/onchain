@@ -213,6 +213,56 @@ defmodule Onchain.RPC do
     end
   end
 
+  # --- eth_estimate_gas ---
+
+  api(:eth_estimate_gas, "Estimate the gas a transaction would consume.",
+    params: [
+      tx_params: [
+        kind: :value,
+        description:
+          "Transaction-params map with atom keys. Recognized: :from, :to, :data, :value, :gas, :gas_price, :max_fee_per_gas, :max_priority_fee_per_gas, :access_list. Absent keys are omitted from the call object."
+      ],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout, :block"]
+    ],
+    returns: %{
+      type: "{:ok, non_neg_integer()} | {:error, term()}",
+      description: "Estimated gas units as an integer"
+    }
+  )
+
+  @spec eth_estimate_gas(map(), keyword()) :: {:ok, non_neg_integer()} | {:error, term()}
+  def eth_estimate_gas(tx_params, opts \\ []) when is_map(tx_params) do
+    with {:ok, call_object} <- build_estimate_gas_params(tx_params),
+         {:ok, block} <- normalize_block(Keyword.get(opts, :block, "latest")) do
+      do_rpc(
+        "eth_estimateGas",
+        [call_object, block],
+        Keyword.put(to_rpc_opts(opts), :decode, :hex_unsigned)
+      )
+    end
+  end
+
+  # --- eth_estimate_gas! ---
+
+  api(:eth_estimate_gas!, "Estimate the gas a transaction would consume. Raises on error.",
+    params: [
+      tx_params: [
+        kind: :value,
+        description: "Transaction-params map with atom keys (see eth_estimate_gas/2)"
+      ],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout, :block"]
+    ],
+    returns: %{type: :integer, description: "Estimated gas units"}
+  )
+
+  @spec eth_estimate_gas!(map(), keyword()) :: non_neg_integer()
+  def eth_estimate_gas!(tx_params, opts \\ []) do
+    case eth_estimate_gas(tx_params, opts) do
+      {:ok, gas} -> gas
+      {:error, reason} -> raise "eth_estimate_gas failed: #{inspect(reason)}"
+    end
+  end
+
   # --- eth_send_raw_transaction ---
 
   api(:eth_send_raw_transaction, "Broadcast a signed transaction.",
@@ -1081,6 +1131,100 @@ defmodule Onchain.RPC do
   end
 
   defp maybe_put_revert_from_error_data(map), do: map
+
+  @doc false
+  # Builds the eth_estimateGas call object from an atom-keyed tx-params map.
+  # Addresses use big-hex (lowercased 0x-40-hex); :data uses big-hex (bytes-preserving,
+  # even-length — never quantity, which strips leading zeros and is rejected by nodes);
+  # integer quantities (value/gas/fees) use quantity hex. Absent keys are omitted.
+  @spec build_estimate_gas_params(map()) :: {:ok, map()} | {:error, term()}
+  defp build_estimate_gas_params(tx_params) do
+    with {:ok, result} <- put_estimate_address(%{}, "from", Map.get(tx_params, :from)),
+         {:ok, result} <- put_estimate_address(result, "to", Map.get(tx_params, :to)),
+         {:ok, result} <- put_estimate_data(result, Map.get(tx_params, :data)),
+         {:ok, result} <- put_estimate_quantity(result, "value", Map.get(tx_params, :value)),
+         {:ok, result} <- put_estimate_quantity(result, "gas", Map.get(tx_params, :gas)),
+         {:ok, result} <- put_estimate_quantity(result, "gasPrice", Map.get(tx_params, :gas_price)),
+         {:ok, result} <-
+           put_estimate_quantity(result, "maxFeePerGas", Map.get(tx_params, :max_fee_per_gas)),
+         {:ok, result} <-
+           put_estimate_quantity(
+             result,
+             "maxPriorityFeePerGas",
+             Map.get(tx_params, :max_priority_fee_per_gas)
+           ) do
+      put_estimate_access_list(result, Map.get(tx_params, :access_list))
+    end
+  end
+
+  @spec put_estimate_address(map(), String.t(), term()) :: {:ok, map()} | {:error, term()}
+  defp put_estimate_address(result, _key, nil), do: {:ok, result}
+
+  defp put_estimate_address(result, key, addr) do
+    with {:ok, hex} <- ensure_hex_address(addr), do: {:ok, Map.put(result, key, hex)}
+  end
+
+  @spec put_estimate_data(map(), term()) :: {:ok, map()} | {:error, term()}
+  defp put_estimate_data(result, nil), do: {:ok, result}
+
+  defp put_estimate_data(result, data) do
+    with {:ok, hex} <- ensure_hex_data(data), do: {:ok, Map.put(result, "data", hex)}
+  end
+
+  @spec put_estimate_quantity(map(), String.t(), term()) ::
+          {:ok, map()} | {:error, term()}
+  defp put_estimate_quantity(result, _key, nil), do: {:ok, result}
+
+  defp put_estimate_quantity(result, key, n) when is_integer(n) and n >= 0 do
+    {:ok, Map.put(result, key, Onchain.Hex.from_integer(n))}
+  end
+
+  defp put_estimate_quantity(_result, key, other), do: {:error, {:invalid_quantity, key, other}}
+
+  # Serializes an EIP-2930 access list into the eth_estimateGas call object as
+  # [%{"address" => 0xhex, "storageKeys" => [0xhex, ...]}]. Accepts the cartouche
+  # canonical shape [{<<_::160>>, [<<_::256>>]}] (binary address + binary storage
+  # keys) and 0x-hex-string forms. An empty/absent list is omitted; a malformed
+  # entry returns an error rather than crashing.
+  @spec put_estimate_access_list(map(), term()) :: {:ok, map()} | {:error, term()}
+  defp put_estimate_access_list(result, nil), do: {:ok, result}
+  defp put_estimate_access_list(result, []), do: {:ok, result}
+
+  defp put_estimate_access_list(result, entries) when is_list(entries) do
+    with {:ok, serialized} <- serialize_access_list(entries, []) do
+      {:ok, Map.put(result, "accessList", serialized)}
+    end
+  end
+
+  defp put_estimate_access_list(_result, other), do: {:error, {:invalid_access_list, other}}
+
+  @spec serialize_access_list([term()], list()) :: {:ok, list()} | {:error, term()}
+  defp serialize_access_list([], acc), do: {:ok, Enum.reverse(acc)}
+
+  defp serialize_access_list([{address, storage_keys} | rest], acc) when is_list(storage_keys) do
+    with {:ok, addr_hex} <- ensure_hex_address(address),
+         {:ok, key_hexes} <- serialize_storage_keys(storage_keys, []) do
+      entry = %{"address" => addr_hex, "storageKeys" => key_hexes}
+      serialize_access_list(rest, [entry | acc])
+    end
+  end
+
+  defp serialize_access_list([entry | _rest], _acc), do: {:error, {:invalid_access_list_entry, entry}}
+
+  @spec serialize_storage_keys([term()], list()) :: {:ok, list()} | {:error, term()}
+  defp serialize_storage_keys([], acc), do: {:ok, Enum.reverse(acc)}
+
+  # 0x-string clause first: a "0x"-prefixed value is a binary, so it must be matched
+  # before the raw-32-byte-binary clause to avoid double-encoding a 32-byte hex string.
+  defp serialize_storage_keys(["0x" <> _ = key | rest], acc) do
+    with {:ok, hex} <- ensure_hex_data(key), do: serialize_storage_keys(rest, [hex | acc])
+  end
+
+  defp serialize_storage_keys([key | rest], acc) when is_binary(key) and byte_size(key) == 32 do
+    serialize_storage_keys(rest, [Onchain.Hex.encode(key) | acc])
+  end
+
+  defp serialize_storage_keys([key | _rest], _acc), do: {:error, {:invalid_storage_key, key}}
 
   @doc false
   # Builds a JSON-RPC filter object from an Elixir map.

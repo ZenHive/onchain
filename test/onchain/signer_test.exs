@@ -367,5 +367,24 @@ defmodule Onchain.SignerTest do
         Signer.send_transaction!(@dummy_to, <<>>, nonce: 0, rpc_url: "http://localhost:1")
       end
     end
+
+    test "address_from_key! returns the checksummed address on success" do
+      assert "0x" <> _rest = Signer.address_from_key!(@test_key_binary)
+    end
+
+    test "build_transaction! returns a V2 struct on success" do
+      assert %V2{} = Signer.build_transaction!(@dummy_to, <<>>, nonce: 0, chain_id: @test_chain_id)
+    end
+
+    test "sign_transaction! returns a signed V2 struct on success" do
+      trx = Signer.build_transaction!(@dummy_to, <<>>, nonce: 0, chain_id: @test_chain_id)
+      assert %V2{} = Signer.sign_transaction!(trx, @test_key_binary, @test_chain_id)
+    end
+
+    test "encode_transaction! returns a 0x hex string on success" do
+      trx = Signer.build_transaction!(@dummy_to, <<>>, nonce: 0, chain_id: @test_chain_id)
+      signed = Signer.sign_transaction!(trx, @test_key_binary, @test_chain_id)
+      assert "0x" <> _rest = Signer.encode_transaction!(signed)
+    end
   end
 end

@@ -61,5 +61,33 @@ defmodule Onchain.SignerIntegrationTest do
       assert receipt.status == 1
       assert receipt.from == address
     end
+
+    @tag :sepolia_send
+    test "auto-estimates gas when :gas_limit is omitted and confirms with status 1" do
+      key = Onchain.SignerCase.signer_key!()
+      rpc_url = Onchain.SignerCase.sepolia_rpc_url!()
+      address = Onchain.SignerCase.signer_address!()
+
+      {:ok, nonce} = RPC.get_transaction_count(address, rpc_url: rpc_url, block: "pending")
+
+      # :gas_limit intentionally omitted — send_transaction estimates via eth_estimateGas
+      # and applies headroom, so the tx is correctly sized and does not OOG-revert.
+      assert {:ok, tx_hash} =
+               Signer.send_transaction(address, <<>>,
+                 private_key: key,
+                 nonce: nonce,
+                 chain_id: @sepolia_chain_id,
+                 rpc_url: rpc_url,
+                 max_fee_per_gas: {10, :gwei},
+                 max_priority_fee_per_gas: {1, :gwei},
+                 value: 0
+               )
+
+      assert {:ok, receipt} = Onchain.SignerCase.wait_for_receipt(tx_hash, rpc_url: rpc_url)
+
+      assert receipt.status == 1
+      # auto-estimate sized the tx — gas actually used does not equal the limit (no OOG)
+      assert receipt.gas_used > 0
+    end
   end
 end

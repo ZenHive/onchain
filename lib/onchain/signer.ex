@@ -35,6 +35,11 @@ defmodule Onchain.Signer do
   @default_max_fee_per_gas {30, :gwei}
   @default_max_priority_fee_per_gas {2, :gwei}
 
+  # Safety headroom applied to an eth_estimateGas result when :gas_limit is
+  # auto-estimated, so a transaction is not sized exactly at the node estimate
+  # (which would OOG-revert if on-chain accounting drifts up before inclusion).
+  @gas_estimate_multiplier 1.25
+
   # --- address_from_key ---
 
   api(:address_from_key, "Derive checksummed Ethereum address from a private key.",
@@ -291,7 +296,8 @@ defmodule Onchain.Signer do
          {:ok, chain_id} <- fetch_required(opts, :chain_id) do
       rpc_opts = Keyword.take(opts, [:rpc_url, :timeout])
 
-      with {:ok, unsigned} <- build_transaction(to, calldata, opts),
+      with {:ok, opts} <- resolve_gas_limit(opts, to, calldata, private_key, rpc_opts),
+           {:ok, unsigned} <- build_transaction(to, calldata, opts),
            {:ok, signed} <- sign_transaction(unsigned, private_key, chain_id),
            {:ok, raw_hex} <- encode_transaction(signed) do
         RPC.eth_send_raw_transaction(raw_hex, rpc_opts)
@@ -325,6 +331,52 @@ defmodule Onchain.Signer do
   end
 
   # --- Private helpers ---
+
+  @doc false
+  # Resolves :gas_limit into opts. An explicit :gas_limit is honored verbatim with
+  # no RPC call. When omitted, estimates via eth_estimateGas (from the signer's own
+  # address) and applies @gas_estimate_multiplier headroom. A failed estimate
+  # propagates as an error — never a silent fallback to @default_gas_limit.
+  @spec resolve_gas_limit(keyword(), binary(), binary() | {:raw, binary()}, binary(), keyword()) ::
+          {:ok, keyword()} | {:error, term()}
+  defp resolve_gas_limit(opts, to, calldata, private_key, rpc_opts) do
+    if Keyword.has_key?(opts, :gas_limit) do
+      {:ok, opts}
+    else
+      with {:ok, from} <- address_from_key(private_key),
+           {:ok, estimated} <- RPC.eth_estimate_gas(estimate_params(from, to, calldata, opts), rpc_opts) do
+        {:ok, Keyword.put(opts, :gas_limit, apply_headroom(estimated))}
+      end
+    end
+  end
+
+  @doc false
+  # Builds the atom-keyed tx-params map for eth_estimateGas. Calldata is normalized
+  # to hex: a binary is hex-encoded, {:raw, binary} is unwrapped then encoded, and
+  # <<>> (plain ETH transfer) yields "0x". :value is normalized to integer wei via
+  # Cartouche.Wei.to_wei/1 so a {n, :wei | :gwei | :eth} tuple (which build_transaction
+  # accepts on the explicit-gas_limit path) is estimated identically, not crashed.
+  # :access_list is forwarded so the estimate covers the exact transaction that will
+  # be submitted (EIP-2930 entries change intrinsic gas); an empty list is omitted.
+  @spec estimate_params(String.t(), binary(), binary() | {:raw, binary()}, keyword()) :: map()
+  defp estimate_params(from, to, calldata, opts) do
+    %{
+      from: from,
+      to: to,
+      data: calldata_to_hex(calldata),
+      value: Cartouche.Wei.to_wei(Keyword.get(opts, :value, 0)),
+      access_list: Keyword.get(opts, :access_list, [])
+    }
+  end
+
+  @spec calldata_to_hex(binary() | {:raw, binary()}) :: String.t()
+  defp calldata_to_hex({:raw, bin}), do: calldata_to_hex(bin)
+  defp calldata_to_hex(bin) when is_binary(bin), do: Hex.encode(bin)
+
+  @spec apply_headroom(non_neg_integer()) :: non_neg_integer()
+  defp apply_headroom(gas) do
+    ceil(gas * @gas_estimate_multiplier)
+  end
 
   @doc false
   # Normalizes a private key input to a 32-byte binary.

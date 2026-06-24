@@ -54,6 +54,33 @@ defmodule Onchain.RPC.IntegrationTest do
     end
   end
 
+  describe "eth_estimate_gas/2" do
+    test "sizes a WETH transfer within a sane range" do
+      {:ok, calldata} =
+        ABI.encode_call("transfer(address,uint256)", [
+          Onchain.Hex.decode!(@eoa_address),
+          1
+        ])
+
+      assert {:ok, gas} =
+               RPC.eth_estimate_gas(
+                 %{from: @eoa_address, to: @weth_address, data: calldata},
+                 rpc_opts()
+               )
+
+      # A plain ERC-20 transfer is ~30k–90k; assert it's a sane, OOG-safe size.
+      assert is_integer(gas)
+      assert gas in 21_000..120_000
+    end
+
+    test "estimates a bare ETH transfer near the 21k floor" do
+      assert {:ok, gas} =
+               RPC.eth_estimate_gas(%{from: @eoa_address, to: @zero_address}, rpc_opts())
+
+      assert gas >= 21_000
+    end
+  end
+
   describe "get_block_by_number/2" do
     test "fetches a known block and returns decoded map" do
       assert {:ok, block} = RPC.get_block_by_number(20_000_000, rpc_opts())
