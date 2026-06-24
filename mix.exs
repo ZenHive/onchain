@@ -73,7 +73,7 @@ defmodule Onchain.MixProject do
       # pipeline. Before bumping: verify the target version's checksum-*.Native.exs
       # references that same version's asset names (only 1.9.0-rc.28+ verified OK as
       # of 2026-06-09). Until a stable 1.9.0 ships, 1.6.2 stays.
-      {:tree_sitter_language_pack, "1.6.2", only: [:dev, :test], runtime: false}
+      {:tree_sitter_language_pack, "1.10.7", only: [:dev, :test], runtime: false}
     ]
   end
 
