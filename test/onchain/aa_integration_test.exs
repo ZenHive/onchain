@@ -31,7 +31,9 @@ defmodule Onchain.AAIntegrationTest do
   end
 
   test "eth_getUserOperationReceipt returns nil for an unknown hash" do
-    unknown = "0x" <> String.duplicate("00", 32)
+    # Non-zero hash: bundlers reject the all-zero value as invalid (-32602) rather
+    # than treating it as a well-formed-but-unknown hash. Matches the byHash test below.
+    unknown = "0x" <> String.duplicate("22", 32)
 
     case AA.get_user_operation_receipt(unknown, bundler_url: bundler_url!()) do
       {:ok, nil} -> :ok

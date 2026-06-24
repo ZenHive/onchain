@@ -68,8 +68,11 @@ defmodule Onchain.ENSIntegrationTest do
       assert ^expected = ENS.address!("vitalik.eth", 60, rpc_opts())
     end
 
-    test "returns no_resolver for a non-existent name" do
-      assert {:error, {:no_resolver, _}} =
+    test "returns no_address for a non-existent name" do
+      # address/3 takes the ENSIP-10 wildcard path, which finds a (wildcard) resolver
+      # and then gets empty addr(node, 60) bytes -> {:no_address, _}. Distinct from the
+      # non-wildcard resolver/2 + resolve/2 paths, which return {:no_resolver, _}.
+      assert {:error, {:no_address, _}} =
                ENS.address("thisnamedoesnotexist12345678.eth", 60, rpc_opts())
     end
   end

@@ -29,6 +29,11 @@ defmodule Onchain.SignerIntegrationTest do
     end
   end
 
+  # NOTE: the :sepolia_send tests below broadcast real transactions and are NOT
+  # idempotent — re-running one re-broadcasts the same nonce, which the node rejects
+  # as "replacement transaction underpriced". ex_unit_json's auto-retry has no per-test
+  # opt-out, so run these with `--no-retry` (e.g. `mix test.json --only sepolia_send
+  # --no-retry`) to avoid a spurious retry-induced collision being reported as flaky.
   describe "self-transfer on Sepolia" do
     @tag :sepolia_send
     test "sends 0 ETH to self and gets receipt with status 1" do
