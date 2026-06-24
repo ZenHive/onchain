@@ -825,6 +825,8 @@ defmodule Onchain.ENS do
       if size > 255 do
         {:halt, {:error, {:label_too_long, label}}}
       else
+        # DNS names are ≤127 short labels (RFC 1035) — O(n²) here is bounded and tiny.
+        # reach:disable-next-line string_building
         {:cont, {:ok, acc <> <<size>> <> label}}
       end
     end)
@@ -844,6 +846,8 @@ defmodule Onchain.ENS do
     |> Enum.reverse()
     |> Enum.reduce(@zero_node, fn label, node ->
       label_hash = Cartouche.Hash.keccak(label)
+      # Not string accumulation: node and label_hash are both fixed 32-byte keccak digests.
+      # reach:disable-next-line string_building
       Cartouche.Hash.keccak(node <> label_hash)
     end)
   end

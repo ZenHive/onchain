@@ -18,6 +18,21 @@ defmodule Onchain.Log do
   - Topic mismatch: `{:error, {:decode_error, {:topic_mismatch, [expected: ..., got: ...]}}}`
   - Decode errors: `{:error, {:decode_error, reason}}`
 
+  ## Security — signature is a trust boundary
+
+  Each parameter name in a `signature` is interned with `String.to_atom/1` so the
+  decoded map can use atom keys. **The `signature` argument MUST be developer-controlled**
+  (a compile-time constant or value you author), never attacker-influenced input
+  (request body, config supplied by a third party). Atoms are not garbage-collected, so
+  routing untrusted signatures here is an atom-table-exhaustion (DoS) vector.
+
+  As a defence-in-depth bound — not a substitute for the contract above — `decode_event/2`
+  rejects signatures with more than `32` params and rejects any segment that is not a
+  bounded identifier-shaped token before interning it (`{:error, {:invalid_signature, _}}`).
+  This caps the per-call surface; it does not stop an attacker looping distinct valid
+  names across many calls. The only structural fix is string-keyed output, a breaking
+  change deliberately not taken here.
+
   ## Functions
 
   | Function | Purpose |
@@ -29,6 +44,15 @@ defmodule Onchain.Log do
   """
 
   use Descripex, namespace: "/log"
+
+  # Defence-in-depth bounds on signature parsing — see the "Security" section of the
+  # @moduledoc. The signature is a trust boundary; these cap the atom-minting surface.
+  @max_event_params 32
+  @max_atom_segment_length 64
+  # A segment safe to intern: an identifier optionally carrying array suffixes
+  # (e.g. "value", "uint256", "uint256[]", "uint256[3]"). Rejects whitespace, unicode,
+  # and punctuation that an attacker could use to spray distinct atoms.
+  @atom_segment ~r/^[a-zA-Z_][a-zA-Z0-9_\[\]]*$/
 
   # --- event_topic ---
 
@@ -85,7 +109,7 @@ defmodule Onchain.Log do
       signature: [
         kind: :value,
         description:
-          ~s{Event signature with indexed markers, e.g. "Transfer(address indexed from, address indexed to, uint256 value)"}
+          ~s{Event signature with indexed markers, e.g. "Transfer(address indexed from, address indexed to, uint256 value)". MUST be developer-controlled — param names are interned as atoms; untrusted signatures are an atom-table DoS vector (see module "Security").}
       ]
     ],
     returns: %{
@@ -177,13 +201,16 @@ defmodule Onchain.Log do
   defp parse_event_signature(signature) do
     case Regex.run(~r/^\w+\((.+)\)$/, signature) do
       [_, params_str] ->
-        params =
+        parts =
           params_str
           |> String.split(",")
           |> Enum.map(&String.trim/1)
-          |> Enum.map(&parse_param/1)
 
-        {:ok, params}
+        if length(parts) > @max_event_params do
+          {:error, {:invalid_signature, signature}}
+        else
+          parse_params(parts)
+        end
 
       nil ->
         # Try empty params: "EventName()"
@@ -196,16 +223,51 @@ defmodule Onchain.Log do
   end
 
   @doc false
-  # Parses a single param like "address indexed from" or "uint256 value".
-  # String.to_atom is safe here — signatures are developer-provided constants, not user input.
-  # sobelow_skip ["DOS.StringToAtom"]
-  @spec parse_param(String.t()) :: {atom(), String.t(), boolean()}
+  # Parses each param, bailing to {:error, {:invalid_signature, segment}} on the first
+  # segment that fails the trust-boundary check in build_param/3.
+  @spec parse_params([String.t()]) :: {:ok, [{atom(), String.t(), boolean()}]} | {:error, term()}
+  defp parse_params(parts) do
+    parts
+    |> Enum.reduce_while([], fn part, acc ->
+      case parse_param(part) do
+        {:ok, parsed} -> {:cont, [parsed | acc]}
+        {:error, _} = err -> {:halt, err}
+      end
+    end)
+    |> case do
+      {:error, _} = err -> err
+      parsed -> {:ok, Enum.reverse(parsed)}
+    end
+  end
+
+  @doc false
+  # Parses a single param like "address indexed from" or "uint256 value". The name
+  # interned to an atom is validated against @atom_segment first (see build_param/3) —
+  # the signature is a trust boundary (@moduledoc "Security").
+  @spec parse_param(String.t()) :: {:ok, {atom(), String.t(), boolean()}} | {:error, term()}
   defp parse_param(param_str) do
     case String.split(param_str) do
-      [type, "indexed", name] -> {String.to_atom(name), type, true}
-      [type, name] -> {String.to_atom(name), type, false}
-      [type] -> {String.to_atom(type), type, false}
-      _other -> {String.to_atom(param_str), param_str, false}
+      [type, "indexed", name] -> build_param(name, type, true)
+      [type, name] -> build_param(name, type, false)
+      [type] -> build_param(type, type, false)
+      _other -> build_param(param_str, param_str, false)
+    end
+  end
+
+  @doc false
+  # Interns the param name only after bounding it. An over-long or non-identifier-shaped
+  # segment is rejected rather than minting an arbitrary atom from untrusted input.
+  # sobelow_skip ["DOS.StringToAtom"]
+  @spec build_param(String.t(), String.t(), boolean()) ::
+          {:ok, {atom(), String.t(), boolean()}} | {:error, term()}
+  defp build_param(name, type, indexed?) do
+    if byte_size(name) <= @max_atom_segment_length and Regex.match?(@atom_segment, name) do
+      # Reached only after the length + identifier-shape guard above and the per-call
+      # param-count cap; the signature is contractually developer-controlled (@moduledoc).
+      # reach:disable-next-line unsafe_atom_creation
+      {:ok, {String.to_atom(name), type, indexed?}}
+    else
+      {:error, {:invalid_signature, name}}
     end
   end
 

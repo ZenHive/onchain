@@ -73,6 +73,9 @@ defmodule Onchain.Fees do
          :ok <- validate_percentile_index(percentile_index, width) do
       base_fee = List.last(history.base_fee_per_gas)
 
+      # reach:disable-next-line suboptimal
+      # row is the per-block percentile list (1-4 elems) and percentile_index a small
+      # constant — Enum.at is O(small), not O(block_count). Not a hot path.
       priority_estimates =
         Enum.map(reward, fn row -> round(Enum.at(row, percentile_index)) end)
 

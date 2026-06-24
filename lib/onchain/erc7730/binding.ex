@@ -337,11 +337,13 @@ defmodule Onchain.ERC7730.Binding do
 
   defp fetch(map, key, default \\ :__none__) do
     case Map.get(map, key, Map.get(map, safe_atom(key), :__missing__)) do
-      :__missing__ when default == :__none__ -> {:error, {:missing_key, key}}
-      :__missing__ -> {:ok, default}
+      :__missing__ -> missing_key(key, default)
       value -> {:ok, value}
     end
   end
+
+  defp missing_key(key, :__none__), do: {:error, {:missing_key, key}}
+  defp missing_key(_key, default), do: {:ok, default}
 
   defp safe_atom(key) do
     String.to_existing_atom(key)

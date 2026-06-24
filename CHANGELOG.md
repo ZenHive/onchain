@@ -13,6 +13,11 @@ Completed roadmap tasks.
 - **Estimate fidelity (review hardening):** a `{n, :wei | :gwei | :eth}` tuple `:value` is normalized to wei for the estimate (matching the explicit-`gas_limit` path) instead of crashing; `:access_list` is forwarded and serialized into the `eth_estimateGas` call object so the estimate covers the exact transaction submitted; and a negative/non-integer quantity or malformed access-list entry returns `{:error, _}` rather than raising a `FunctionClauseError`.
 - **Dependency:** requires **cartouche `~> 0.4.1`** — 0.4.1 fixes EIP-1559 access-list signing (the unsigned signing-digest encode now normalizes tuple access-list entries; previously any access-list transaction crashed at sign time).
 
+### Security — harden `Onchain.Log.decode_event/2` signature trust boundary (Reach-driven)
+
+- **`Onchain.Log.decode_event/2`** interns each event-signature param name with `String.to_atom/1`; the prior code relied on an *unenforced* "signatures are developer-provided" comment, leaving an atom-table-exhaustion (DoS) vector if a consumer ever routed untrusted signature strings through the **public** API. The boundary is now defended in depth: signatures with more than 32 params are rejected, and every segment is validated against a bounded identifier shape (≤64 bytes, `[a-zA-Z_][a-zA-Z0-9_\[\]]*`) before interning — anything else returns `{:error, {:invalid_signature, _}}`. The moduledoc now states the trust contract explicitly (signature must be developer-controlled) and is honest that the bound mitigates but does not structurally eliminate the vector (the structural fix is string keys, a breaking change deliberately not taken). Atom-keyed return shape unchanged; no breaking change.
+- **Quality (Reach `reach.check --smells`):** `Onchain.Transfer.parse_logs/1` collapses a `map |> flat_map` into a single `Enum.flat_map/2`; `Onchain.ERC7730.Binding` replaces a `when default == :__none__` guard with function-head pattern matching. Documented false positives (ENS DNS/namehash fixed-size concatenation, EIP-1559 percentile `Enum.at`) are now `# reach:disable-next-line`-suppressed with grounded rationale rather than left as recurring noise.
+
 ## v0.8.0 — descripex 0.9 / cartouche 0.3 dependency line (2026-06-12)
 
 ### Changed

@@ -268,4 +268,44 @@ defmodule Onchain.LogTest do
       assert decoded.amount == 99
     end
   end
+
+  describe "decode_event/2 — signature trust boundary (atom-table DoS defence)" do
+    # Minimal well-formed log; parse_event_signature runs before any topic check, so a
+    # rejected signature short-circuits with {:error, {:invalid_signature, _}}.
+    @valid_log %{topics: ["0x" <> String.duplicate("0", 64)], data: "0x"}
+
+    test "rejects a signature with more than the param-count cap" do
+      params = Enum.map_join(1..33, ", ", fn i -> "uint256 p#{i}" end)
+      signature = "Big(#{params})"
+
+      assert {:error, {:invalid_signature, ^signature}} = Log.decode_event(@valid_log, signature)
+    end
+
+    test "accepts a signature exactly at the param-count cap" do
+      params = Enum.map_join(1..32, ", ", fn i -> "uint256 p#{i}" end)
+      signature = "AtCap(#{params})"
+
+      # Parses past the cap (fails later on topic mismatch, not on :invalid_signature).
+      assert {:error, {:decode_error, _}} = Log.decode_event(@valid_log, signature)
+    end
+
+    test "rejects a param name with non-identifier characters" do
+      assert {:error, {:invalid_signature, "a-b"}} =
+               Log.decode_event(@valid_log, "Evt(uint256 a-b)")
+    end
+
+    test "rejects a param name exceeding the length cap" do
+      long = String.duplicate("a", 65)
+
+      assert {:error, {:invalid_signature, ^long}} =
+               Log.decode_event(@valid_log, "Evt(uint256 #{long})")
+    end
+
+    test "rejects a malformed segment that would otherwise mint a garbage atom" do
+      # 4+ tokens hit the catch-all branch; the whole segment (with spaces) fails the
+      # identifier check rather than being interned verbatim.
+      assert {:error, {:invalid_signature, "address indexed from extra"}} =
+               Log.decode_event(@valid_log, "Evt(address indexed from extra)")
+    end
+  end
 end

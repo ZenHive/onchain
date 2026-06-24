@@ -190,21 +190,21 @@ defmodule Onchain.Transfer do
   @spec parse_logs([map()]) :: {:ok, [t()]}
   def parse_logs(logs) when is_list(logs) do
     transfers =
-      logs
-      |> Enum.map(&parse_log/1)
-      |> Enum.flat_map(fn
-        {:ok, list} when is_list(list) ->
-          list
+      Enum.flat_map(logs, fn log ->
+        case parse_log(log) do
+          {:ok, list} when is_list(list) ->
+            list
 
-        {:ok, single} ->
-          [single]
+          {:ok, single} ->
+            [single]
 
-        {:error, {:unknown_event, _}} ->
-          []
+          {:error, {:unknown_event, _}} ->
+            []
 
-        {:error, reason} ->
-          Logger.warning("Transfer parse error (skipped): #{inspect(reason)}")
-          []
+          {:error, reason} ->
+            Logger.warning("Transfer parse error (skipped): #{inspect(reason)}")
+            []
+        end
       end)
 
     {:ok, transfers}
