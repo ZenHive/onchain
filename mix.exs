@@ -49,7 +49,7 @@ defmodule Onchain.MixProject do
       # Dev/test tooling
       {:tidewave, "~> 0.6", only: :dev},
       {:bandit, "~> 1.0", only: :dev},
-      {:ex_unit_json, "~> 0.5.0", only: [:dev, :test], runtime: false},
+      {:ex_unit_json, "~> 0.6.0", only: [:dev, :test], runtime: false},
       {:dialyzer_json, "~> 0.2.0", only: [:dev, :test], runtime: false},
       {:styler, "~> 1.0", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
