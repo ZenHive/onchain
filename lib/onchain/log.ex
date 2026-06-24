@@ -49,10 +49,11 @@ defmodule Onchain.Log do
   # @moduledoc. The signature is a trust boundary; these cap the atom-minting surface.
   @max_event_params 32
   @max_atom_segment_length 64
-  # A segment safe to intern: an identifier optionally carrying array suffixes
-  # (e.g. "value", "uint256", "uint256[]", "uint256[3]"). Rejects whitespace, unicode,
-  # and punctuation that an attacker could use to spray distinct atoms.
-  @atom_segment ~r/^[a-zA-Z_][a-zA-Z0-9_\[\]]*$/
+  # A segment safe to intern: a Solidity identifier (which may start with or contain
+  # `$` per the language grammar) optionally carrying array suffixes (e.g. "value",
+  # "uint256", "uint256[]", "uint256[3]", "$amount"). Rejects whitespace, unicode, and
+  # other punctuation an attacker could use to spray distinct atoms.
+  @atom_segment ~r/^[a-zA-Z_$][a-zA-Z0-9_$\[\]]*$/
 
   # --- event_topic ---
 
@@ -137,7 +138,11 @@ defmodule Onchain.Log do
   api(:decode_event!, "Decode a raw log map. Raises on error.",
     params: [
       log: [kind: :value, description: "Raw log map with :topics and :data keys"],
-      signature: [kind: :value, description: "Event signature with indexed markers"]
+      signature: [
+        kind: :value,
+        description:
+          ~s{Event signature with indexed markers. MUST be developer-controlled — param names are interned as atoms; untrusted signatures are an atom-table DoS vector (see module "Security" and decode_event/2).}
+      ]
     ],
     returns: %{type: :map, description: "Map with atom keys for each decoded parameter"}
   )

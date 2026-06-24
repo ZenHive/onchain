@@ -35,10 +35,12 @@ defmodule Onchain.Signer do
   @default_max_fee_per_gas {30, :gwei}
   @default_max_priority_fee_per_gas {2, :gwei}
 
-  # Safety headroom applied to an eth_estimateGas result when :gas_limit is
-  # auto-estimated, so a transaction is not sized exactly at the node estimate
-  # (which would OOG-revert if on-chain accounting drifts up before inclusion).
-  @gas_estimate_multiplier 1.25
+  # Safety headroom (1.25× = 5/4) applied to an eth_estimateGas result when
+  # :gas_limit is auto-estimated, so a transaction is not sized exactly at the node
+  # estimate (which would OOG-revert if on-chain accounting drifts up before
+  # inclusion). Expressed as a num/den pair so apply_headroom/1 can use integer math.
+  @gas_headroom_numerator 5
+  @gas_headroom_denominator 4
 
   # --- address_from_key ---
 
@@ -106,24 +108,30 @@ defmodule Onchain.Signer do
 
   @spec build_transaction(binary(), binary() | {:raw, binary()}, keyword()) ::
           {:ok, V2.t()} | {:error, term()}
-  def build_transaction(to, {:raw, calldata}, opts) when is_binary(calldata),
-    do: build_transaction_validated(to, calldata, opts)
+  def build_transaction(to, calldata, opts) do
+    with {:ok, calldata_bin} <- normalize_calldata(calldata) do
+      build_transaction_validated(to, calldata_bin, opts)
+    end
+  end
 
-  def build_transaction(_to, {:raw, calldata}, _opts), do: {:error, {:invalid_calldata, {:raw, calldata}}}
+  @doc false
+  # Validates calldata shape and unwraps it to a raw binary, returning the same
+  # error tuples build_transaction/3 has always returned. Shared with the
+  # send_transaction/3 auto-estimate path so that path rejects bad calldata with
+  # an identical {:error, _} instead of crashing in the estimate's hex encoder
+  # before build_transaction/3 ever runs.
+  @spec normalize_calldata(binary() | {:raw, binary()}) :: {:ok, binary()} | {:error, term()}
+  defp normalize_calldata({:raw, calldata}) when is_binary(calldata), do: {:ok, calldata}
+  defp normalize_calldata({:raw, calldata}), do: {:error, {:invalid_calldata, {:raw, calldata}}}
 
-  def build_transaction(_to, <<"0x", _rest::binary>> = calldata, _opts) do
+  defp normalize_calldata(<<"0x", _rest::binary>> = calldata) do
     {:error,
      {:hex_calldata, calldata,
       "use Hex.decode!/1 to convert hex calldata to binary; if you need literal bytes starting with 0x, pass {:raw, binary}"}}
   end
 
-  def build_transaction(to, calldata, opts) when is_binary(calldata) do
-    build_transaction_validated(to, calldata, opts)
-  end
-
-  def build_transaction(_to, calldata, _opts) do
-    {:error, {:invalid_calldata, calldata}}
-  end
+  defp normalize_calldata(calldata) when is_binary(calldata), do: {:ok, calldata}
+  defp normalize_calldata(calldata), do: {:error, {:invalid_calldata, calldata}}
 
   @doc false
   # Builds the transaction after calldata shape has been validated and normalized.
@@ -280,7 +288,7 @@ defmodule Onchain.Signer do
       opts: [
         kind: :value,
         description:
-          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :gas_limit, :max_fee_per_gas, :max_priority_fee_per_gas, :value, :access_list"
+          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :gas_limit, :max_fee_per_gas, :max_priority_fee_per_gas, :value, :access_list. When :gas_limit is omitted it is auto-estimated via eth_estimateGas (1.25× headroom) from the signer's address; a failed estimate returns {:error, _} rather than falling back to a default."
       ]
     ],
     returns: %{
@@ -293,11 +301,12 @@ defmodule Onchain.Signer do
           {:ok, String.t()} | {:error, term()}
   def send_transaction(to, calldata, opts) do
     with {:ok, private_key} <- fetch_required(opts, :private_key),
-         {:ok, chain_id} <- fetch_required(opts, :chain_id) do
+         {:ok, chain_id} <- fetch_required(opts, :chain_id),
+         {:ok, calldata_bin} <- normalize_calldata(calldata) do
       rpc_opts = Keyword.take(opts, [:rpc_url, :timeout])
 
-      with {:ok, opts} <- resolve_gas_limit(opts, to, calldata, private_key, rpc_opts),
-           {:ok, unsigned} <- build_transaction(to, calldata, opts),
+      with {:ok, opts} <- resolve_gas_limit(opts, to, calldata_bin, private_key, rpc_opts),
+           {:ok, unsigned} <- build_transaction(to, calldata_bin, opts),
            {:ok, signed} <- sign_transaction(unsigned, private_key, chain_id),
            {:ok, raw_hex} <- encode_transaction(signed) do
         RPC.eth_send_raw_transaction(raw_hex, rpc_opts)
@@ -316,7 +325,7 @@ defmodule Onchain.Signer do
       opts: [
         kind: :value,
         description:
-          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :gas_limit, :max_fee_per_gas, :max_priority_fee_per_gas, :value, :access_list"
+          "Required: :private_key, :nonce, :chain_id, :rpc_url. Optional: :gas_limit, :max_fee_per_gas, :max_priority_fee_per_gas, :value, :access_list. When :gas_limit is omitted it is auto-estimated via eth_estimateGas (1.25× headroom) from the signer's address; a failed estimate returns {:error, _} rather than falling back to a default."
       ]
     ],
     returns: %{type: :string, description: "Transaction hash hex string"}
@@ -335,9 +344,9 @@ defmodule Onchain.Signer do
   @doc false
   # Resolves :gas_limit into opts. An explicit :gas_limit is honored verbatim with
   # no RPC call. When omitted, estimates via eth_estimateGas (from the signer's own
-  # address) and applies @gas_estimate_multiplier headroom. A failed estimate
+  # address) and applies apply_headroom/1 (1.25×) headroom. A failed estimate
   # propagates as an error — never a silent fallback to @default_gas_limit.
-  @spec resolve_gas_limit(keyword(), binary(), binary() | {:raw, binary()}, binary(), keyword()) ::
+  @spec resolve_gas_limit(keyword(), binary(), binary(), binary(), keyword()) ::
           {:ok, keyword()} | {:error, term()}
   defp resolve_gas_limit(opts, to, calldata, private_key, rpc_opts) do
     if Keyword.has_key?(opts, :gas_limit) do
@@ -351,31 +360,33 @@ defmodule Onchain.Signer do
   end
 
   @doc false
-  # Builds the atom-keyed tx-params map for eth_estimateGas. Calldata is normalized
-  # to hex: a binary is hex-encoded, {:raw, binary} is unwrapped then encoded, and
+  # Builds the atom-keyed tx-params map for eth_estimateGas. Calldata arrives already
+  # normalized to a raw binary (see normalize_calldata/1) and is hex-encoded here;
   # <<>> (plain ETH transfer) yields "0x". :value is normalized to integer wei via
   # Cartouche.Wei.to_wei/1 so a {n, :wei | :gwei | :eth} tuple (which build_transaction
   # accepts on the explicit-gas_limit path) is estimated identically, not crashed.
   # :access_list is forwarded so the estimate covers the exact transaction that will
   # be submitted (EIP-2930 entries change intrinsic gas); an empty list is omitted.
-  @spec estimate_params(String.t(), binary(), binary() | {:raw, binary()}, keyword()) :: map()
+  # Fee fields are intentionally NOT forwarded: passing maxFeePerGas/gasPrice to
+  # eth_estimateGas can trigger node-side balance checks that fail the estimate, and
+  # the GASPRICE-opcode-dependent estimation divergence it would avoid is rare.
+  @spec estimate_params(String.t(), binary(), binary(), keyword()) :: map()
   defp estimate_params(from, to, calldata, opts) do
     %{
       from: from,
       to: to,
-      data: calldata_to_hex(calldata),
+      data: Hex.encode(calldata),
       value: Cartouche.Wei.to_wei(Keyword.get(opts, :value, 0)),
       access_list: Keyword.get(opts, :access_list, [])
     }
   end
 
-  @spec calldata_to_hex(binary() | {:raw, binary()}) :: String.t()
-  defp calldata_to_hex({:raw, bin}), do: calldata_to_hex(bin)
-  defp calldata_to_hex(bin) when is_binary(bin), do: Hex.encode(bin)
-
+  # Applies the safety headroom with integer math (ceil(gas * num / den)). gas is
+  # always integral, so this avoids float arithmetic — an absurd node estimate (e.g.
+  # a malformed RPC returning hundreds of hex digits) would overflow `gas * 1.25`.
   @spec apply_headroom(non_neg_integer()) :: non_neg_integer()
   defp apply_headroom(gas) do
-    ceil(gas * @gas_estimate_multiplier)
+    div(gas * @gas_headroom_numerator + @gas_headroom_denominator - 1, @gas_headroom_denominator)
   end
 
   @doc false

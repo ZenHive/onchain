@@ -321,6 +321,30 @@ defmodule Onchain.SignerTest do
                  rpc_url: "http://localhost:1"
                )
     end
+
+    # Auto-estimate path (no :gas_limit) must reject malformed calldata with the
+    # same error tuple build_transaction/3 returns, NOT crash in the estimate's
+    # hex encoder. rpc_url is unreachable: reaching eth_estimateGas would surface a
+    # connection error, so the calldata error proves no RPC was attempted.
+    test "rejects non-binary calldata before estimating gas (no :gas_limit)" do
+      assert {:error, {:invalid_calldata, :not_binary}} =
+               Signer.send_transaction(@dummy_to, :not_binary,
+                 nonce: 0,
+                 chain_id: @test_chain_id,
+                 private_key: @test_key_hex,
+                 rpc_url: "http://localhost:1"
+               )
+    end
+
+    test "rejects 0x-string calldata before estimating gas (no :gas_limit)" do
+      assert {:error, {:hex_calldata, "0xabcd", _msg}} =
+               Signer.send_transaction(@dummy_to, "0xabcd",
+                 nonce: 0,
+                 chain_id: @test_chain_id,
+                 private_key: @test_key_hex,
+                 rpc_url: "http://localhost:1"
+               )
+    end
   end
 
   # --- bang variants ---

@@ -307,5 +307,12 @@ defmodule Onchain.LogTest do
       assert {:error, {:invalid_signature, "address indexed from extra"}} =
                Log.decode_event(@valid_log, "Evt(address indexed from extra)")
     end
+
+    test "accepts a Solidity $-identifier param name" do
+      # `$` is valid in a Solidity identifier (per the language grammar), so a
+      # developer-authored signature using it must parse past the trust-boundary
+      # check (failing later on topic mismatch, not on :invalid_signature).
+      assert {:error, {:decode_error, _}} = Log.decode_event(@valid_log, "Evt(uint256 $amount)")
+    end
   end
 end
