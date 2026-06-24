@@ -64,8 +64,8 @@ jobs:
       - name: Doctor (--raise overrides .doctor.exs raise=false to gate CI)
         run: mix doctor --raise
 
-      - name: Sobelow (honors .sobelow-conf, exit=Low)
-        run: mix sobelow
+      - name: Sobelow (--skip honors .sobelow-skips false-positive list, exit=Low)
+        run: mix sobelow --skip
 
       # Coverage floor: 70% — conservative family floor (matches onchain_tempo).
       # Raise per-repo as coverage climbs. `mix test.json`'s test_helper excludes
