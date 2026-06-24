@@ -6,6 +6,10 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Removed — `tree_sitter_language_pack` dev dependency (Erigon scraper now pure-Elixir)
+
+- **Dropped `tree_sitter_language_pack`** (the lone native/precompiled-NIF dependency, dev/test-only) and reimplemented `mix onchain.scrape_erigon_methods` as a pure-Elixir line-anchored regex over the vendored Go source. The dep's `extract/2` custom-query engine was removed upstream in 1.10.x and its replacement parser API ships stubbed in the precompiled NIF (`{:error, "Not implemented"}`); `process/2` drops the Go method receiver the scraper needs. Since the scraper was the sole consumer, the regex (`func (recv *?Type) Method(`) is a strictly simpler long-term fit — no native dep, no CI grammar download, fully deterministic. Output `priv/specs/erigon-methods.json` is byte-identical (21 methods); both task tests pass unchanged. (Resolves dependabot PR #7; Claude + Codex concurred on dropping vs. upgrading.)
+
 ### Added — eth_estimateGas RPC helper + auto-estimate gas in send_transaction (Task 82)
 
 - **`Onchain.RPC.eth_estimate_gas/2`** (+ `eth_estimate_gas!/2`) — wraps `eth_estimateGas` over an atom-keyed tx-params map (`:from`, `:to`, `:data`, `:value`, plus optional `:gas`/`:gas_price`/`:max_fee_per_gas`/`:max_priority_fee_per_gas`). Addresses and `:data` serialize as big-hex (bytes-preserving), integer quantities as quantity-hex (no leading zeros); absent keys are omitted from the call object. Returns `{:ok, gas}` (decoded integer); accepts an optional `:block` tag (default `"latest"`).

@@ -3,6 +3,11 @@ defmodule Mix.Tasks.Onchain.ScrapeErigonMethods do
 
   @moduledoc """
   Scrapes Erigon trace/otterscan JSON-RPC methods from vendored Go source.
+
+  Pure-Elixir: matches Go method declarations with `@method_decl_regex`. The
+  vendored Erigon API files (pinned commit) keep the receiver and method name on
+  the method's opening line, so a line-anchored regex extracts them
+  deterministically without a parser dependency.
   """
 
   use Mix.Task
@@ -15,16 +20,11 @@ defmodule Mix.Tasks.Onchain.ScrapeErigonMethods do
     "TraceAPIImpl" => "trace"
   }
 
-  @method_query """
-  (method_declaration
-    receiver: (parameter_list
-      (parameter_declaration
-        type: [
-          (pointer_type (type_identifier) @receiver)
-          (type_identifier) @receiver
-        ]))
-    name: (field_identifier) @method)
-  """
+  # Matches a Go method declaration's opening line, capturing the receiver type
+  # (group 1, with optional `*` pointer and optional `[T]` generic params) and
+  # the method name (group 2). Line-anchored (`m`) so `^func` only matches real
+  # declarations, never `func` inside a comment or string body.
+  @method_decl_regex ~r/^func\s+\(\s*[A-Za-z_]\w*\s+\*?([A-Za-z_]\w*)(?:\[[^\]]+\])?\s*\)\s+([A-Za-z_]\w*)\s*\(/m
 
   @impl Mix.Task
   @spec run([String.t()]) :: :ok
@@ -53,8 +53,7 @@ defmodule Mix.Tasks.Onchain.ScrapeErigonMethods do
   @doc false
   @spec extract_methods(Path.t()) :: {:ok, [map()]} | {:error, term()}
   def extract_methods(source_root) when is_binary(source_root) do
-    with :ok <- ensure_source_root(source_root),
-         :ok <- ensure_go_parser() do
+    with :ok <- ensure_source_root(source_root) do
       source_root
       |> go_files()
       |> Enum.flat_map(&extract_file(&1, source_root))
@@ -72,14 +71,6 @@ defmodule Mix.Tasks.Onchain.ScrapeErigonMethods do
     end
   end
 
-  defp ensure_go_parser do
-    unless TreeSitterLanguagePack.has_language("go") do
-      _ = TreeSitterLanguagePack.download(["go"])
-    end
-
-    :ok
-  end
-
   defp go_files(source_root) do
     source_root
     |> Path.join("**/*.go")
@@ -88,29 +79,14 @@ defmodule Mix.Tasks.Onchain.ScrapeErigonMethods do
   end
 
   defp extract_file(path, source_root) do
-    path
-    |> File.read!()
-    |> TreeSitterLanguagePack.extract(extraction_config())
-    |> get_in(["results", "rpc_methods", "matches"])
-    |> Enum.flat_map(&method_from_match(&1, path, source_root))
+    source = Path.relative_to(path, source_root)
+
+    @method_decl_regex
+    |> Regex.scan(File.read!(path), capture: :all_but_first)
+    |> Enum.flat_map(fn [receiver, go_method] -> method_entry(receiver, go_method, source) end)
   end
 
-  defp extraction_config do
-    Jason.encode!(%{
-      "language" => "go",
-      "patterns" => %{
-        "rpc_methods" => %{
-          "query" => @method_query,
-          "capture_output" => "Text"
-        }
-      }
-    })
-  end
-
-  defp method_from_match(%{"captures" => captures}, path, source_root) do
-    receiver = capture_text(captures, "receiver")
-    go_method = capture_text(captures, "method")
-
+  defp method_entry(receiver, go_method, source) do
     with namespace when is_binary(namespace) <- Map.get(@rpc_receivers, receiver),
          true <- exported?(go_method) do
       [
@@ -119,18 +95,12 @@ defmodule Mix.Tasks.Onchain.ScrapeErigonMethods do
           "namespace" => namespace,
           "receiver" => receiver,
           "go_method" => go_method,
-          "source" => Path.relative_to(path, source_root)
+          "source" => source
         }
       ]
     else
       _ -> []
     end
-  end
-
-  defp capture_text(captures, name) do
-    captures
-    |> Enum.find(&(&1["name"] == name))
-    |> Map.fetch!("text")
   end
 
   defp exported?(<<first::utf8, _rest::binary>>) do

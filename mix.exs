@@ -60,20 +60,7 @@ defmodule Onchain.MixProject do
       {:ex_dna, "~> 1.3", only: [:dev, :test], runtime: false},
       {:ex_ast, "~> 0.12.0", only: [:dev, :test], runtime: false},
       {:reach, "~> 2.7.1", only: [:dev, :test], runtime: false},
-      {:boxart, "~> 0.3.3", only: [:dev, :test], runtime: false},
-      # Exact-pinned, NOT a `~>` range, on purpose. Backs only the dev task
-      # `onchain.scrape_erigon_methods` (regenerates priv/specs/erigon-methods.json);
-      # never compiled into the shipped lib (runtime: false). Pulls a precompiled
-      # Rust NIF via rustler_precompiled — the lone native dep, hence dev/test-only.
-      # DO NOT bump on `mix hex.outdated`: 1.8.1's hex tarball ships a STALE checksum
-      # manifest (lists v1.8.0-rc.26 asset names, not v1.8.1) → precompiled download
-      # fails with "the precompiled NIF file does not exist in the checksum file".
-      # The actual GH release binary is fine; only the in-package checksum is wrong —
-      # upstream publish-step bug, no 1.8.2 cut. Their 1.9.0-rc.* line fixed the
-      # pipeline. Before bumping: verify the target version's checksum-*.Native.exs
-      # references that same version's asset names (only 1.9.0-rc.28+ verified OK as
-      # of 2026-06-09). Until a stable 1.9.0 ships, 1.6.2 stays.
-      {:tree_sitter_language_pack, "1.6.2", only: [:dev, :test], runtime: false}
+      {:boxart, "~> 0.3.3", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -115,7 +102,7 @@ defmodule Onchain.MixProject do
       # Tidewave/bandit's HTTP stack (plug, finch, mint, gun, cowlib, etc.)
       # is not in lib/'s call graph and bloats PLT to ~800 modules.
       plt_add_deps: :apps_direct,
-      plt_add_apps: [:ex_unit, :mix, :hieroglyph, :curvy, :tree_sitter_language_pack],
+      plt_add_apps: [:ex_unit, :mix, :hieroglyph, :curvy],
       plt_local_path: "priv/plts",
       plt_core_path: "priv/plts"
     ]
