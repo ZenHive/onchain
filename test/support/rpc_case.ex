@@ -13,7 +13,7 @@ defmodule Onchain.RPCCase do
     rpc_url() || flunk_missing_rpc()
   end
 
-  @doc false
+  @spec flunk_missing_rpc() :: no_return()
   defp flunk_missing_rpc do
     ExUnit.Assertions.flunk("""
     Missing Ethereum RPC URL!
