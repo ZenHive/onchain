@@ -4,7 +4,6 @@ defmodule Onchain.RPC.Differential.CartoucheTest do
   alias Onchain.ABI
   alias Onchain.RPC
 
-  @moduletag :integration
   @moduletag :differential
 
   # Task 65 requested signet as the first oracle. The project has since migrated

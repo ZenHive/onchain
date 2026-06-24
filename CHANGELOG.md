@@ -6,6 +6,12 @@ Completed roadmap tasks.
 
 ## [Unreleased]
 
+### Fixed — differential RPC suite no longer flunks under `--only/--include integration`
+
+- **`test/onchain/differential/rpc_cartouche_test.exs`** carried both `@moduletag :integration` and `@moduletag :differential`, so the documented `mix test --only integration` / `--include integration` commands pulled the differential module in via the broad `:integration` selector, ran its `setup_all`, and `flunk`ed ("Differential RPC tests are disabled… all tests have been invalidated") whenever `ONCHAIN_DIFFERENTIAL_TESTS` was unset. The differential suite has its own separate opt-in (`--include differential` + `ONCHAIN_DIFFERENTIAL_TESTS=1`), so it must not ride the integration tag. Dropped `@moduletag :integration` (kept `:differential`) and added `:differential` to the default `ExUnit.start(exclude: …)` set so plain `mix test` still skips it. `mix test --only integration` now runs clean (159 passed, 0 invalid); the combined credentialed command (`--include integration --include differential`) is unaffected since it already passes both includes.
+
+## v0.9.0 — eth_estimateGas auto-gas + cartouche 0.4.1; Log atom-trust hardening (2026-06-24)
+
 ### Removed — `tree_sitter_language_pack` dev dependency (Erigon scraper now pure-Elixir)
 
 - **Dropped `tree_sitter_language_pack`** (the lone native/precompiled-NIF dependency, dev/test-only) and reimplemented `mix onchain.scrape_erigon_methods` as a pure-Elixir line-anchored regex over the vendored Go source. The dep's `extract/2` custom-query engine was removed upstream in 1.10.x and its replacement parser API ships stubbed in the precompiled NIF (`{:error, "Not implemented"}`); `process/2` drops the Go method receiver the scraper needs. Since the scraper was the sole consumer, the regex (`func (recv *?Type) Method(`) is a strictly simpler long-term fit — no native dep, no CI grammar download, fully deterministic. Output `priv/specs/erigon-methods.json` is byte-identical (21 methods); both task tests pass unchanged. (Resolves dependabot PR #7; Claude + Codex concurred on dropping vs. upgrading.)
