@@ -1,0 +1,62 @@
+# Nightly differential RPC suite — informational, NOT a merge gate.
+#
+# Compares Onchain.RPC against Cartouche.RPC over a live mainnet archive node
+# (reads historical block 20_000_000, so a full archive is required). The PR
+# `harness.yml` gate deliberately excludes this: it burns Alchemy credits per
+# run, is network-flaky, and forks can't read the secret. So it runs on a
+# schedule with `continue-on-error` — a red run informs, it doesn't block.
+#
+# Requires repo secret ETHEREUM_ALCHEMY_URL (a mainnet archive RPC URL).
+# Without it the suite's own setup_all flunks with setup instructions.
+
+name: Differential
+
+on:
+  schedule:
+    # 07:00 UTC nightly (~midnight PT)
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: differential-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  differential:
+    name: Differential RPC
+    runs-on: ubuntu-latest
+    # Informational: never blocks. A failure surfaces in the run list, not as a gate.
+    continue-on-error: true
+    env:
+      MIX_ENV: test
+      ONCHAIN_DIFFERENTIAL_TESTS: "1"
+      ETHEREUM_API_URL: ${{ secrets.ETHEREUM_ALCHEMY_URL }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: beam
+        uses: erlef/setup-beam@v1
+        with:
+          version-file: .tool-versions
+          version-type: strict
+
+      - name: Cache deps & _build
+        uses: actions/cache@v6
+        with:
+          path: |
+            deps
+            _build
+          key: differential-${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            differential-${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-
+
+      - run: mix deps.get
+
+      - name: Compile (warnings as errors)
+        run: mix compile --warnings-as-errors
+
+      - name: Differential RPC suite
+        run: mix test --include differential test/onchain/differential
