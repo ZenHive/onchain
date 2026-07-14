@@ -64,7 +64,8 @@ defmodule Onchain.MixProject do
       {:ex_dna, "~> 1.3", only: [:dev, :test], runtime: false},
       {:ex_ast, "~> 0.12.0", only: [:dev, :test], runtime: false},
       {:reach, "~> 2.7.1", only: [:dev, :test], runtime: false},
-      {:boxart, "~> 0.3.3", only: [:dev, :test], runtime: false}
+      {:boxart, "~> 0.3.3", only: [:dev, :test], runtime: false},
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
     ]
   end
 

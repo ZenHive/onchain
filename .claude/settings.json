@@ -8,6 +8,7 @@
     }
   },
   "enabledPlugins": {
+    "dep-audit@zenhive": true,
     "defi-skills@nethermind-defi-skills": true
   }
 }
