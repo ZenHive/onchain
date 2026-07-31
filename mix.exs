@@ -1,7 +1,7 @@
 defmodule Onchain.MixProject do
   use Mix.Project
 
-  @version "0.10.0"
+  @version "0.11.0"
   @source_url "https://github.com/ZenHive/onchain"
 
   def project do
@@ -40,7 +40,10 @@ defmodule Onchain.MixProject do
     [
       {:cartouche, "~> 0.6"},
       {:decimal, "~> 3.1.1"},
-      {:descripex, "~> 0.9"},
+      # Floor raised 0.9 -> 0.11 to state the real requirement: cartouche 0.6
+      # declares `descripex ~> 0.11`, so nothing below 0.11 was resolvable
+      # anyway. The stale 0.9 floor described a world that no longer exists.
+      {:descripex, "~> 0.11"},
       {:jason, "~> 1.4"},
       {:nimble_options, "~> 1.0"},
       {:req, "~> 0.6"},

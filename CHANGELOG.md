@@ -4,6 +4,47 @@ Completed roadmap tasks.
 
 ---
 
+## v0.11.0 — raise cartouche/descripex floors so consumers actually get req 0.7 (2026-07-31)
+
+No code changes. This release exists purely to correct two dependency
+declarations that were describing an older world, and it is the release
+downstream consumers need in order to leave `req 0.6.x`.
+
+### Changed — `{:cartouche, "~> 0.5"}` → `{:cartouche, "~> 0.6"}`
+
+cartouche 0.6.0 widened its own bound to `{:req, "~> 0.6.2 or ~> 0.7"}`,
+lifting the transitive cap that held every consumer of this library below
+req 0.7. Publishing cartouche 0.6.0 alone was **not** sufficient to deliver
+that fix, and the reason is worth stating precisely because it is easy to get
+backwards:
+
+`~> 0.5` is a two-segment requirement — `>= 0.5.0 and < 1.0.0` — so it already
+*permitted* cartouche 0.6.0. What it did not do is *require* it. A consumer
+with an existing `mix.lock` pinning cartouche 0.5.x stays on 0.5.x through any
+number of `mix deps.get` runs, because the lockfile wins over the bound; only
+an explicit `mix deps.update cartouche` would have moved it. Since cartouche
+0.5.0 declares `req ~> 0.6.2`, those consumers remained capped below req 0.7
+with no visible signal that anything was wrong — their builds were green, their
+lockfiles simply never moved.
+
+Raising the floor to `~> 0.6` makes the old lock entry invalid, so the upgrade
+happens on the next ordinary `mix deps.get` rather than depending on someone
+knowing to run `deps.update`.
+
+### Changed — `{:descripex, "~> 0.9"}` → `{:descripex, "~> 0.11"}`
+
+Truthfulness fix, not a functional one. cartouche 0.6 declares
+`descripex ~> 0.11`, so nothing below 0.11 was resolvable here regardless of
+what this file claimed. The stale `~> 0.9` floor understated the real
+requirement — the same class of drift as the cartouche bound above, where a
+declaration that merely *permits* the right answer gets mistaken for one that
+*guarantees* it.
+
+### Unchanged
+
+`{:req, "~> 0.6"}` stays as-is: two-segment, so it already admits 0.7.x. The
+cap was never in this declaration — it came in transitively through cartouche.
+
 ## v0.10.0 — Req HTTP transport (cartouche 0.5.0 Finch→Req); differential suite tag fix (2026-06-24)
 
 ### Changed — HTTP transport migrated off cartouche's removed Finch seams to Req (cartouche 0.5.0, Task 83)
