@@ -1346,7 +1346,6 @@ defmodule Onchain.RPC do
     }
   end
 
-  @doc false
   defp decode_get_block_result({:ok, nil}), do: {:ok, nil}
 
   defp decode_get_block_result({:ok, block}) when is_map(block) do

@@ -694,10 +694,10 @@ defmodule Onchain.ENS do
   # Returns true when the resolver implements ENSIP-10 (interface 0x9061b923).
   @spec extended_resolver?(String.t(), keyword()) :: boolean()
   defp extended_resolver?(resolver_addr, opts) do
-    case Contract.call(resolver_addr, "supportsInterface(bytes4)", [@ensip10_interface_id], "(bool)", opts) do
-      {:ok, [true]} -> true
-      _ -> false
-    end
+    match?(
+      {:ok, [true]},
+      Contract.call(resolver_addr, "supportsInterface(bytes4)", [@ensip10_interface_id], "(bool)", opts)
+    )
   end
 
   # ENSIP-10 extended path: resolve(dnsEncode(name), innerCall) with CCIP-Read.
@@ -843,7 +843,6 @@ defmodule Onchain.ENS do
     end
   end
 
-  @doc false
   # EIP-137 namehash: fold right over dot-separated labels with keccak256
   defp compute_namehash(""), do: @zero_node
 

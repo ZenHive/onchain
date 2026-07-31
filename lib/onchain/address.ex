@@ -161,7 +161,6 @@ defmodule Onchain.Address do
 
   # --- Private helpers ---
 
-  @doc false
   # Normalizes any valid address input to a 20-byte binary.
   # Accepts: 20-byte binary, 0x-prefixed hex, or bare hex string.
   defp to_binary(bin) when is_binary(bin) and byte_size(bin) == @address_size do

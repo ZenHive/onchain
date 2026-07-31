@@ -73,11 +73,12 @@ defmodule Onchain.Fees do
          :ok <- validate_percentile_index(percentile_index, width) do
       base_fee = List.last(history.base_fee_per_gas)
 
-      # reach:disable-next-line suboptimal
-      # row is the per-block percentile list (1-4 elems) and percentile_index a small
-      # constant — Enum.at is O(small), not O(block_count). Not a hot path.
-      priority_estimates =
-        Enum.map(reward, fn row -> round(Enum.at(row, percentile_index)) end)
+      # `row` is the per-block percentile list (1-4 elements) and percentile_index a
+      # small constant, so Enum.at here is O(small), not O(block_count).
+      # The directive must be the last comment above the flagged line: reach scopes
+      # `disable-next-line` to `comment_line + 1`.
+      # reach:disable-next-line suboptimal -- Enum.at over a 1-4 element row, not a hot path
+      priority_estimates = Enum.map(reward, fn row -> round(Enum.at(row, percentile_index)) end)
 
       max_priority = median(priority_estimates)
       max_fee = ceil(base_fee * buffer) + max_priority

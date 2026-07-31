@@ -133,7 +133,6 @@ defmodule Onchain.Signer do
   defp normalize_calldata(calldata) when is_binary(calldata), do: {:ok, calldata}
   defp normalize_calldata(calldata), do: {:error, {:invalid_calldata, calldata}}
 
-  @doc false
   # Builds the transaction after calldata shape has been validated and normalized.
   defp build_transaction_validated(to, calldata, opts) do
     with {:ok, nonce} <- fetch_required(opts, :nonce),
@@ -389,7 +388,6 @@ defmodule Onchain.Signer do
     div(gas * @gas_headroom_numerator + @gas_headroom_denominator - 1, @gas_headroom_denominator)
   end
 
-  @doc false
   # Normalizes a private key input to a 32-byte binary.
   # Accepts: 32-byte binary, hex string (64 chars, with/without 0x).
   defp decode_private_key(bin) when is_binary(bin) and byte_size(bin) == 32 do
@@ -405,16 +403,19 @@ defmodule Onchain.Signer do
 
   defp decode_private_key(other), do: {:error, {:invalid_private_key, other}}
 
-  @doc false
   # Wraps Curvy.get_address/1 to catch crashes from malformed keys (e.g. <<0::256>>).
   # Returns {:error, {:invalid_private_key, original_input}} instead of crashing.
+  #
+  # Verified against Cartouche.Signer.Curvy: a scalar outside [1, n-1] fails the
+  # `<<0>>` pubkey-prefix match (MatchError); a non-32-byte or non-binary key has no
+  # matching `Curvy.Key.from_privkey/2` clause (FunctionClauseError). Every other
+  # exception — a typo'd call, a missing dep — propagates as the bug it is.
   defp safe_get_address(key_bin, original_input) do
     Curvy.get_address(key_bin)
   rescue
-    _ -> {:error, {:invalid_private_key, original_input}}
+    _ in [FunctionClauseError, MatchError] -> {:error, {:invalid_private_key, original_input}}
   end
 
-  @doc false
   # Returns {:ok, value} for present keys, {:error, {:missing_option, key}} for absent ones.
   # Used instead of Keyword.fetch!/2 so non-bang functions return error tuples.
   defp fetch_required(opts, key) do

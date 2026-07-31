@@ -198,6 +198,7 @@ defmodule Onchain.Transfer do
           {:ok, single} ->
             [single]
 
+          # reach:disable-next-line false_success_error -- skipping non-Transfer logs is this function's contract
           {:error, {:unknown_event, _}} ->
             []
 

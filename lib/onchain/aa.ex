@@ -628,10 +628,14 @@ defmodule Onchain.AA do
 
   defp decode_private_key(other), do: {:error, {:invalid_private_key, other}}
 
+  # Verified against Cartouche.Signer.Curvy: a scalar outside [1, n-1] fails the
+  # `<<0>>` pubkey-prefix match (MatchError); a non-32-byte or non-binary key has no
+  # matching `Curvy.Key.from_privkey/2` clause (FunctionClauseError). Every other
+  # exception — a typo'd call, a missing dep — propagates as the bug it is.
   defp safe_get_address(key_bin, original_input) do
     CurvySigner.get_address(key_bin)
   rescue
-    _ -> {:error, {:invalid_private_key, original_input}}
+    _ in [FunctionClauseError, MatchError] -> {:error, {:invalid_private_key, original_input}}
   end
 
   # --- Private: RPC ---

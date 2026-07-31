@@ -135,11 +135,23 @@ defmodule Onchain.ENS.CCIP do
     end
   end
 
+  # Gateway/resolver payloads are attacker-influenced, so a malformed one is an
+  # expected `:error`, not a crash. Exception set mirrors `Onchain.ABI`'s
+  # `@abi_errors` — see the note there for how each was verified against
+  # hieroglyph. Anything outside it is a bug in this module and propagates.
   @spec safe_decode(String.t(), binary()) :: {:ok, list()} | :error
   defp safe_decode(types, binary) do
     {:ok, ABI.decode(types, binary)}
   rescue
-    _ -> :error
+    _ in [
+      ABI.TypeDecoder.StrictViolation,
+      ArgumentError,
+      CaseClauseError,
+      FunctionClauseError,
+      MatchError,
+      RuntimeError
+    ] ->
+      :error
   end
 
   @spec to_hex_address(binary()) :: String.t()

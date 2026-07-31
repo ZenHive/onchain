@@ -37,6 +37,26 @@ defmodule Onchain.ABITest do
     end
   end
 
+  # The rescue clauses in Onchain.ABI list exception modules explicitly, so an input
+  # class raising something outside @abi_errors would escape as a crash instead of an
+  # error tuple. One case per exception hieroglyph raises, so adding a class to the
+  # upstream surface fails here rather than in a consumer.
+  describe "upstream exception coverage" do
+    test "every malformed-input class surfaces as an error tuple, never a raise" do
+      assert {:error, {:encode_error, _}} = ABI.encode_call("???invalid", [])
+      assert {:error, {:encode_error, _}} = ABI.encode_call("balanceOf(address)", [])
+      assert {:error, {:encode_error, _}} = ABI.encode_call("f(uint256)", [nil])
+      assert {:error, {:encode_error, _}} = ABI.encode_call("f(uint257)", [1])
+      assert {:error, {:encode_error, _}} = ABI.encode_call("f(uint256)", [%{a: 1}])
+
+      assert {:error, {:decode_error, _}} = ABI.decode_response("(uint256)", "0x010203")
+      assert {:error, {:decode_error, _}} = ABI.decode_response("(uint256)", "0x")
+      assert {:error, {:decode_error, _}} = ABI.decode_response("uint256", Onchain.Hex.encode(<<0::256>>))
+      assert {:error, {:decode_error, _}} = ABI.decode_response("(string)", Onchain.Hex.encode(<<0xFFFFFFFF::256>>))
+      assert {:error, {:decode_error, _}} = ABI.decode_response("(bool)", Onchain.Hex.encode(<<7::256>>))
+    end
+  end
+
   describe "encode_call!/2" do
     test "returns hex string for valid call" do
       assert "0x70a08231" <> _ = ABI.encode_call!("balanceOf(address)", [<<1::160>>])

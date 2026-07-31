@@ -46,6 +46,27 @@ defmodule Onchain.ABI do
 
   use Descripex, namespace: "/abi"
 
+  # Exceptions hieroglyph raises on malformed signatures, params, or payloads. These
+  # are the *input* failure modes this module converts into `{:error, {_, reason}}`
+  # tuples; anything outside the list (UndefinedFunctionError from a typo'd call,
+  # BadArityError, KeyError) is a bug here and must propagate.
+  #
+  # Verified against hieroglyph by probing each entry point:
+  #   MatchError                       unparseable signature / truncated or malformed payload
+  #   RuntimeError                     signature/params arity mismatch
+  #   FunctionClauseError              unknown type, nil/map param
+  #   CaseClauseError                  word outside the type's domain (e.g. bool /= 0|1)
+  #   ArgumentError                    explicit spec violations (packed mode, parser)
+  #   ABI.TypeDecoder.StrictViolation  strict-mode decode violation
+  @abi_errors [
+    ABI.TypeDecoder.StrictViolation,
+    ArgumentError,
+    CaseClauseError,
+    FunctionClauseError,
+    MatchError,
+    RuntimeError
+  ]
+
   # --- encode_call ---
 
   api(:encode_call, "Encode a function call to 0x-prefixed hex calldata.",
@@ -64,7 +85,7 @@ defmodule Onchain.ABI do
   def encode_call(signature, params) do
     {:ok, Onchain.Hex.encode(ABI.encode(signature, params))}
   rescue
-    e -> {:error, {:encode_error, Exception.message(e)}}
+    e in @abi_errors -> {:error, {:encode_error, Exception.message(e)}}
   end
 
   # --- encode_call! ---
@@ -110,7 +131,7 @@ defmodule Onchain.ABI do
         {:error, {:decode_error, reason}}
     end
   rescue
-    e -> {:error, {:decode_error, Exception.message(e)}}
+    e in @abi_errors -> {:error, {:decode_error, Exception.message(e)}}
   end
 
   # --- decode_response! ---
@@ -209,7 +230,7 @@ defmodule Onchain.ABI do
       {:error, atom} when is_atom(atom) -> {:error, {:decode_error, atom}}
     end
   rescue
-    e -> {:error, {:decode_error, Exception.message(e)}}
+    e in @abi_errors -> {:error, {:decode_error, Exception.message(e)}}
   end
 
   # --- decode_call! ---
@@ -278,7 +299,7 @@ defmodule Onchain.ABI do
       {:error, atom} when is_atom(atom) -> {:error, {:decode_error, atom}}
     end
   rescue
-    e -> {:error, {:decode_error, Exception.message(e)}}
+    e in @abi_errors -> {:error, {:decode_error, Exception.message(e)}}
   end
 
   # --- decode_error! ---

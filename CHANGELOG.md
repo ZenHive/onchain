@@ -4,6 +4,63 @@ Completed roadmap tasks.
 
 ---
 
+## Unreleased — finish the reach install and clear its smell surface
+
+`reach` was already a dev/test dep, but `.reach.exs` was missing, so
+`mix reach.check --arch` aborted with "No architecture policy found" — the dep
+was half-installed and its smell surface had never been graded. Adding the
+policy file and raising the bound to `~> 2.8` (the old `~> 2.7.1` was
+three-segment, capping at `< 2.8.0` for no reason beyond how it was written)
+surfaced 19 findings. All are now resolved and `mix reach.check --arch --smells
+--strict` is green.
+
+### Changed — bare rescues narrowed to verified exception sets
+
+Ten `rescue _ ->` clauses caught every exception type, including the ones that
+mean *this code is wrong*: a typo'd call raising `UndefinedFunctionError` was
+indistinguishable from a malformed input, and surfaced to the caller as a
+tidy `{:error, {:decode_error, …}}`.
+
+Each site now lists the exceptions its body can actually raise. The sets are
+not guesses — every entry point was probed against the installed dep:
+
+- `Onchain.ABI` (4 sites, hoisted to `@abi_errors`) — hieroglyph raises
+  `MatchError` on an unparseable signature or truncated payload,
+  `RuntimeError` on arity mismatch, `FunctionClauseError` on an unknown type or
+  non-encodable param, `CaseClauseError` on a word outside its type's domain,
+  `ArgumentError` on explicit spec violations, and
+  `ABI.TypeDecoder.StrictViolation` in strict mode.
+- `Onchain.ENS.CCIP.safe_decode/2` — same set; gateway payloads are
+  attacker-influenced, so a malformed one stays an expected `:error`.
+- `Onchain.ERC7730.Binding` (3 sites, `@selector_errors`) —
+  `ABI.FunctionSelector.decode/1` and `decode_type/1` fail their result match
+  on junk or empty input.
+- `Onchain.Signer` and `Onchain.AA` `safe_get_address/2` — a scalar outside
+  `[1, n-1]` fails the pubkey-prefix match; a non-32-byte key reaches no
+  `Curvy.Key.from_privkey/2` clause.
+
+Behavior is unchanged for every input class that was already handled. What
+changed is that a bug inside these functions now crashes instead of being
+reported as the caller's bad input. `Onchain.ABITest` gained a case per
+upstream exception class, so a new one appearing in hieroglyph fails here
+rather than in a consumer, and `Onchain.AATest` now covers the
+curve-order path that only `safe_get_address/2` guards.
+
+### Changed — smaller cleanups
+
+- Removed `@doc false` from five private functions (`Onchain.Address`,
+  `Onchain.RPC`, `Onchain.Signer` ×3, `Onchain.ENS`); `defp` cannot carry docs,
+  so the attribute was inert. The explanatory comments stay.
+- `Onchain.ENS.extended_resolver?/2` is a `match?/2` — it was a `case` with a
+  catch-all returning `false`, which is what `match?/2` means.
+- Two findings are suppressed with justifications rather than "fixed", because
+  the code is right: `Onchain.Fees` uses `Enum.at` over a 1-4 element percentile
+  row (not the O(n²) pattern the check targets), and `Onchain.Transfer.parse_logs/1`
+  dropping `{:error, {:unknown_event, _}}` *is* its documented contract.
+  The pre-existing `Fees` suppression was inert — reach scopes
+  `disable-next-line` to `comment_line + 1`, and two explanatory comments sat
+  between the directive and the flagged expression.
+
 ## v0.11.0 — raise cartouche/descripex floors so consumers actually get req 0.7 (2026-07-31)
 
 No code changes. This release exists purely to correct two dependency
@@ -44,6 +101,30 @@ declaration that merely *permits* the right answer gets mistaken for one that
 
 `{:req, "~> 0.6"}` stays as-is: two-segment, so it already admits 0.7.x. The
 cap was never in this declaration — it came in transitively through cartouche.
+
+### Fixed (dev/test tooling) — `{:reach, "~> 2.7.1"}` → `{:reach, "~> 2.8"}`
+
+Same bug shape as above, one layer down and self-inflicted: `~> 2.7.1` is
+three-segment, so it means `>= 2.7.1 and < 2.8.0` and blocked reach 2.8.x for
+no reason other than how the bound was written. `mix hex.outdated` reported
+reach as "Update not possible" with `mix.exs` as the only listed source. Now on
+reach 2.8.2. Dev/test only — no consumer impact.
+
+`ex_ast` remains pinned at 0.12.x and will keep showing as "Update not
+possible": reach 2.8.2 itself declares `ex_ast ~> 0.12.0`, so 0.13.x is
+unreachable wherever reach is a dependency. That cap is upstream's, not ours.
+
+### Added — `.reach.exs` architecture policy
+
+`reach` was a declared dev/test dependency with no policy file, so
+`mix reach.check --arch` aborted with "No .reach.exs architecture policy found"
+— the tool was half-installed. Added a permissive policy mirroring cartouche's:
+`--arch` passes, and no layer/boundary rules are asserted yet because onchain's
+module surface is still flat under `Onchain.*`. `--smells` currently reports 19
+pre-existing findings (bare rescues in `abi.ex` / `erc7730/binding.ex`,
+`@doc false` on private functions, an `Enum.at/2` in a loop in `fees.ex`, one
+false-success error branch in `transfer.ex`); these are untouched here and not
+yet gated in CI.
 
 ## v0.10.0 — Req HTTP transport (cartouche 0.5.0 Finch→Req); differential suite tag fix (2026-06-24)
 

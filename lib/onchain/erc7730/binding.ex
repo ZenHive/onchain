@@ -44,6 +44,14 @@ defmodule Onchain.ERC7730.Binding do
   alias Onchain.ERC7730.Descriptor
   alias Onchain.Hex
 
+  # Descriptor JSON is third-party input, so an unparseable type or format key is
+  # an expected fallback, not a crash. `ABI.FunctionSelector.decode/1` and
+  # `decode_type/1` fail the parser's result match (MatchError) on junk or empty
+  # input and raise ArgumentError on explicit spec violations; a non-binary reaches
+  # no clause (FunctionClauseError). Same set as `Onchain.ABI`'s `@abi_errors`,
+  # minus the decode-payload-only entries.
+  @selector_errors [ArgumentError, FunctionClauseError, MatchError]
+
   @type request ::
           {:calldata, String.t() | binary(), non_neg_integer(), String.t()}
           | {:eip712, map()}
@@ -266,7 +274,7 @@ defmodule Onchain.ERC7730.Binding do
   defp parse_eip712_type(type) when is_binary(type) do
     ABI.FunctionSelector.decode_type(type)
   rescue
-    _ -> type
+    _ in @selector_errors -> type
   end
 
   defp parse_eip712_type(type), do: type
@@ -284,13 +292,13 @@ defmodule Onchain.ERC7730.Binding do
       {:ok, fs, sel}
     end
   rescue
-    _ -> :error
+    _ in @selector_errors -> :error
   end
 
   defp parse_selector(key) do
     {:ok, ABI.FunctionSelector.decode(key)}
   rescue
-    _ -> {:error, {:invalid_format_key, key}}
+    _ in @selector_errors -> {:error, {:invalid_format_key, key}}
   end
 
   # --- calldata decoding ---

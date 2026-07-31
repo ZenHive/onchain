@@ -227,6 +227,15 @@ defmodule Onchain.AATest do
                AA.sign_user_operation(ref_op(), "0xdeadbeef", @ref_entry_point, @ref_chain_id)
     end
 
+    # Well-formed 32 bytes, so it clears decode_private_key/1 and only fails deeper,
+    # inside the signer — the path safe_get_address/2's narrowed rescue guards.
+    test "rejects a 32-byte key whose scalar is outside the curve order" do
+      zero_key = <<0::256>>
+
+      assert {:error, {:invalid_private_key, ^zero_key}} =
+               AA.sign_user_operation(ref_op(), zero_key, @ref_entry_point, @ref_chain_id)
+    end
+
     test "rejects an invalid signature scheme" do
       assert {:error, {:invalid_scheme, :wat}} =
                AA.sign_user_operation(ref_op(), @test_key_hex, @ref_entry_point, @ref_chain_id, scheme: :wat)
