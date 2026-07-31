@@ -101,6 +101,37 @@ defmodule Onchain.AATest do
       assert {:error, {:invalid_field, :call_data, "0xabc"}} =
                AA.new(%{sender: "0x1234567890123456789012345678901234567890", call_data: "0xabc"})
     end
+
+    test "rejects a non-binary hex field" do
+      assert {:error, {:invalid_field, :call_data, 123}} =
+               AA.new(%{sender: "0x1234567890123456789012345678901234567890", call_data: 123})
+    end
+
+    test "rejects a list that is not a keyword list" do
+      assert {:error, {:invalid_fields, ["nope"]}} = AA.new(["nope"])
+    end
+
+    test "rejects input that is neither a map nor a list" do
+      assert {:error, {:invalid_fields, 123}} = AA.new(123)
+    end
+
+    # nil is the "field absent" signal for the v0.7 optional fields, distinct from
+    # a zero or "0x" that would encode as present-but-empty.
+    test "passes explicit nil through for optional factory/paymaster fields" do
+      {:ok, op} =
+        AA.new(%{
+          sender: "0x1234567890123456789012345678901234567890",
+          factory_data: nil,
+          paymaster_data: nil,
+          paymaster_verification_gas_limit: nil,
+          paymaster_post_op_gas_limit: nil
+        })
+
+      assert op.factory_data == nil
+      assert op.paymaster_data == nil
+      assert op.paymaster_verification_gas_limit == nil
+      assert op.paymaster_post_op_gas_limit == nil
+    end
   end
 
   describe "user_op_hash/4 — reference vectors" do
@@ -181,6 +212,88 @@ defmodule Onchain.AATest do
     end
   end
 
+  # A v0.7 op may set `factory`/`paymaster` while leaving their sub-fields nil — a
+  # paymaster needing no calldata and no gas overrides is the common case. Those
+  # nils are encoded as fixed-width zero words, not omitted, so getting them wrong
+  # shifts every following byte and yields a userOpHash for a *different*
+  # operation than the one submitted. The packed-equivalent comparison pins the
+  # widths against an independently written byte string rather than against the
+  # encoder's own output.
+  describe "user_op_hash/4 — v0.7 absent optional sub-fields" do
+    @paymaster "0x00000000000000000000000000000000000000bb"
+    @factory "0x00000000000000000000000000000000000000aa"
+    @zero_uint128 String.duplicate("0", 32)
+
+    test "nil paymaster gas limits and data encode as two zero words and no data" do
+      {:ok, split} =
+        AA.new(%{
+          sender: "0x1234567890123456789012345678901234567890",
+          paymaster: @paymaster,
+          paymaster_verification_gas_limit: nil,
+          paymaster_post_op_gas_limit: nil,
+          paymaster_data: nil
+        })
+
+      # paymaster(20) ‖ verGas(16 zero bytes) ‖ postOp(16 zero bytes) ‖ no data
+      packed = @paymaster <> @zero_uint128 <> @zero_uint128
+      assert byte_size(Hex.decode!(packed)) == 52
+
+      {:ok, combined} =
+        AA.new(%{sender: "0x1234567890123456789012345678901234567890", paymaster_and_data: packed})
+
+      {:ok, split_hash} = AA.user_op_hash(split, @ref_entry_point, @ref_chain_id)
+      {:ok, combined_hash} = AA.user_op_hash(combined, @ref_entry_point, @ref_chain_id)
+      assert split_hash == combined_hash
+    end
+
+    test "nil factory_data encodes as an initCode of the factory address alone" do
+      {:ok, split} =
+        AA.new(%{
+          sender: "0x1234567890123456789012345678901234567890",
+          factory: @factory,
+          factory_data: nil
+        })
+
+      {:ok, combined} =
+        AA.new(%{sender: "0x1234567890123456789012345678901234567890", init_code: @factory})
+
+      {:ok, split_hash} = AA.user_op_hash(split, @ref_entry_point, @ref_chain_id)
+      {:ok, combined_hash} = AA.user_op_hash(combined, @ref_entry_point, @ref_chain_id)
+      assert split_hash == combined_hash
+    end
+
+    test "to_rpc_params renders absent sub-fields as zero quantities and empty bytes" do
+      {:ok, op} =
+        AA.new(%{
+          sender: "0x1234567890123456789012345678901234567890",
+          factory: @factory,
+          factory_data: nil,
+          paymaster: @paymaster,
+          paymaster_verification_gas_limit: nil,
+          paymaster_post_op_gas_limit: nil,
+          paymaster_data: nil
+        })
+
+      {:ok, params} = AA.to_rpc_params(op, version: :v0_7)
+
+      assert params["factory"] == @factory
+      assert params["factoryData"] == "0x"
+      assert params["paymaster"] == @paymaster
+      assert params["paymasterVerificationGasLimit"] == "0x0"
+      assert params["paymasterPostOpGasLimit"] == "0x0"
+      assert params["paymasterData"] == "0x"
+    end
+
+    # new/1 normalizes hex on the way in, so a malformed init_code can only reach
+    # the encoder on a hand-built struct — which the public struct permits.
+    test "a hand-built struct with malformed init_code is rejected, not decoded" do
+      op = %UserOperation{sender: "0x1234567890123456789012345678901234567890", init_code: "0xzz"}
+
+      assert {:error, {:invalid_field, :init_code, "0xzz"}} =
+               AA.user_op_hash(op, @ref_entry_point, @ref_chain_id)
+    end
+  end
+
   describe "user_op_hash/4 — errors" do
     test "rejects an unknown version" do
       assert {:error, {:invalid_version, :v9}} =
@@ -234,6 +347,11 @@ defmodule Onchain.AATest do
 
       assert {:error, {:invalid_private_key, ^zero_key}} =
                AA.sign_user_operation(ref_op(), zero_key, @ref_entry_point, @ref_chain_id)
+    end
+
+    test "rejects a non-binary private key" do
+      assert {:error, {:invalid_private_key, 123}} =
+               AA.sign_user_operation(ref_op(), 123, @ref_entry_point, @ref_chain_id)
     end
 
     test "rejects an invalid signature scheme" do
@@ -380,6 +498,14 @@ defmodule Onchain.AATest do
 
     test "get_user_operation_receipt rejects a malformed hash" do
       assert {:error, {:invalid_user_op_hash, 123}} = AA.get_user_operation_receipt(123)
+    end
+
+    # Valid hex, wrong width — the length check is separate from the hex check, and
+    # only this shape reaches it. A short hash must never be padded into a lookup.
+    test "rejects a well-formed hex hash that is not 32 bytes" do
+      short = "0x" <> String.duplicate("ab", 16)
+
+      assert {:error, {:invalid_user_op_hash, ^short}} = AA.get_user_operation_by_hash(short)
     end
   end
 

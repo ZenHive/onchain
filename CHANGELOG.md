@@ -46,6 +46,28 @@ upstream exception class, so a new one appearing in hieroglyph fails here
 rather than in a consumer, and `Onchain.AATest` now covers the
 curve-order path that only `safe_get_address/2` guards.
 
+### Added — coverage for `Onchain.AA`'s absent-field encoders
+
+Touching `Onchain.AA` put it under the coverage gate at 83%. Most of the
+shortfall turned out to be measurement scope — the bundler query surface is
+exercised only by the integration suite, which the default run excludes, and a
+few lines are `opts \\ []` heads whose real arity is tested — but reading the
+uncovered set surfaced one gap worth closing.
+
+A v0.7 op may set `paymaster` (or `factory`) while leaving its sub-fields
+`nil`: a paymaster that needs no calldata and no gas overrides is the ordinary
+case. Those `nil`s are not omitted from `paymasterAndData` — they encode as
+fixed-width zero words, so a wrong width shifts every following byte and
+produces a `userOpHash` for a *different* operation than the one submitted.
+Nothing covered that path. The new tests pin it by hashing the split form
+against a hand-written packed equivalent, which reaches the encoder through the
+other branch, so the two cannot agree by sharing a bug. Coverage is 88.65%.
+
+Two lines are deliberately left uncovered: `sign_digest/3`'s `{:sign_error, _}`
+is unreachable for a key that already passed address derivation, and the
+success arm of `validate_hash/1` continues into a bundler round-trip that a
+unit test has no business making.
+
 ### Changed — smaller cleanups
 
 - Removed `@doc false` from five private functions (`Onchain.Address`,
