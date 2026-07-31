@@ -102,29 +102,9 @@ declaration that merely *permits* the right answer gets mistaken for one that
 `{:req, "~> 0.6"}` stays as-is: two-segment, so it already admits 0.7.x. The
 cap was never in this declaration — it came in transitively through cartouche.
 
-### Fixed (dev/test tooling) — `{:reach, "~> 2.7.1"}` → `{:reach, "~> 2.8"}`
-
-Same bug shape as above, one layer down and self-inflicted: `~> 2.7.1` is
-three-segment, so it means `>= 2.7.1 and < 2.8.0` and blocked reach 2.8.x for
-no reason other than how the bound was written. `mix hex.outdated` reported
-reach as "Update not possible" with `mix.exs` as the only listed source. Now on
-reach 2.8.2. Dev/test only — no consumer impact.
-
-`ex_ast` remains pinned at 0.12.x and will keep showing as "Update not
-possible": reach 2.8.2 itself declares `ex_ast ~> 0.12.0`, so 0.13.x is
-unreachable wherever reach is a dependency. That cap is upstream's, not ours.
-
-### Added — `.reach.exs` architecture policy
-
-`reach` was a declared dev/test dependency with no policy file, so
-`mix reach.check --arch` aborted with "No .reach.exs architecture policy found"
-— the tool was half-installed. Added a permissive policy mirroring cartouche's:
-`--arch` passes, and no layer/boundary rules are asserted yet because onchain's
-module surface is still flat under `Onchain.*`. `--smells` currently reports 19
-pre-existing findings (bare rescues in `abi.ex` / `erc7730/binding.ex`,
-`@doc false` on private functions, an `Enum.at/2` in a loop in `fees.ex`, one
-false-success error branch in `transfer.ex`); these are untouched here and not
-yet gated in CI.
+The `reach` bound and its `.reach.exs` policy moved in the same commit range but
+are dev/test-only and carry no consumer impact — see the Unreleased section
+above.
 
 ## v0.10.0 — Req HTTP transport (cartouche 0.5.0 Finch→Req); differential suite tag fix (2026-06-24)
 
