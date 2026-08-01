@@ -617,16 +617,7 @@ defmodule Onchain.AA do
     |> Cartouche.Address.from_public_key()
   end
 
-  defp decode_private_key(bin) when is_binary(bin) and byte_size(bin) == 32, do: {:ok, bin}
-
-  defp decode_private_key(hex) when is_binary(hex) do
-    case Hex.decode(hex) do
-      {:ok, bin} when byte_size(bin) == 32 -> {:ok, bin}
-      _ -> {:error, {:invalid_private_key, hex}}
-    end
-  end
-
-  defp decode_private_key(other), do: {:error, {:invalid_private_key, other}}
+  defp decode_private_key(input), do: Onchain.PrivateKey.decode(input)
 
   # Verified against Cartouche.Signer.Curvy: a scalar outside [1, n-1] fails the
   # `<<0>>` pubkey-prefix match (MatchError); a non-32-byte or non-binary key has no

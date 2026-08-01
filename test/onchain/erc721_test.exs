@@ -1,5 +1,7 @@
 defmodule Onchain.ERC721Test do
-  use ExUnit.Case, async: true
+  # async: false — EthCallStub mutates global :cartouche, Cartouche.RPC config
+  use ExUnit.Case, async: false
+  use Onchain.EthCallStub
 
   alias Onchain.ERC721
 
@@ -18,6 +20,13 @@ defmodule Onchain.ERC721Test do
       assert {:error, {:invalid_address, "bad_contract"}} =
                ERC721.balance_of("bad_contract", owner_bin)
     end
+
+    test "returns the decoded uint256 owned-token count on success" do
+      Onchain.EthCallStub.queue_response("uint256", 3)
+
+      assert {:ok, 3} =
+               ERC721.balance_of(@valid_address, @valid_address, rpc_url: "http://stub.invalid")
+    end
   end
 
   describe "balance_of!/3" do
@@ -25,6 +34,12 @@ defmodule Onchain.ERC721Test do
       assert_raise RuntimeError, ~r/balance_of failed/, fn ->
         ERC721.balance_of!(@valid_address, "not_an_address")
       end
+    end
+
+    test "returns the decoded uint256 owned-token count on success" do
+      Onchain.EthCallStub.queue_response("uint256", 3)
+
+      assert 3 = ERC721.balance_of!(@valid_address, @valid_address, rpc_url: "http://stub.invalid")
     end
   end
 
@@ -86,6 +101,12 @@ defmodule Onchain.ERC721Test do
         ERC721.symbol!("not_a_contract")
       end
     end
+
+    test "returns the decoded symbol string on success" do
+      Onchain.EthCallStub.queue_response("string", "BAYC")
+
+      assert "BAYC" = ERC721.symbol!(@valid_address, rpc_url: "http://stub.invalid")
+    end
   end
 
   describe "get_approved/3" do
@@ -120,6 +141,13 @@ defmodule Onchain.ERC721Test do
       assert {:error, {:invalid_address, "bad_contract"}} =
                ERC721.approved_for_all?("bad_contract", addr_bin, addr_bin)
     end
+
+    test "returns the decoded approval bool on success" do
+      Onchain.EthCallStub.queue_response("bool", true)
+
+      assert {:ok, true} =
+               ERC721.approved_for_all?(@valid_address, @valid_address, @valid_address, rpc_url: "http://stub.invalid")
+    end
   end
 
   describe "approved_for_all!/4" do
@@ -127,6 +155,13 @@ defmodule Onchain.ERC721Test do
       assert_raise RuntimeError, ~r/approved_for_all\? failed/, fn ->
         ERC721.approved_for_all!(@valid_address, "bad_owner", @valid_address)
       end
+    end
+
+    test "returns the decoded approval bool on success" do
+      Onchain.EthCallStub.queue_response("bool", true)
+
+      assert true =
+               ERC721.approved_for_all!(@valid_address, @valid_address, @valid_address, rpc_url: "http://stub.invalid")
     end
   end
 end

@@ -49,29 +49,9 @@ jobs:
 
       - run: mix deps.get
 
-      - name: Compile (warnings as errors)
-        run: mix compile --warnings-as-errors
-
-      - name: Format check
-        run: mix format --check-formatted
-
-      # TODO/FIXME tags are tracked-debt visibility, not regressions — exclude
-      # so harness only fails on real Credo issues (see development-philosophy.md
-      # § "TODO Comment Requirements").
-      - name: Credo (strict, excluding TODO/FIXME design tags)
-        run: mix credo --strict --ignore TagTODO,TagFIXME
-
-      - name: Doctor (--raise overrides .doctor.exs raise=false to gate CI)
-        run: mix doctor --raise
-
-      - name: Sobelow (--skip honors .sobelow-skips false-positive list, exit=Low)
-        run: mix sobelow --skip
-
-      # Coverage floor: 70% — conservative family floor (matches onchain_tempo).
-      # Raise per-repo as coverage climbs. `mix test.json`'s test_helper excludes
-      # `:integration` by default, so no `--exclude integration` needed here.
-      - name: Tests + coverage gate (>=70%)
-        run: mix test.json --cover --cover-threshold 70 --summary-only
-
-      - name: Dialyzer
-        run: mix dialyzer
+      # Runs the full canonical gate — compile / format / credo / doctor /
+      # ex_dna / reach.check / sobelow / deps.audit.gated / test+coverage /
+      # dialyzer / AGENTS.md freshness. See `mix.exs` `aliases/0` (`ci` ->
+      # `precommit.full`) for the authoritative step list.
+      - name: mix ci
+        run: mix ci

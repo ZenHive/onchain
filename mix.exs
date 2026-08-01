@@ -1,14 +1,16 @@
 defmodule Onchain.MixProject do
   use Mix.Project
 
-  @version "0.11.0"
+  @version "0.12.0"
   @source_url "https://github.com/ZenHive/onchain"
 
   def project do
     [
       app: :onchain,
       version: @version,
-      elixir: "~> 1.17",
+      # 1.18 floor inherited transitively from hieroglyph 1.6.0 (via cartouche),
+      # whose encode path uses `Enum.sum_by/2` (Elixir 1.18+).
+      elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
       aliases: aliases(),
@@ -40,15 +42,23 @@ defmodule Onchain.MixProject do
     [
       {:cartouche, "~> 0.6"},
       {:decimal, "~> 3.1.1"},
-      # Floor raised 0.9 -> 0.11 to state the real requirement: cartouche 0.6
-      # declares `descripex ~> 0.11`, so nothing below 0.11 was resolvable
-      # anyway. The stale 0.9 floor described a world that no longer exists.
-      {:descripex, "~> 0.11"},
+      # Three-segment on purpose (caps at < 0.13.0): descripex 0.12.0 changed
+      # `short_name` in describe/1 output from atom to string at a *minor*
+      # bump, which the previous `~> 0.11` would have absorbed silently. A 0.x
+      # package that breaks on minor earns the tighter form; raise the cap
+      # deliberately after reading its CHANGELOG.
+      {:descripex, "~> 0.12.0"},
       {:jason, "~> 1.4"},
       {:nimble_options, "~> 1.0"},
       {:req, "~> 0.6"},
       {:telemetry, "~> 1.4"},
-      {:zen_websocket, "~> 0.4.2"},
+      # 0.5.0 is where `gun` rises to `~> 2.4` and thereby *requires* the fix for
+      # GHSA-w4f7-4cxr-rv3c instead of merely permitting it; 0.6.0 is where
+      # `descripex` narrows to `~> 0.12.0`, matching what this package now
+      # declares directly. Three-segment (caps at < 0.7.0) because zen_websocket
+      # has shipped two consecutive minors it labels breaking for consumers —
+      # a two-segment `~> 0.5` would absorb the third one silently.
+      {:zen_websocket, "~> 0.6.0"},
 
       # Dev/test tooling
       # Req.Test plug-based transport stubbing (req's :plug is optional);
@@ -65,7 +75,13 @@ defmodule Onchain.MixProject do
       {:sobelow, "~> 0.14.1", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.40.1", only: :dev, runtime: false},
       {:ex_dna, "~> 1.3", only: [:dev, :test], runtime: false},
-      {:ex_ast, "~> 0.12.0", only: [:dev, :test], runtime: false},
+      # Two-segment on purpose: the three-segment form was a redundant self-cap.
+      # Resolution lands on 0.12.10 because reach 2.8.2 declares
+      # `{:ex_ast, "~> 0.12.0"}`. That is a choice, not a wall -- `override:
+      # true` gets past it (cartouche does) -- but the override is unmeasured:
+      # ex_ast 0.13.0 made map patterns subset-matching, and reach's smell
+      # checks are built on those patterns, so it could report fewer findings.
+      {:ex_ast, "~> 0.12", only: [:dev, :test], runtime: false},
       # Two-segment on purpose: the previous `~> 2.7.1` was three-segment
       # (>= 2.7.1 and < 2.8.0) and blocked reach 2.8.x with no reason beyond
       # the way the bound was written.
@@ -102,7 +118,52 @@ defmodule Onchain.MixProject do
     [
       tidewave: [
         "run --no-halt -e 'Agent.start(fn -> Bandit.start_link(plug: Tidewave, port: 4007) end)'"
-      ]
+      ],
+      # Fast local pre-commit loop — skips the cold-PLT dialyzer and the coverage
+      # pass so it stays quick on incremental edits.
+      precommit: [
+        "compile --warnings-as-errors",
+        "format --check-formatted",
+        "credo --strict --ignore Credo.Check.Design.TagTODO,Credo.Check.Design.TagFIXME",
+        "ex_dna --max-clones 0",
+        # `preferred_envs` (cli/0) is ignored for alias steps — set MIX_ENV via
+        # `env` (Elixir 1.20's `mix cmd` no longer parses a leading VAR=val prefix).
+        "cmd env MIX_ENV=test mix test.json --exclude integration"
+      ],
+      # Comprehensive gate — the harness reviewer's `check_command` and `mix ci`
+      # target. Coverage floor 70 matches the family convention already encoded
+      # in .github/workflows/harness.yml (measured baseline: 79.04%). reach's
+      # analysis scope (see .reach.exs) includes the `dev` root in addition to
+      # `lib`/`src` — do not narrow it.
+      "precommit.full": [
+        "compile --warnings-as-errors",
+        "format --check-formatted",
+        "credo --strict --ignore Credo.Check.Design.TagTODO,Credo.Check.Design.TagFIXME",
+        "doctor --raise",
+        "ex_dna --max-clones 0",
+        "reach.check --arch --smells",
+        "sobelow --skip",
+        "deps.audit.gated",
+        "cmd env MIX_ENV=test mix test.json --cover --cover-threshold 70 --summary-only --exclude integration",
+        "dialyzer",
+        # AGENTS.md is what the cross-family (codex/cursor/grok) reviewers read;
+        # a stale render makes them gate against rules that already changed.
+        "agents.check"
+      ],
+      # mix_audit discards its sync exit status (mirego/mix_audit#61), so a
+      # frozen advisory DB still reports green. Prove freshness first, then
+      # audit. `deps.audit` reports the gun/GHSA-w4f7-4cxr-rv3c false positive
+      # (see .mix_audit_ignore for the verified rationale) — ignore-file scoped.
+      "deps.audit.gated": [
+        &advisory_freshness/1,
+        "deps.audit --ignore-file .mix_audit_ignore"
+      ],
+      # Fails when AGENTS.md has drifted from CLAUDE.md. Compares rendered
+      # output, not mtimes, so drift in a transitive @-import is caught too.
+      "agents.check": [
+        &agents_check/1
+      ],
+      ci: ["precommit.full"]
     ]
   end
 
@@ -120,5 +181,50 @@ defmodule Onchain.MixProject do
       plt_local_path: "priv/plts",
       plt_core_path: "priv/plts"
     ]
+  end
+
+  # Both gates below shell out to scripts that live OUTSIDE this repo, on the
+  # developer host: the AGENTS.md renderer needs the claude-marketplace
+  # checkout plus ~/.claude/includes, and the advisory-freshness prover needs
+  # the local mix_audit mirror. Neither exists on a CI runner, and `mix cmd`
+  # with an absent path exits non-zero — which aborted the whole `mix ci`
+  # alias, and since these steps precede test.json/dialyzer it took the test,
+  # coverage and dialyzer signal down with it. Skip loudly when the script is
+  # absent so CI keeps running the checks it CAN run; the developer host and
+  # the harness reviewer still get the full gate.
+  @spec agents_check([String.t()]) :: :ok
+  defp agents_check(_args) do
+    host_script(
+      "~/_DATA/code/claude-marketplace/scripts/sync-agents-md.sh",
+      ["--check"],
+      "AGENTS.md freshness check"
+    )
+  end
+
+  @spec advisory_freshness([String.t()]) :: :ok
+  defp advisory_freshness(_args) do
+    host_script(
+      "~/_DATA/code/onchain-stack/bin/advisory-freshness.sh",
+      [],
+      "advisory-mirror freshness check"
+    )
+  end
+
+  @spec host_script(String.t(), [String.t()], String.t()) :: :ok
+  defp host_script(path, args, label) do
+    expanded = Path.expand(path)
+
+    if File.exists?(expanded) do
+      {_out, status} =
+        System.cmd(expanded, args, into: IO.stream(:stdio, :line), stderr_to_stdout: true)
+
+      if status != 0 do
+        Mix.raise("#{label} failed (#{expanded} exited #{status})")
+      end
+    else
+      Mix.shell().info("[skip] #{label}: #{expanded} not found (developer-host script, absent in CI).")
+    end
+
+    :ok
   end
 end

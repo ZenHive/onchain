@@ -33,6 +33,7 @@ defmodule Onchain.ERC1155 do
 
   alias Onchain.Address
   alias Onchain.Contract
+  alias Onchain.ERC.Helpers
 
   # --- balance_of ---
 
@@ -226,20 +227,8 @@ defmodule Onchain.ERC1155 do
           String.t() | binary(),
           keyword()
         ) :: {:ok, boolean()} | {:error, term()}
-  def approved_for_all?(contract, owner, operator, opts \\ []) do
-    with {:ok, owner_bin} <- Address.validate(owner),
-         {:ok, operator_bin} <- Address.validate(operator),
-         {:ok, [approved]} <-
-           Contract.call(
-             contract,
-             "isApprovedForAll(address,address)",
-             [owner_bin, operator_bin],
-             "(bool)",
-             opts
-           ) do
-      {:ok, approved}
-    end
-  end
+  def approved_for_all?(contract, owner, operator, opts \\ []),
+    do: Helpers.approved_for_all?(contract, owner, operator, opts)
 
   # --- approved_for_all! ---
 
@@ -259,12 +248,8 @@ defmodule Onchain.ERC1155 do
           String.t() | binary(),
           keyword()
         ) :: boolean()
-  def approved_for_all!(contract, owner, operator, opts \\ []) do
-    case approved_for_all?(contract, owner, operator, opts) do
-      {:ok, approved} -> approved
-      {:error, reason} -> raise "approved_for_all? failed: #{inspect(reason)}"
-    end
-  end
+  def approved_for_all!(contract, owner, operator, opts \\ []),
+    do: Helpers.unwrap!(approved_for_all?(contract, owner, operator, opts), "approved_for_all?")
 
   # Validates a list of addresses, returning all as binaries or the first error.
   @spec validate_addresses([String.t() | binary()]) :: {:ok, [binary()]} | {:error, term()}

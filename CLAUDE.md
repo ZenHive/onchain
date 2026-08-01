@@ -69,6 +69,26 @@ This repo is part of a multi-library portfolio. The boundary is **ephemeral vs d
 - Plain structs with `defstruct` + `@enforce_keys`, no private macro deps
 - Path dependency in consumers: `{:onchain, path: "../onchain"}`
 
+## Toolchain & check commands
+
+Canonical gate: **`mix ci`** (= `precommit.full`) — compile `--warnings-as-errors`,
+`format --check-formatted`, `credo --strict`, `doctor --raise`, `ex_dna --max-clones 0`,
+`reach.check --arch --smells`, `sobelow --skip`, `deps.audit.gated`, `test.json --cover
+--cover-threshold 70`, `dialyzer`, `agents.check`. `mix precommit` is the fast local loop
+(no dialyzer/coverage). A clean `mix ci` is the merge bar.
+
+- **`mix test.json` / `mix dialyzer.json` emit JSON by design** — parse for real failures,
+  never flag the envelope itself as a problem. When the JSON encoder can't serialize a
+  warning shape, plain `mix dialyzer` (MIX_ENV=dev) is authoritative.
+- **`mix reach.check --arch --smells` gates from `.reach.exs`** (`smells: [strict: true]`),
+  scanned across `roots=dev, lib, src` — do not narrow that scope. Smell findings must be
+  fixed, never added to an ignore list.
+- **`deps.audit.gated`** runs `bin/advisory-freshness.sh` (in `onchain-stack`) before
+  `mix deps.audit --ignore-file .mix_audit_ignore` — `mix_audit` discards its own sync exit
+  status, so a frozen advisory DB would otherwise still report green. The one ignore entry
+  (`GHSA-w4f7-4cxr-rv3c`) is a verified false positive for `gun` — see `.mix_audit_ignore`
+  for the full rationale. Do not add any other advisory id to that file.
+
 ## Module Layout
 
 ```

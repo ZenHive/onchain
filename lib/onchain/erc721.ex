@@ -38,6 +38,7 @@ defmodule Onchain.ERC721 do
 
   alias Onchain.Address
   alias Onchain.Contract
+  alias Onchain.ERC.Helpers
 
   # --- balance_of ---
 
@@ -56,12 +57,7 @@ defmodule Onchain.ERC721 do
 
   @spec balance_of(String.t() | binary(), String.t() | binary(), keyword()) ::
           {:ok, non_neg_integer()} | {:error, term()}
-  def balance_of(contract, owner, opts \\ []) do
-    with {:ok, owner_bin} <- Address.validate(owner),
-         {:ok, [count]} <- Contract.call(contract, "balanceOf(address)", [owner_bin], "(uint256)", opts) do
-      {:ok, count}
-    end
-  end
+  def balance_of(contract, owner, opts \\ []), do: Helpers.balance_of(contract, owner, opts)
 
   # --- balance_of! ---
 
@@ -75,12 +71,7 @@ defmodule Onchain.ERC721 do
   )
 
   @spec balance_of!(String.t() | binary(), String.t() | binary(), keyword()) :: non_neg_integer()
-  def balance_of!(contract, owner, opts \\ []) do
-    case balance_of(contract, owner, opts) do
-      {:ok, count} -> count
-      {:error, reason} -> raise "balance_of failed: #{inspect(reason)}"
-    end
-  end
+  def balance_of!(contract, owner, opts \\ []), do: Helpers.unwrap!(balance_of(contract, owner, opts), "balance_of")
 
   # --- owner_of ---
 
@@ -239,12 +230,7 @@ defmodule Onchain.ERC721 do
   )
 
   @spec symbol!(String.t() | binary(), keyword()) :: String.t()
-  def symbol!(contract, opts \\ []) do
-    case symbol(contract, opts) do
-      {:ok, value} -> value
-      {:error, reason} -> raise "symbol failed: #{inspect(reason)}"
-    end
-  end
+  def symbol!(contract, opts \\ []), do: Helpers.unwrap!(symbol(contract, opts), "symbol")
 
   # --- get_approved ---
 
@@ -311,20 +297,8 @@ defmodule Onchain.ERC721 do
           String.t() | binary(),
           keyword()
         ) :: {:ok, boolean()} | {:error, term()}
-  def approved_for_all?(contract, owner, operator, opts \\ []) do
-    with {:ok, owner_bin} <- Address.validate(owner),
-         {:ok, operator_bin} <- Address.validate(operator),
-         {:ok, [approved]} <-
-           Contract.call(
-             contract,
-             "isApprovedForAll(address,address)",
-             [owner_bin, operator_bin],
-             "(bool)",
-             opts
-           ) do
-      {:ok, approved}
-    end
-  end
+  def approved_for_all?(contract, owner, operator, opts \\ []),
+    do: Helpers.approved_for_all?(contract, owner, operator, opts)
 
   # --- approved_for_all! ---
 
@@ -344,10 +318,6 @@ defmodule Onchain.ERC721 do
           String.t() | binary(),
           keyword()
         ) :: boolean()
-  def approved_for_all!(contract, owner, operator, opts \\ []) do
-    case approved_for_all?(contract, owner, operator, opts) do
-      {:ok, approved} -> approved
-      {:error, reason} -> raise "approved_for_all? failed: #{inspect(reason)}"
-    end
-  end
+  def approved_for_all!(contract, owner, operator, opts \\ []),
+    do: Helpers.unwrap!(approved_for_all?(contract, owner, operator, opts), "approved_for_all?")
 end

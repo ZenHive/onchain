@@ -10,4 +10,8 @@
 # ens, aa, dex, erc7730, subscription) with no enforced layering to encode;
 # populate `layers` / `deps[:forbidden]` here once that architecture solidifies.
 # See the `elixir:reach` skill for the policy DSL.
-[]
+[
+  # `--smells` is advisory unless strict is set (reach 2.8.2 config.ex ~L351);
+  # this makes every `mix reach.check --arch --smells` invocation gate.
+  smells: [strict: true]
+]

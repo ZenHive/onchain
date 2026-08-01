@@ -650,25 +650,39 @@ We run our own full archive Ethereum node on `blockwatch-one`. Available across 
 
 **Access from Mac:**
 
-| Method | HTTP | WebSocket |
-|--------|------|-----------|
-| SSH tunnel | `http://localhost:8545` | `ws://localhost:8546` |
-| WireGuard VPN | `http://10.100.0.1:8545` | `ws://10.100.0.1:8546` |
+Reth binds JSON-RPC to `127.0.0.1` only — an SSH tunnel is the intended access path.
+A launchd agent (`com.efries.blockwatch-one-rpc`) holds it open permanently and
+restarts it after suspend or network loss, so **normally there is nothing to set up**.
 
-**SSH tunnel setup:**
+| Forwarded port | Serves |
+|---|---|
+| `http://localhost:8545` | JSON-RPC (namespaces: `trace`, `web3`, `eth`, `net` — `debug` is off) |
+| `ws://localhost:8546` | JSON-RPC over WebSocket (`eth_subscribe`) |
+| `http://localhost:9002/metrics` | reth metrics |
+| `http://localhost:5054/metrics` | lighthouse metrics |
+
+**Tunnel control** (config lives in `~/.ssh/config` as `Host blockwatch-one-rpc`):
 ```bash
-ssh -L 8545:127.0.0.1:8545 -L 8546:127.0.0.1:8546 blockwatch-one
+launchctl print gui/$(id -u)/com.efries.blockwatch-one-rpc   # status + pid
+launchctl kickstart -k gui/$(id -u)/com.efries.blockwatch-one-rpc  # force restart
+tail ~/Library/Logs/blockwatch-one-rpc.log                   # why it failed
+ssh -f blockwatch-one-rpc                                    # manual raise (only if the agent is stopped)
 ```
+The agent runs `ssh` with multiplexing forced off, so `ssh -O check/exit` does **not**
+see it — use `launchctl`. Both paths bind the same ports, so only one can be up at a time.
 
 **For integration tests:**
 ```bash
 ETHEREUM_API_URL=http://localhost:8545 mix test.json --quiet --include integration
 ```
 
-**If RPC connection fails (timeout, connection refused):** Do NOT try to diagnose or fix networking. Ask Tito to:
-- Check if the SSH tunnel is running
-- Start WireGuard if needed
-- Verify the node is up on blockwatch-one
+**If RPC connection fails (timeout, connection refused):** check the agent state and the
+log above — that is the whole diagnosis. Do NOT try to fix networking or rebind ports.
+Substituting a public provider is a poor fallback for the archive-dependent suites: a
+hosted endpoint may answer `-32001 Unable to complete request` for historical-block calls
+such as `eth_feeHistory` at block 20,000,000 depending on plan and load. If the agent is
+running and the node still doesn't answer, ask Tito to verify the node is up on
+blockwatch-one.
 
 ## Sepolia Testnet
 
@@ -738,6 +752,26 @@ This repo is part of a multi-library portfolio. The boundary is **ephemeral vs d
 - Standard error tuples: `{:ok, result} | {:error, {:tag, reason}}`
 - Plain structs with `defstruct` + `@enforce_keys`, no private macro deps
 - Path dependency in consumers: `{:onchain, path: "../onchain"}`
+
+## Toolchain & check commands
+
+Canonical gate: **`mix ci`** (= `precommit.full`) — compile `--warnings-as-errors`,
+`format --check-formatted`, `credo --strict`, `doctor --raise`, `ex_dna --max-clones 0`,
+`reach.check --arch --smells`, `sobelow --skip`, `deps.audit.gated`, `test.json --cover
+--cover-threshold 70`, `dialyzer`, `agents.check`. `mix precommit` is the fast local loop
+(no dialyzer/coverage). A clean `mix ci` is the merge bar.
+
+- **`mix test.json` / `mix dialyzer.json` emit JSON by design** — parse for real failures,
+  never flag the envelope itself as a problem. When the JSON encoder can't serialize a
+  warning shape, plain `mix dialyzer` (MIX_ENV=dev) is authoritative.
+- **`mix reach.check --arch --smells` gates from `.reach.exs`** (`smells: [strict: true]`),
+  scanned across `roots=dev, lib, src` — do not narrow that scope. Smell findings must be
+  fixed, never added to an ignore list.
+- **`deps.audit.gated`** runs `bin/advisory-freshness.sh` (in `onchain-stack`) before
+  `mix deps.audit --ignore-file .mix_audit_ignore` — `mix_audit` discards its own sync exit
+  status, so a frozen advisory DB would otherwise still report green. The one ignore entry
+  (`GHSA-w4f7-4cxr-rv3c`) is a verified false positive for `gun` — see `.mix_audit_ignore`
+  for the full rationale. Do not add any other advisory id to that file.
 
 ## Module Layout
 

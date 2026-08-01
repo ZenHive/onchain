@@ -4,7 +4,116 @@ Completed roadmap tasks.
 
 ---
 
-## Unreleased — finish the reach install and clear its smell surface
+## v0.12.0 — clone dedup, real gates, first-party bounds narrowed (2026-08-01)
+
+No public API change. `Onchain.ERC20`, `Onchain.ERC721`, `Onchain.ERC1155`,
+`Onchain.AA` and `Onchain.Signer` keep every function's name, arity, return
+shape and docs.
+
+**Minor, not patch.** This was drafted as 0.11.1 while the only dependency edit
+was dev/test-scoped. It now narrows two *runtime* requirements (`descripex`,
+`zen_websocket`), and narrowing a runtime bound can fail resolution for a
+consumer pinned below the new floor. That failure is loud rather than silent,
+but it is still a compatibility break and semver should say so — the same call
+zen_websocket made for its own 0.5.0 and 0.6.0.
+
+### Changed — hieroglyph 1.6.0 in the lock, Elixir floor to 1.18
+
+`mix.exs` gains no `hieroglyph` line — it arrives transitively through
+cartouche, whose published `~> 1.5` already admits it — but the lock now
+carries 1.6.0, which restores `ABI.Event.decode_event/4`'s documented total
+contract (unnamed event inputs no longer raise; an array length prefix that
+cannot fit the remaining payload is rejected before the element list is
+allocated) and makes `decode_structs: true` work on the event path. Every log
+decode in this library goes through it.
+
+`elixir: "~> 1.17"` → `"~> 1.18"` moves with it: hieroglyph 1.6.0's encode path
+uses `Enum.sum_by/2`, so a 1.17 resolution would succeed and then fail
+compiling a dependency.
+
+### Changed — six duplicated blocks extracted behind the existing public API
+
+`mix ex_dna --max-clones 0` had never run here (no alias called it), so clones
+accumulated unchecked: 6 groups, ~106 duplicated lines. Two internal helper
+modules now hold the shared logic, both `@moduledoc false` — this is
+deduplication, not new surface:
+
+- `Onchain.ERC.Helpers` — `balance_of/3`, `approved_for_all?/4`, `unwrap!/2`,
+  shared by the three ERC wrapper modules.
+- `Onchain.PrivateKey` — `decode/1`, shared by `Onchain.AA` (ERC-4337
+  UserOperation signing) and `Onchain.Signer` (raw transaction signing), which
+  accept the same key input shapes.
+
+`ERC1155.balance_of/4` was *not* merged into `ERC20`/`ERC721`'s `balance_of/3`:
+ERC-1155 takes a token id and the semantics differ. Merging semantically
+distinct code to satisfy a clone counter is worse than the duplication.
+
+Coverage was measured before refactoring and the uncovered success paths got
+tests first — confirmed green against the *unchanged* code, then re-run after.
+10 new tests reuse the existing `Req.Test` / `Cartouche.RPC` stub pattern.
+
+### Changed — `{:zen_websocket, "~> 0.4.2"}` → `{:zen_websocket, "~> 0.6.0"}`
+
+The old three-segment `~> 0.4.2` capped at `< 0.5.0`, so it locked this package
+out of zen_websocket 0.5.0 — the release that raises `gun` to `~> 2.4` and
+thereby *requires* the fix for GHSA-w4f7-4cxr-rv3c rather than merely permitting
+it. Left as-is, onchain would have kept resolving zen_websocket 0.4.x and its
+consumers would never have received the fix, because a lock entry that still
+satisfies its bound is never re-resolved.
+
+The floor lands on **0.6.0**, not 0.5.0: 0.6.0 is where zen_websocket narrows
+`descripex` to `~> 0.12.0`, matching what this package now declares directly.
+The bound stays **three-segment** (`< 0.7.0`) rather than widening to `~> 0.5`,
+because zen_websocket has now shipped two consecutive minor releases it labels
+breaking for consumers; a two-segment bound would absorb the third one silently.
+
+### Changed — `{:descripex, "~> 0.11"}` → `{:descripex, "~> 0.12.0"}`
+
+descripex 0.12.0 changed `short_name` in `describe/1` output from an atom to a
+string — a consumer-visible contract change shipped at a *minor* bump, which the
+old two-segment `~> 0.11` (`>= 0.11.0 and < 1.0.0`) would have absorbed on any
+fresh resolution without a version bump here. A 0.x package that breaks on minor
+earns the tighter form; raise the cap deliberately after reading its release
+notes.
+
+onchain does not read `short_name` — nothing in `lib/` or `test/` references it,
+and the full suite (831 tests) is green against descripex 0.12.0 with no code
+change. The break is in the *bound*, not the behaviour. The earlier note that
+this floor was "raised 0.9 → 0.11 to state the real requirement" still holds;
+0.12.0 supersedes it.
+
+### Changed — `{:ex_ast, "~> 0.12.0"}` → `{:ex_ast, "~> 0.12"}`
+
+Dev/test only, so no effect on the published package. The three-segment form was
+a redundant self-cap; ex_ast resolves 0.12.10 here because `reach 2.8.2` declares
+`ex_ast ~> 0.12.0`.
+
+That transitive requirement is a **choice, not a wall** — `override: true` gets
+past it, and cartouche does exactly that with `{:ex_ast, "~> 0.13", override:
+true}`. This package does not, and the reason is that the override is unmeasured
+rather than unavailable: ex_ast 0.13.0 changed pattern-matching semantics (map
+patterns became subset matching) and reach's smell checks are built on those
+patterns, so running reach against an ex_ast its author excluded could quietly
+report fewer findings. Until that is measured — same smell corpus under 0.12.10
+and 0.13.1, comparing finding counts — 0.12.x stays.
+
+`req` resolves to 0.7.2.
+
+### Changed — the rest of the quality gates now actually gate
+
+- **`mix_audit` added and wired.** `deps.audit.gated` proves the advisory
+  database is current *before* auditing — `mix_audit` discards its own sync exit
+  status (mirego/mix_audit#61), so a database that can no longer sync still
+  prints "No vulnerabilities found" and exits 0.
+- **`ex_dna --max-clones 0`** is now a gate step, which is what surfaced the
+  clones above.
+- **`agents.check`** fails when `AGENTS.md` has drifted from `CLAUDE.md`.
+- **CI invokes `mix ci`** instead of a hand-maintained check list.
+- **MCP config mirrored to all four agent families** (`.cursor/`, `.codex/`,
+  `.grok/`); the `harness_eval` server key was renamed `harness_tidewave` to
+  match the rest of the family.
+
+### Changed — the reach install finished and its smell surface cleared
 
 `reach` was already a dev/test dep, but `.reach.exs` was missing, so
 `mix reach.check --arch` aborted with "No architecture policy found" — the dep
@@ -82,6 +191,8 @@ unit test has no business making.
   The pre-existing `Fees` suppression was inert — reach scopes
   `disable-next-line` to `comment_line + 1`, and two explanatory comments sat
   between the directive and the flagged expression.
+
+---
 
 ## v0.11.0 — raise cartouche/descripex floors so consumers actually get req 0.7 (2026-07-31)
 

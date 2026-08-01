@@ -1,5 +1,7 @@
 defmodule Onchain.ERC1155Test do
-  use ExUnit.Case, async: true
+  # async: false — EthCallStub mutates global :cartouche, Cartouche.RPC config
+  use ExUnit.Case, async: false
+  use Onchain.EthCallStub
 
   alias Onchain.ERC1155
 
@@ -97,6 +99,13 @@ defmodule Onchain.ERC1155Test do
       assert {:error, {:invalid_address, "bad_contract"}} =
                ERC1155.approved_for_all?("bad_contract", addr_bin, addr_bin)
     end
+
+    test "returns the decoded approval bool on success" do
+      Onchain.EthCallStub.queue_response("bool", true)
+
+      assert {:ok, true} =
+               ERC1155.approved_for_all?(@valid_address, @valid_address, @valid_address, rpc_url: "http://stub.invalid")
+    end
   end
 
   describe "approved_for_all!/4" do
@@ -104,6 +113,13 @@ defmodule Onchain.ERC1155Test do
       assert_raise RuntimeError, ~r/approved_for_all\? failed/, fn ->
         ERC1155.approved_for_all!(@valid_address, "bad_owner", @valid_address)
       end
+    end
+
+    test "returns the decoded approval bool on success" do
+      Onchain.EthCallStub.queue_response("bool", true)
+
+      assert true =
+               ERC1155.approved_for_all!(@valid_address, @valid_address, @valid_address, rpc_url: "http://stub.invalid")
     end
   end
 end

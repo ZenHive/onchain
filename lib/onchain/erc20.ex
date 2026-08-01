@@ -41,6 +41,7 @@ defmodule Onchain.ERC20 do
   alias Onchain.ABI
   alias Onchain.Address
   alias Onchain.Contract
+  alias Onchain.ERC.Helpers
   alias Onchain.Hex
   alias Onchain.Signer
 
@@ -61,12 +62,7 @@ defmodule Onchain.ERC20 do
 
   @spec balance_of(String.t() | binary(), String.t() | binary(), keyword()) ::
           {:ok, non_neg_integer()} | {:error, term()}
-  def balance_of(token, holder, opts \\ []) do
-    with {:ok, holder_bin} <- Address.validate(holder),
-         {:ok, [balance]} <- Contract.call(token, "balanceOf(address)", [holder_bin], "(uint256)", opts) do
-      {:ok, balance}
-    end
-  end
+  def balance_of(token, holder, opts \\ []), do: Helpers.balance_of(token, holder, opts)
 
   # --- balance_of! ---
 
@@ -80,12 +76,7 @@ defmodule Onchain.ERC20 do
   )
 
   @spec balance_of!(String.t() | binary(), String.t() | binary(), keyword()) :: non_neg_integer()
-  def balance_of!(token, holder, opts \\ []) do
-    case balance_of(token, holder, opts) do
-      {:ok, balance} -> balance
-      {:error, reason} -> raise "balance_of failed: #{inspect(reason)}"
-    end
-  end
+  def balance_of!(token, holder, opts \\ []), do: Helpers.unwrap!(balance_of(token, holder, opts), "balance_of")
 
   # --- allowance ---
 
@@ -214,12 +205,7 @@ defmodule Onchain.ERC20 do
   )
 
   @spec symbol!(String.t() | binary(), keyword()) :: String.t()
-  def symbol!(token, opts \\ []) do
-    case symbol(token, opts) do
-      {:ok, value} -> value
-      {:error, reason} -> raise "symbol failed: #{inspect(reason)}"
-    end
-  end
+  def symbol!(token, opts \\ []), do: Helpers.unwrap!(symbol(token, opts), "symbol")
 
   # --- total_supply ---
 

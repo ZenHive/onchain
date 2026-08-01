@@ -1,6 +1,7 @@
 defmodule Onchain.ERC20Test do
   # async: false — :dbg tracing sets a process-global tracer, can't run concurrently
   use ExUnit.Case, async: false
+  use Onchain.EthCallStub
 
   alias Onchain.ERC20
 
@@ -21,6 +22,13 @@ defmodule Onchain.ERC20Test do
       assert {:error, {:invalid_address, "bad_token"}} =
                ERC20.balance_of("bad_token", holder_bin)
     end
+
+    test "returns the decoded uint256 balance on success" do
+      Onchain.EthCallStub.queue_response("uint256", 1_000_000)
+
+      assert {:ok, 1_000_000} =
+               ERC20.balance_of(@valid_address, @valid_address, rpc_url: "http://stub.invalid")
+    end
   end
 
   describe "balance_of!/3" do
@@ -28,6 +36,13 @@ defmodule Onchain.ERC20Test do
       assert_raise RuntimeError, ~r/balance_of failed/, fn ->
         ERC20.balance_of!(@valid_address, "not_an_address")
       end
+    end
+
+    test "returns the decoded uint256 balance on success" do
+      Onchain.EthCallStub.queue_response("uint256", 1_000_000)
+
+      assert 1_000_000 =
+               ERC20.balance_of!(@valid_address, @valid_address, rpc_url: "http://stub.invalid")
     end
   end
 
@@ -85,6 +100,12 @@ defmodule Onchain.ERC20Test do
       assert_raise RuntimeError, ~r/symbol failed/, fn ->
         ERC20.symbol!("not_a_token")
       end
+    end
+
+    test "returns the decoded symbol string on success" do
+      Onchain.EthCallStub.queue_response("string", "USDC")
+
+      assert "USDC" = ERC20.symbol!(@valid_address, rpc_url: "http://stub.invalid")
     end
   end
 

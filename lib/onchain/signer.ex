@@ -390,18 +390,7 @@ defmodule Onchain.Signer do
 
   # Normalizes a private key input to a 32-byte binary.
   # Accepts: 32-byte binary, hex string (64 chars, with/without 0x).
-  defp decode_private_key(bin) when is_binary(bin) and byte_size(bin) == 32 do
-    {:ok, bin}
-  end
-
-  defp decode_private_key(hex) when is_binary(hex) do
-    case Hex.decode(hex) do
-      {:ok, bin} when byte_size(bin) == 32 -> {:ok, bin}
-      _ -> {:error, {:invalid_private_key, hex}}
-    end
-  end
-
-  defp decode_private_key(other), do: {:error, {:invalid_private_key, other}}
+  defp decode_private_key(input), do: Onchain.PrivateKey.decode(input)
 
   # Wraps Curvy.get_address/1 to catch crashes from malformed keys (e.g. <<0::256>>).
   # Returns {:error, {:invalid_private_key, original_input}} instead of crashing.
