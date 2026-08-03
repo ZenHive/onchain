@@ -1,6 +1,6 @@
 schema_version = 2
 project = "onchain"
-default_branch = "development"
+default_branch = "main"
 vision = "Pure Elixir Ethereum library — read + write primitives, no native deps. RPC method wrappers, ABI encode/decode, signing, token reads/writes, chain-intelligence primitives, and real-time subscriptions over Cartouche's public surface. Core of the five-package onchain family (onchain, onchain_aave, onchain_evm, onchain_js, onchain_tempo). Completed work lives in CHANGELOG.md; this file tracks the actionable pending backlog harness dispatches."
 
 # ----------------------------------------------------------------------------
