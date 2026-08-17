@@ -4,6 +4,24 @@ Completed roadmap tasks.
 
 ---
 
+## v0.12.1 — dependency refresh (2026-08-17)
+
+No public API or runtime dependency requirement changed.
+
+### Changed
+
+- Resolved `cartouche 0.7.0`, whose published runtime requirement now states
+  the already-effective `descripex ~> 0.12.0` floor.
+- Resolved `zen_websocket 0.6.1`, including its PoolRouter fallback fix for
+  task exits while collecting metrics.
+- Resolved the published `descripex 0.12.1` and transitive `hieroglyph 1.6.1`
+  patches within the existing runtime requirements.
+- Updated development tooling: `sobelow` 0.14.1 → 0.15.0 and `tidewave`
+  0.8.1 → 0.8.4. Sobelow 0.15 fixes several scan-abort and false-green paths.
+- `ex_ast` remains on 0.12.10 because Reach 2.8.2 caps it at `~> 0.12.0`;
+  the documented smell-corpus comparison against 0.13.1 is still required
+  before adding an override.
+
 ## v0.12.0 — clone dedup, real gates, first-party bounds narrowed (2026-08-01)
 
 No public API change. `Onchain.ERC20`, `Onchain.ERC721`, `Onchain.ERC1155`,

@@ -1,7 +1,7 @@
 defmodule Onchain.MixProject do
   use Mix.Project
 
-  @version "0.12.0"
+  @version "0.12.1"
   @source_url "https://github.com/ZenHive/onchain"
 
   def project do
@@ -72,7 +72,7 @@ defmodule Onchain.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:doctor, "~> 0.23.0", only: [:dev, :test], runtime: false},
-      {:sobelow, "~> 0.14.1", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.15", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.40.1", only: :dev, runtime: false},
       {:ex_dna, "~> 1.3", only: [:dev, :test], runtime: false},
       # Two-segment on purpose: the three-segment form was a redundant self-cap.
