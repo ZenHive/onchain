@@ -27,7 +27,7 @@
 |------|--------|-------|
 | Task 28 `[P]` | ✅ | 🎁 **dex** · *Onchain.DEX.Router* · DEX swap routing (optimal path across pools) [D:7/B:8/U:7 → Eff:1.07?] 📋 |
 | Task 29 `[P]` | ✅ | 🎁 **dex** · *Onchain.MEV* · MEV protection (private transaction submission) [D:6/B:8/U:7 → Eff:1.25?] 📋 |
-| Task 80 | ✅ | 🎁 **dex** · *Onchain.MEV* · Audit-surfaced: Onchain.MEV accepts block tags where a concrete block is required [D:3/B:4/U:4 → Eff:1.33] 📋 |
+| Task 80 | ✅ | 🎁 **dex** · *Onchain.MEV* · Audit-surfaced: Onchain.MEV accepts block tags where a concrete block is required [D:3/B:4/U:4 → Eff:1.33?] 📋 |
 <!-- TASKS:END -->
 
 ---
@@ -38,7 +38,7 @@
 | Task | Status | Notes |
 |------|--------|-------|
 | Task 69 `[P]` | ✅ | 🎁 **account_abstraction** · *Onchain.AA* · ERC-4337 UserOperation construction, signing, and bundler RPC [D:7/B:8/U:7 → Eff:1.07?] 📋 |
-| Task 79 | ✅ | 🎁 **account_abstraction** · *Onchain.AA* · Audit-surfaced: ERC-4337 to_rpc_params validation can diverge from user_op_hash [D:4/B:5/U:5 → Eff:1.25] 📋 |
+| Task 79 | ✅ | 🎁 **account_abstraction** · *Onchain.AA* · Audit-surfaced: ERC-4337 to_rpc_params validation can diverge from user_op_hash [D:4/B:5/U:5 → Eff:1.25?] 📋 |
 <!-- TASKS:END -->
 
 ---
@@ -53,8 +53,8 @@
 | Task 51 | ✅ | 🎁 **rpc_composition** · *Onchain.RPC* · Onchain.RPC.batch/2 — JSON-RPC 2.0 array-batched requests [D:4/B:6/U:5 → Eff:1.38?] 📋 |
 | Task 52 | ✅ | 🎁 **rpc_composition** · *Onchain.RPC* · Telemetry events around Onchain.RPC request path [D:3/B:5/U:5 → Eff:1.67?] 🚀 |
 | Task 54 | ✅ | 🎁 **rpc_composition** · *Onchain.RPC* · Opt-in retry/backoff wrapper over Signet.RPC.send_rpc/3 [D:4/B:5/U:4 → Eff:1.12?] 📋 |
-| Task 81 | ✅ | 🎁 **rpc_composition** · *Onchain.RPC* · Audit-surfaced: RPC batch + block decode crash on malformed node responses [D:2/B:3/U:4 → Eff:1.75] 🚀 |
-| Task 82 | ✅ | 🎁 **rpc_composition** · Add eth_estimateGas RPC helper + auto-estimate gas in send_transaction [D:3/B:5/U:6 → Eff:1.83] 🚀 |
+| Task 81 | ✅ | 🎁 **rpc_composition** · *Onchain.RPC* · Audit-surfaced: RPC batch + block decode crash on malformed node responses [D:2/B:3/U:4 → Eff:1.75?] 🚀 |
+| Task 82 | ✅ | 🎁 **rpc_composition** · Add eth_estimateGas RPC helper + auto-estimate gas in send_transaction [D:3/B:5/U:6 → Eff:1.83?] 🚀 |
 <!-- TASKS:END -->
 
 ---
@@ -74,11 +74,12 @@
 | Task 65 `[P]` | ✅ | 🎁 **differential_testing** · *test/onchain/differential/* · Differential test harness: Onchain.RPC vs reference impl (signet first) [D:6/B:5/U:3 → Eff:0.67?] ⚠️ |
 | Task 70 `[P]` | ✅ | 🎁 **subscription_hardening** · *Onchain.Subscription* · Harden Onchain.Subscription.lookup_or_buffer/3 against unsolicited sub_id keys [D:3/B:4/U:3 → Eff:1.17?] 📋 |
 | Task 74 `[P]` | ✅ | 🎁 **erc_standards** · *Onchain.ERC7730* · ERC-7730 clear-signing descriptor parser + binding evaluator [D:6/B:7/U:6 → Eff:1.08?] 📋 |
-| Task 75 | ✅ | 🎁 **rpc_shapes** · Stop dialyzer cold-building the PLT per harness worktree (it OOM'd the host twice) [D:2/B:3/U:5 → Eff:2.0] 🎯 |
-| Task 76 | ✅ | 🎁 **rpc_codegen** · *Onchain.RPC* · Audit-surfaced: Task 63 defrpc macro is unused — wrappers still hand-written [D:4/B:5/U:5 → Eff:1.25] 📋 |
-| Task 77 | ✅ | 🎁 **erc_standards** · *Onchain.ERC7730.Formatter* · Audit-surfaced: ERC-7730 tokenAmount renders wrong token symbol (clear-signing safety) [D:4/B:7/U:6 → Eff:1.62] 🚀 |
-| Task 78 | ✅ | 🎁 **erc_standards** · *Onchain.ERC7730.Binding* · Audit-surfaced: ERC-7730 binding/descriptor hardening (domain match, EIP-712 type, malformed input) [D:5/B:5/U:5 → Eff:1.0] 📋 |
-| Task 83 | ✅ | 🎁 **rpc_composition** · *Onchain.RPC* · Migrate HTTP transport off cartouche's removed Finch seams (cartouche 0.5.0) [D:4/B:8/U:8 → Eff:2.0] 🎯 |
+| Task 75 | ✅ | 🎁 **rpc_shapes** · Stop dialyzer cold-building the PLT per harness worktree (it OOM'd the host twice) [D:2/B:3/U:5 → Eff:2.0?] 🎯 |
+| Task 76 | ✅ | 🎁 **rpc_codegen** · *Onchain.RPC* · Audit-surfaced: Task 63 defrpc macro is unused — wrappers still hand-written [D:4/B:5/U:5 → Eff:1.25?] 📋 |
+| Task 77 | ✅ | 🎁 **erc_standards** · *Onchain.ERC7730.Formatter* · Audit-surfaced: ERC-7730 tokenAmount renders wrong token symbol (clear-signing safety) [D:4/B:7/U:6 → Eff:1.62?] 🚀 |
+| Task 78 | ✅ | 🎁 **erc_standards** · *Onchain.ERC7730.Binding* · Audit-surfaced: ERC-7730 binding/descriptor hardening (domain match, EIP-712 type, malformed input) [D:5/B:5/U:5 → Eff:1.0?] 📋 |
+| Task 83 | ✅ | 🎁 **rpc_composition** · *Onchain.RPC* · Migrate HTTP transport off cartouche's removed Finch seams (cartouche 0.5.0) [D:4/B:8/U:8 → Eff:2.0?] 🎯 |
+| Task 84 | ⬜ | 🎁 **differential_testing** · 🔒 Mutation-grade RPC construction and DEX math invariants [D:6/B:9/U:7 → Eff:1.33] 📋 |
 <!-- TASKS:END -->
 
 ---

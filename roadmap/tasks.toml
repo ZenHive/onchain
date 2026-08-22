@@ -712,3 +712,21 @@ verified = true
 created_at = "2026-06-24"
 scored_at = "2026-06-24"
 done_at = "2026-06-24"
+
+[[task]]
+id = 84
+phase = 12
+bundle = "differential_testing"
+status = "pending"
+title = "Mutation-grade RPC construction and DEX math invariants"
+scores = { d = 6, b = 9, u = 7 }
+markers = ["security"]
+acceptance_criteria = ["RPC properties and the existing differential suite pin parameter ordering/nesting, block tags, hex decoding and sparse response semantics against a live node plus provider-owned JSON-RPC specifications", "DEX properties pin integer rounding, fee application, path monotonicity, minimum-output/slippage behavior and quote semantics against official protocol formulas or deployed calls at the same block", "A reproducible mutation campaign changes RPC construction/decoding and DEX arithmetic/boundaries; every survivor is classified with evidence", "Wrong RPC parameter order and wrong DEX rounding/slippage canaries are detected and make the verification run fail", "A ledger records authorities, live block/evidence, configurations, mutations and survivor review; touched critical modules remain at least 95% covered and mix ci passes"]
+touches = ["lib/onchain/rpc.ex", "lib/onchain/rpc/", "lib/onchain/dex/", "test/onchain/rpc", "test/onchain/differential/", "test/onchain/dex/"]
+assignee = "codex"
+model = "gpt-5.6-sol"
+body = """
+Extend the existing RPC differential evidence and DEX tests with property and mutation adequacy. The live node plus provider-owned RPC/protocol contracts define semantics; Cartouche or self-built fixtures alone are not independent authorities. Challenge both wire construction and money-sensitive integer math with deliberate faults while preserving current public behavior.
+"""
+created_at = "2026-08-17"
+scored_at = "2026-08-17"
