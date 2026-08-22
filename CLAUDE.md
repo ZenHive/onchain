@@ -180,7 +180,9 @@ ONCHAIN_DIFFERENTIAL_TESTS=1 ETHEREUM_API_URL="$ETHEREUM_ALCHEMY_URL" \
 mix test.json --quiet --include integration --include differential
 ```
 
-**Differential only — `ocdiff` shell helper** (in `~/.zshrc`): runs the differential suite against the Alchemy archive (no SSH tunnel needed); pass a URL to override (`ocdiff http://localhost:8545`). CI also runs it nightly, non-gating, via `.github/workflows/differential.yml` (secret `ETHEREUM_ALCHEMY_URL`).
+**Differential only — `ocdiff` shell helper** (in `~/.zshrc`): runs the differential suite against the Alchemy archive (no SSH tunnel needed); pass a URL to override (`ocdiff http://localhost:8545`).
+
+**This is now the only way the differential suite ever runs.** It used to also run nightly and non-gating via `.github/workflows/differential.yml`, removed with every other workflow on 2026-08-22 — so archive-node drift no longer surfaces on its own. Run `ocdiff` deliberately when touching RPC decoding or block/receipt shapes.
 
 ### Quick Commands
 
