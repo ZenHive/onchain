@@ -20,6 +20,28 @@ no `Onchain` function changed signature or behaviour.
   removed or reshaped — are unused here. `connect/2`'s new terminal failure
   reason is absorbed by the existing `{:error, reason}` clause.
 
+- **`descripex` requirement widened to `~> 0.12`** (from `~> 0.12.0`), and the
+  lock now resolves descripex 0.13.0. The three-segment cap had been protecting
+  against descripex's break-on-minor history, but it propagated into every
+  consumer's graph and made each descripex minor a forced release across the
+  family; in-family it guarded nothing, since `mix.lock` is committed and a new
+  descripex can only arrive through a deliberate `mix deps.update` behind
+  `mix ci`. Widening is not a narrowing, so this loosens rather than constrains
+  what a consumer can resolve. descripex 0.13.0 itself is additive — a new
+  `typeless_params/1` and schema keys on params that previously shipped none;
+  `Onchain` reads neither.
+- **Upstream locks refreshed** to cartouche 0.7.1, hieroglyph 1.6.2 and
+  zen_websocket 0.7.1 — each carrying the same widened descripex bound. That
+  ordering was load-bearing rather than cosmetic: all three declare descripex
+  as a runtime requirement, so while any one of them still published
+  `~> 0.12.0`, this package could not resolve descripex 0.13.0 no matter what
+  its own `mix.exs` said.
+- **`ex_ast` raised to 0.13.1** via `override: true` over reach 2.8.2's
+  `~> 0.12.0`, matching the rest of the family. Dev/test only, never shipped.
+  The override had been carried as an unmeasured risk; measured here by running
+  `mix reach.check --dead-code --arch --smells` under both 0.12.10 and 0.13.1,
+  which produced identical output over identical scope.
+
 ### Removed
 
 - **The `@dialyzer` suppression block in `Onchain.Subscription`.**
