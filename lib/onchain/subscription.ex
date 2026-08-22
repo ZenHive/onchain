@@ -80,18 +80,6 @@ defmodule Onchain.Subscription do
 
   require Logger
 
-  # UPSTREAM(zen_websocket): JsonRpc.build_request/2 spec is (String.t(), map() | nil)
-  # but Ethereum JSON-RPC uses list params. Fix spec upstream to (String.t(), term()).
-  # Cascade: build_request spec mismatch → do_subscribe "won't succeed" →
-  # subscribe/unsubscribe "no return" → bang variants "invalid contract".
-  @dialyzer [
-    {:no_match, [do_subscribe: 3, unsubscribe: 2]},
-    {:no_return, [subscribe!: 2, subscribe!: 3, unsubscribe: 2, unsubscribe!: 2, do_subscribe: 3]},
-    {:no_fail_call, [do_subscribe: 3, unsubscribe: 2, subscribe: 3]},
-    {:no_contracts, [subscribe!: 2, subscribe!: 3, unsubscribe: 2, unsubscribe!: 2, do_subscribe: 3]},
-    {:no_match, [subscribe!: 3]}
-  ]
-
   @enforce_keys [:client, :agent]
   defstruct [:client, :agent, :handler]
 

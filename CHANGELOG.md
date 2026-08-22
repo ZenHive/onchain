@@ -4,6 +4,34 @@ Completed roadmap tasks.
 
 ---
 
+## v0.13.0 — zen_websocket 0.7 (2026-08-22)
+
+Narrows a runtime requirement, which is a minor bump for consumers even though
+no `Onchain` function changed signature or behaviour.
+
+### Changed
+
+- **`zen_websocket` requirement narrowed to `~> 0.7.0`** (from `~> 0.6.0`).
+  0.7.0 is labelled breaking upstream, but none of its removals reach this
+  package: `Onchain.Subscription` uses only `Client.connect/2`,
+  `send_message/2`, `close/1`, `JsonRpc.build_request/2` and
+  `match_response/1`. The RateLimiter queue surface, the Deribit adapters,
+  `SubscriptionManager` tracking and `mix stability_test` — everything 0.7.0
+  removed or reshaped — are unused here. `connect/2`'s new terminal failure
+  reason is absorbed by the existing `{:error, reason}` clause.
+
+### Removed
+
+- **The `@dialyzer` suppression block in `Onchain.Subscription`.**
+  zen_websocket 0.7.0 widens `JsonRpc.build_request/2`'s spec to accept
+  positional parameter lists, so the spec mismatch that cascaded into
+  `no_match` / `no_return` / `no_fail_call` / `no_contracts` entries for
+  `subscribe/3`, `unsubscribe/2`, `do_subscribe/3` and the bang variants is
+  gone at the source. Dialyzer reports 0 errors and 0 unnecessary skips
+  without it.
+
+---
+
 ## v0.12.1 — dependency refresh (2026-08-17)
 
 No public API or runtime dependency requirement changed.

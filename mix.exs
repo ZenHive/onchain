@@ -1,7 +1,7 @@
 defmodule Onchain.MixProject do
   use Mix.Project
 
-  @version "0.12.1"
+  @version "0.13.0"
   @source_url "https://github.com/ZenHive/onchain"
 
   def project do
@@ -55,10 +55,13 @@ defmodule Onchain.MixProject do
       # 0.5.0 is where `gun` rises to `~> 2.4` and thereby *requires* the fix for
       # GHSA-w4f7-4cxr-rv3c instead of merely permitting it; 0.6.0 is where
       # `descripex` narrows to `~> 0.12.0`, matching what this package now
-      # declares directly. Three-segment (caps at < 0.7.0) because zen_websocket
-      # has shipped two consecutive minors it labels breaking for consumers —
-      # a two-segment `~> 0.5` would absorb the third one silently.
-      {:zen_websocket, "~> 0.6.0"},
+      # declares directly. 0.7.0 widens `JsonRpc.build_request/2`'s spec to
+      # accept positional lists, which is what let the `@dialyzer` suppression
+      # in `Onchain.Subscription` go away. Three-segment (caps at < 0.8.0)
+      # because zen_websocket has now shipped three consecutive minors it
+      # labels breaking for consumers — a two-segment `~> 0.7` would absorb the
+      # fourth one silently.
+      {:zen_websocket, "~> 0.7.0"},
 
       # Dev/test tooling
       # Req.Test plug-based transport stubbing (req's :plug is optional);
