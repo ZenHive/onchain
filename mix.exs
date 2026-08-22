@@ -79,13 +79,13 @@ defmodule Onchain.MixProject do
       {:sobelow, "~> 0.15", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.40.1", only: :dev, runtime: false},
       {:ex_dna, "~> 1.3", only: [:dev, :test], runtime: false},
-      # Two-segment on purpose: the three-segment form was a redundant self-cap.
-      # Resolution lands on 0.12.10 because reach 2.8.2 declares
-      # `{:ex_ast, "~> 0.12.0"}`. That is a choice, not a wall -- `override:
-      # true` gets past it (cartouche does) -- but the override is unmeasured:
-      # ex_ast 0.13.0 made map patterns subset-matching, and reach's smell
-      # checks are built on those patterns, so it could report fewer findings.
-      {:ex_ast, "~> 0.12", only: [:dev, :test], runtime: false},
+      # `override: true` on purpose: reach 2.8.2 declares `ex_ast ~> 0.12.0`,
+      # which would otherwise hold this repo at 0.12.10. The override was long
+      # carried as "unmeasured", on the theory that ex_ast 0.13.0's subset map
+      # patterns could make reach's smell checks report fewer findings. Measured
+      # 2026-08-22: `mix reach.check --dead-code --arch --smells` run here under
+      # both 0.12.10 and 0.13.1 produced identical output over identical scope.
+      {:ex_ast, "~> 0.13", override: true, only: [:dev, :test], runtime: false},
       # Two-segment on purpose: the previous `~> 2.7.1` was three-segment
       # (>= 2.7.1 and < 2.8.0) and blocked reach 2.8.x with no reason beyond
       # the way the bound was written.
