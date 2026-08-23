@@ -730,3 +730,56 @@ Extend the existing RPC differential evidence and DEX tests with property and mu
 """
 created_at = "2026-08-17"
 scored_at = "2026-08-17"
+
+[[task]]
+id = 85
+phase = 12
+bundle = "rpc_composition"
+status = "pending"
+title = "Onchain.RPC block-level reads — receipts, transaction counts, transactions by index, and the block access list"
+scores = { d = 4, b = 7, u = 6 }
+markers = ["parallel"]
+acceptance_criteria = ["All six methods are exposed on Onchain.RPC through the existing codegen/specs path, with the api/3 declarations and bang variants the module's conventions require", "get_block_receipts returns the same receipt representation as get_transaction_receipt, proven by a live test that fetches one block's receipts in bulk and asserts a specific transaction's receipt is byte-identical to the one returned by the single-receipt call for the same hash", "The two transaction-count methods and the two by-index methods are pinned by live tests against a known mainnet block, asserting concrete counts and a specific transaction hash at a specific index, not merely shape", "A by-index call with an out-of-range index pins the node's actual observed response", "eth_getBlockAccessList is verified against the live node and its real response shape is pinned; if the node does not implement it the test flunks naming the method and the node's error rather than skipping", "Any Onchain.Block convenience added on top of these reads is documented in the module's moduledoc table", "mix ci passes"]
+out_of_scope = ["eth_createAccessList — call simulation, filed against cartouche", "A block-indexing or caching layer", "Changing the existing get_block_by_number/get_block_by_hash surface"]
+files_to_modify = ["lib/onchain/rpc.ex", "lib/onchain/block.ex"]
+assignee = "codex"
+model = "gpt-5.6-sol"
+body = """
+A completeness sweep of the whole stack against `ethereum/execution-apis` found six block-level reads that neither cartouche nor onchain implements. They form one surface — every one of them answers a question about a block — and onchain is the layer that owns block reads (`Onchain.Block`, `Onchain.RPC.get_block_by_number/2`), so they belong here rather than in the substrate.
+
+- `eth_getBlockReceipts` returns every receipt in a block in one call. Today a caller fetches the block and then issues one `eth_getTransactionReceipt` per transaction, which for a full block is a few hundred round trips where one would do. This is the highest-value entry of the six.
+- `eth_getBlockTransactionCountByHash` and `eth_getBlockTransactionCountByNumber` return a transaction count without transferring the block body.
+- `eth_getTransactionByBlockHashAndIndex` and `eth_getTransactionByBlockNumberAndIndex` fetch a single transaction positionally, without the surrounding block.
+- `eth_getBlockAccessList` returns the EIP-7928 block access list. This is a block read and unrelated to `eth_createAccessList`, which is a call-simulation method filed against cartouche; do not conflate the two.
+
+All six are present in the vendored `priv/specs/openrpc-v1.0.0-beta.4.json`, so they should go through the existing `Onchain.RPC.Codegen` / `Onchain.RPC.Specs` path like their neighbours rather than being hand-rolled. Reuse the receipt and transaction deserializers the module already has; `eth_getBlockReceipts` in particular must produce the same receipt representation as `eth_getTransactionReceipt` so the two are interchangeable to a caller.
+
+`eth_getBlockAccessList` is recent and client support is uneven — verify against the live node what it actually returns before pinning a shape, and record the observation.
+"""
+created_at = "2026-08-23"
+scored_at = "2026-08-23"
+
+[[task]]
+id = 86
+phase = 12
+bundle = "rpc_composition"
+status = "pending"
+title = "Onchain.RPC.get_storage_values — eth_getStorageValues batched multi-account slot reads"
+scores = { d = 3, b = 6, u = 5 }
+markers = ["parallel"]
+acceptance_criteria = ["Onchain.RPC.get_storage_values is exposed through the existing codegen/specs path with the api/3 declaration and bang variant the module's conventions require", "A live test reads several slots across at least two mainnet contracts at a pinned block and asserts each returned value equals what get_storage_at returns for the same account and slot, proving the batched and single-slot routes agree", "The representation of a never-written slot is established against the live node and pinned by a test", "A request naming an account with no code pins the node's actual observed response", "If the node does not implement the method the test flunks naming the method and the node's error rather than skipping", "mix ci passes"]
+out_of_scope = ["EIP-1967 proxy-slot helpers or any storage-layout decoding built on top of this read", "Changing eth_getStorageAt", "eth_getProof"]
+files_to_modify = ["lib/onchain/rpc.ex"]
+assignee = "grok"
+model = "grok-4.6"
+body = """
+onchain implements `eth_getStorageAt`, which reads one slot of one account per call. `eth_getStorageValues` reads many slots across many accounts in a single request, and is absent from the whole stack.
+
+The natural consumers already exist here: proxy-implementation detection reads EIP-1967 slots, and any multi-slot storage layout read (a packed struct, a mapping bucket) currently costs one round trip per slot. A caller reading five slots from three contracts issues fifteen requests today.
+
+The method is present in the vendored `priv/specs/openrpc-v1.0.0-beta.4.json`, so it should go through the existing `Onchain.RPC.Codegen` / `Onchain.RPC.Specs` path rather than being hand-rolled. It is a recent spec addition and client support is uneven — establish what the live node actually returns, including how it represents a slot that has never been written, before pinning a shape.
+
+Keep `eth_getStorageAt` as it is; this is an addition beside it, not a replacement, and the two must agree slot-for-slot.
+"""
+created_at = "2026-08-23"
+scored_at = "2026-08-23"

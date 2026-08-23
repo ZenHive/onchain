@@ -80,6 +80,8 @@
 | Task 78 | ✅ | 🎁 **erc_standards** · *Onchain.ERC7730.Binding* · Audit-surfaced: ERC-7730 binding/descriptor hardening (domain match, EIP-712 type, malformed input) [D:5/B:5/U:5 → Eff:1.0?] 📋 |
 | Task 83 | ✅ | 🎁 **rpc_composition** · *Onchain.RPC* · Migrate HTTP transport off cartouche's removed Finch seams (cartouche 0.5.0) [D:4/B:8/U:8 → Eff:2.0?] 🎯 |
 | Task 84 | ⬜ | 🎁 **differential_testing** · 🔒 Mutation-grade RPC construction and DEX math invariants [D:6/B:9/U:7 → Eff:1.33] 📋 |
+| Task 85 `[P]` | ⬜ | 🎁 **rpc_composition** · Onchain.RPC block-level reads — receipts, transaction counts, transactions by index, and the block access list [D:4/B:7/U:6 → Eff:1.62] 🚀 |
+| Task 86 `[P]` | ⬜ | 🎁 **rpc_composition** · Onchain.RPC.get_storage_values — eth_getStorageValues batched multi-account slot reads [D:3/B:6/U:5 → Eff:1.83] 🚀 |
 <!-- TASKS:END -->
 
 ---
