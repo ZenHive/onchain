@@ -783,3 +783,34 @@ Keep `eth_getStorageAt` as it is; this is an addition beside it, not a replaceme
 """
 created_at = "2026-08-23"
 scored_at = "2026-08-23"
+
+[[task]]
+id = 87
+phase = 12
+bundle = "differential_testing"
+status = "blocked"
+title = "Mutation-adequacy campaign over the signing, key and address surface"
+scores = { d = 5, b = 8, u = 3 }
+markers = ["security"]
+acceptance_criteria = ["The Oeditus/muex#20 reproduction reports survived=2 and a 0% score on the installed muex version, recorded with that version alongside the campaign result. No survivor triage is started until this passes", "A single-invocation campaign covers lib/onchain/signer.ex, private_key.ex, address.ex, hex.ex and abi.ex with all 18 mutators, no filtering and no sampling, from a reproducible script committed under .mutation/", "Every survivor is dispositioned in writing as one of: killed by a new test added in this task, provably equivalent with the argument, or an accepted gap with the reason. None is left unclassified", "Every no_coverage result is dispositioned too: either a new test reaches the line, or the line is justified in writing as unreachable from the public surface", "A ledger under docs/ records muex version, mutator set, per-module counts and each disposition", "mix ci passes and the touched modules stay at or above their current coverage"]
+out_of_scope = ["RPC construction, DEX arithmetic and the live-node differential evidence. Task 84 owns those", "Adopting muex as a mix ci gate. This stays an on-demand measurement plus the tests it produces", "Patching muex under deps/ to work around #20. A measurement produced by a hand-patched tool is not a durable verification record", "The subscription, ENS, ERC-7730 and account-abstraction surfaces"]
+cross_repo = [{ repo = "cartouche", task_id = 119, relation = "related" }]
+assignee = "human"
+blocked_reason = "muex 0.8.2 cannot report a survivor on Elixir 1.20 (Oeditus/muex#20, acknowledged upstream 2026-08-23). The survivor half unblocks when an installed release passes the four-file reproduction; the no_coverage/equivalent half is runnable today."
+body = """
+Task 84 puts RPC construction and DEX arithmetic under mutation. It does not touch the other money-critical surface in this library, and nothing else does either: lib/onchain/signer.ex (416 lines), private_key.ex, address.ex, hex.ex and abi.ex are local implementations, not thin wrappers - grep reports zero defdelegate in signer.ex, private_key.ex and address.ex - so cartouche campaign over its own signing modules does not reach them. This task covers that gap.
+
+Why this surface specifically: a signing fault is silent. A wrong recovery bit, a mis-derived address, a hex encoder that drops a leading zero - each produces well-formed output that a round-trip test accepts and only a counterparty rejects. Cartouche campaign on the equivalent surface found exactly that shape: V3.sign/1, the default-signer route, had no test reaching it at all. The coverage class exposed it; a mutation score never would have.
+
+Blocked on the tool, not on the work. muex 0.8.2 cannot report a surviving mutant on Elixir 1.20: Muex.TestRunner.Port.count_failures/2 matches the pre-1.20 ExUnit summary wording (N tests, M failures), while 1.20 prints Result: N passed / Failed: N test. The regex misses, the fallback returns 1 failure, and the only path to :survived is unreachable - every survivor comes back killed and a suite that asserts nothing scores 100%. Filed as Oeditus/muex#20 (2026-08-23) with a four-file reproduction and a patch; upstream acknowledged it the same morning. Verified against cartouche task 114, which hit this and could not produce its central deliverable. Do not start the survivor half until an installed release passes the reproduction.
+
+Note what is NOT blocked, because it is the half that already paid off elsewhere. The no_coverage and equivalent classes are decided before or without running a test - no_coverage from the coverage index in select_tests/2, equivalent by Trivial Compiler Equivalence bytecode comparison - so the defect does not touch them, and in cartouche they produced the campaign single most useful finding. If the upstream fix stalls, a coverage-class-only pass over this surface is still worth running, and the ledger must then say plainly that the survivor axis was not measured.
+
+Add the dep in the same change (only: [:dev, :test], runtime: false, matching cartouche) at whatever release carries the #20 fix. Do not pin 0.8.2.
+
+Copy the campaign mechanics rather than re-deriving them: ~/_DATA/code/cartouche/.mutation/run.sh runs ONE invocation over the whole surface with all 18 mutators and --no-filter --no-optimize --coverage-guided. Per-module invocations are not equivalent in cost - muex rebuilds its coverage line index by running the suite once per test file, serially, with no cache, so N invocations pay that N times over. In cartouche that is what exhausted a harness run lifetime budget.
+
+Routing is left open on purpose. The surface is a dispatch trigger, but the tool is unproven on this Elixir line, and freezing an agent assignee now would retire the dispatch decision before anyone knows what the campaign costs.
+"""
+created_at = "2026-08-23"
+scored_at = "2026-08-23"
