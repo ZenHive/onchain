@@ -788,7 +788,7 @@ scored_at = "2026-08-23"
 id = 87
 phase = 12
 bundle = "differential_testing"
-status = "blocked"
+status = "pending"
 title = "Mutation-adequacy campaign over the signing, key and address surface"
 scores = { d = 5, b = 8, u = 3 }
 markers = ["security"]
@@ -796,7 +796,6 @@ acceptance_criteria = ["The Oeditus/muex#20 reproduction reports survived=2 and 
 out_of_scope = ["RPC construction, DEX arithmetic and the live-node differential evidence. Task 84 owns those", "Adopting muex as a mix ci gate. This stays an on-demand measurement plus the tests it produces", "Patching muex under deps/ to work around #20. A measurement produced by a hand-patched tool is not a durable verification record", "The subscription, ENS, ERC-7730 and account-abstraction surfaces"]
 cross_repo = [{ repo = "cartouche", task_id = 119, relation = "related" }]
 assignee = "human"
-blocked_reason = "muex 0.8.2 cannot report a survivor on Elixir 1.20 (Oeditus/muex#20, acknowledged upstream 2026-08-23). The survivor half unblocks when an installed release passes the four-file reproduction; the no_coverage/equivalent half is runnable today."
 body = """
 Task 84 puts RPC construction and DEX arithmetic under mutation. It does not touch the other money-critical surface in this library, and nothing else does either: lib/onchain/signer.ex (416 lines), private_key.ex, address.ex, hex.ex and abi.ex are local implementations, not thin wrappers - grep reports zero defdelegate in signer.ex, private_key.ex and address.ex - so cartouche campaign over its own signing modules does not reach them. This task covers that gap.
 
@@ -810,7 +809,9 @@ Add the dep in the same change (only: [:dev, :test], runtime: false, matching ca
 
 Copy the campaign mechanics rather than re-deriving them: ~/_DATA/code/cartouche/.mutation/run.sh runs ONE invocation over the whole surface with all 18 mutators and --no-filter --no-optimize --coverage-guided. Per-module invocations are not equivalent in cost - muex rebuilds its coverage line index by running the suite once per test file, serially, with no cache, so N invocations pay that N times over. In cartouche that is what exhausted a harness run lifetime budget.
 
-Routing is left open on purpose. The surface is a dispatch trigger, but the tool is unproven on this Elixir line, and freezing an agent assignee now would retire the dispatch decision before anyone knows what the campaign costs.
+Routing is left open on purpose. The surface is a dispatch trigger and the tool now works, so this is genuinely dispatchable - but rmap freezes assignee at creation, and nobody has yet measured what a campaign over this surface costs in wall-clock or in survivor-triage judgement. Decide the routing when the campaign is actually scheduled, not here.
+
+Confirmed 2026-08-24 on muex 0.8.3 (released the same day; Oeditus/muex#20 closed 09:42Z): the four-file reproduction reports survived=2 and a 0.0% score on Elixir 1.20.2 / OTP 29, and the converse check - the same two mutants against a value-asserting test - reports killed=2 and 100%, so the tool is not simply calling everything survived now. Re-run the reproduction against whatever version is installed when the campaign actually starts; this note records that a working release exists, not that the installed one is it.
 """
 created_at = "2026-08-23"
 scored_at = "2026-08-23"
