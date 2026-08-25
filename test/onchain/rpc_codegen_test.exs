@@ -9,7 +9,8 @@ defmodule Onchain.RPCCodegenTest do
     :syncing,
     :chain_id,
     :get_transaction_count,
-    :eth_get_code
+    :eth_get_code,
+    :blob_base_fee
   ]
 
   test "uniform RPC wrappers are declared through defrpc codegen" do

@@ -6,6 +6,32 @@ Completed roadmap tasks.
 
 ## Unreleased
 
+### Added
+
+- **`Onchain.RPC.base_fee/1` and `Onchain.RPC.blob_base_fee/1`** (plus `!`
+  variants) — the two fee reads cartouche 0.8.0 added, exposed here in the shape
+  a consumer can actually run.
+
+  `blob_base_fee/1` wraps `eth_blobBaseFee` directly: it is a standard method,
+  present in the vendored OpenRPC spec, and verified live on both reth v2.5.1
+  and Alchemy mainnet.
+
+  `base_fee/1` deliberately does **not** wrap `eth_baseFee`. That method is an
+  Erigon extension — absent from the OpenRPC spec, and Alchemy mainnet rejects
+  it outright (`-32600 "eth_baseFee is not available on the ETH_MAINNET"`).
+  Wrapping it would have shipped a fee read that works on this repo's own node
+  and fails for consumers on common hosted endpoints. Instead `base_fee/1` reads
+  `baseFeePerGas` from the block header (default block `"pending"`), which every
+  EIP-1559 node serves, and accepts `:block` for historical or `"latest"` reads.
+  Verified equivalent to `eth_baseFee` in a single same-instant batch against
+  reth: both `71_739_926`, while `latest` was `68_871_658` — so the pending
+  header, not the latest one, carries `eth_baseFee`'s next-block semantics.
+
+  The full `rpc_integration_test.exs` suite (36 tests) passes unchanged against
+  both `localhost:8545` (reth archive) and Alchemy mainnet; the identical
+  green run on both endpoints is what the portability claim rests on.
+
+
 ### Changed
 
 - **`cartouche` 0.7.1 → 0.8.0 and `hieroglyph` 1.6.2 → 1.7.0 in the lock.**

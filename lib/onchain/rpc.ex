@@ -916,6 +916,92 @@ defmodule Onchain.RPC do
     end
   end
 
+  # --- base_fee ---
+
+  # NOTE (portability): cartouche 0.8.0 exposes `Cartouche.RPC.base_fee/1`, which calls the
+  # `eth_baseFee` JSON-RPC method. That method is an Erigon extension — it is absent from the
+  # vendored OpenRPC spec, and hosted providers reject it (Alchemy mainnet answers
+  # `-32600 "eth_baseFee is not available on the ETH_MAINNET"`). Wrapping it directly would
+  # give this library a fee read that works on the maintainers' node and fails for consumers
+  # on the most common hosted endpoints. We therefore read the value from the pending block
+  # header instead, which every EIP-1559 node serves. Verified equivalent against reth
+  # v2.5.1 in a single batch request: `eth_baseFee` == pending `baseFeePerGas` == 71_739_926,
+  # while `latest` was 68_871_658 — so the pending header, not the latest one, carries
+  # `eth_baseFee`'s "next block" semantics.
+
+  api(:base_fee, "Get the EIP-1559 base fee per gas for the next block.",
+    params: [
+      opts: [
+        kind: :value,
+        default: [],
+        description:
+          ~s{Options: :block (default "pending" — the next block's base fee; pass "latest" for the most recent mined block), :rpc_url, :timeout}
+      ]
+    ],
+    returns: %{
+      type: "{:ok, non_neg_integer | nil} | {:error, term}",
+      description:
+        "Base fee per gas in wei, or nil for a pre-EIP-1559 block. Read from the block header, so it works on any EIP-1559 node rather than only those implementing Erigon's eth_baseFee.",
+      example: "71_739_926"
+    }
+  )
+
+  @spec base_fee(keyword()) :: {:ok, non_neg_integer() | nil} | {:error, term()}
+  def base_fee(opts \\ []) do
+    {block, rpc_opts} = Keyword.pop(opts, :block, "pending")
+
+    case get_block_by_number(block, rpc_opts) do
+      {:ok, nil} -> {:error, {:block_not_found, block}}
+      {:ok, %{base_fee_per_gas: base_fee}} -> {:ok, base_fee}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # --- base_fee! ---
+
+  api(:base_fee!, "Get the base fee per gas for the next block. Raises on error.",
+    params: [
+      opts: [kind: :value, default: [], description: "Options: :block, :rpc_url, :timeout"]
+    ],
+    returns: %{type: "non_neg_integer | nil", description: "Base fee per gas in wei"}
+  )
+
+  @spec base_fee!(keyword()) :: non_neg_integer() | nil
+  def base_fee!(opts \\ []) do
+    case base_fee(opts) do
+      {:ok, result} -> result
+      {:error, reason} -> raise "base_fee failed: #{inspect(reason)}"
+    end
+  end
+
+  # --- blob_base_fee ---
+
+  api(:blob_base_fee, "Get the current base fee per blob gas (eth_blobBaseFee).",
+    params: [
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{
+      type: "{:ok, non_neg_integer} | {:error, term}",
+      description: "EIP-4844 base fee per blob gas in wei",
+      example: "3_936_408"
+    }
+  )
+
+  @spec blob_base_fee(keyword()) :: {:ok, non_neg_integer()} | {:error, term()}
+  defrpc(:blob_base_fee, method: "eth_blobBaseFee", decode: :hex_unsigned)
+
+  # --- blob_base_fee! ---
+
+  api(:blob_base_fee!, "Get the current base fee per blob gas. Raises on error.",
+    params: [
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{type: :non_neg_integer, description: "Base fee per blob gas in wei"}
+  )
+
+  @spec blob_base_fee!(keyword()) :: non_neg_integer()
+  defrpc_bang(:blob_base_fee)
+
   # --- Private helpers ---
 
   @spec do_rpc(String.t(), list(), keyword()) :: {:ok, term()} | {:error, term()}

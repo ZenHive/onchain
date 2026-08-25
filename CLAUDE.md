@@ -99,7 +99,7 @@ lib/onchain/
   abi.ex            # encode_call/2, decode_response/2, decode_types/2, decode_call/3, decode_error/2
   decimal.ex        # to_decimal/2, to_basis_points/1, div_pow10/2
   fees.ex           # suggest_fees/2 — EIP-1559 fee recommendation over Cartouche.FeeHistory.t()
-  rpc.ex            # eth_call, eth_estimateGas, eth_getLogs, eth_getBalance, receipts, nonces, syncing, fee_history, get_proof, generic call/3 passthrough
+  rpc.ex            # eth_call, eth_estimateGas, eth_getLogs, eth_getBalance, receipts, nonces, syncing, fee_history, base_fee (portable, via the block header), blob_base_fee, get_proof, generic call/3 passthrough
   rpc/codegen.ex    # defrpc/defrpc_bang macros — NimbleOptions-backed codegen for uniform RPC wrapper bodies
   rpc/helpers.ex    # shared RPC helpers; parse_block_response/1, parse_transaction_map/1; do_rpc enriches revert maps with :data hex for decode_error/2
   signer.ex         # key management, transaction signing
