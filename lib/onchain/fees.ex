@@ -33,10 +33,14 @@ defmodule Onchain.Fees do
 
   ## Error Format
 
+  - `{:error, :no_base_fee_data}` — `history.base_fee_per_gas` is `nil` or empty,
+    so there is no next-block fee to project from.
+  - `{:error, {:invalid_base_fee, value}}` — the last `base_fee_per_gas` entry is
+    not a number.
   - `{:error, :no_reward_data}` — `history.reward` is `nil` or empty (caller
-    passed empty `reward_percentiles` to `eth_feeHistory`).
+    passed empty `reward_percentiles` to `eth_feeHistory`), or a row is not a list.
   - `{:error, {:percentile_index_out_of_range, idx, width}}` — requested column
-    doesn't exist in the reward rows.
+    doesn't exist in the reward rows. `width` is the narrowest row's length.
   - `{:error, {:invalid_buffer, value}}` — buffer is not a positive number.
   """
 
@@ -68,11 +72,10 @@ defmodule Onchain.Fees do
     buffer = Keyword.get(opts, :buffer, 1.2)
 
     with :ok <- validate_buffer(buffer),
+         {:ok, base_fee} <- fetch_base_fee(history),
          {:ok, reward} <- fetch_reward(history),
          {:ok, width} <- reward_width(reward),
          :ok <- validate_percentile_index(percentile_index, width) do
-      base_fee = List.last(history.base_fee_per_gas)
-
       # `row` is the per-block percentile list (1-4 elements) and percentile_index a
       # small constant, so Enum.at here is O(small), not O(block_count).
       # The directive must be the last comment above the flagged line: reach scopes
@@ -110,11 +113,31 @@ defmodule Onchain.Fees do
   defp validate_buffer(n) when is_number(n) and n > 0, do: :ok
   defp validate_buffer(other), do: {:error, {:invalid_buffer, other}}
 
+  defp fetch_base_fee(%Cartouche.FeeHistory{base_fee_per_gas: list}) when is_list(list) do
+    case List.last(list) do
+      nil -> {:error, :no_base_fee_data}
+      base_fee when is_number(base_fee) -> {:ok, base_fee}
+      other -> {:error, {:invalid_base_fee, other}}
+    end
+  end
+
+  defp fetch_base_fee(%Cartouche.FeeHistory{}), do: {:error, :no_base_fee_data}
+
   defp fetch_reward(%Cartouche.FeeHistory{reward: nil}), do: {:error, :no_reward_data}
   defp fetch_reward(%Cartouche.FeeHistory{reward: []}), do: {:error, :no_reward_data}
   defp fetch_reward(%Cartouche.FeeHistory{reward: reward}), do: {:ok, reward}
 
-  defp reward_width([first_row | _]) when is_list(first_row), do: {:ok, length(first_row)}
+  # The narrowest row bounds the valid index: `eth_feeHistory` is specified to return one
+  # column per requested percentile, but a ragged row from a non-conforming node would
+  # otherwise make `Enum.at/2` yield nil and crash `round/1` mid-map.
+  defp reward_width(rows) when is_list(rows) do
+    if rows != [] and Enum.all?(rows, &is_list/1) do
+      {:ok, rows |> Enum.map(&length/1) |> Enum.min()}
+    else
+      {:error, :no_reward_data}
+    end
+  end
+
   defp reward_width(_), do: {:error, :no_reward_data}
 
   defp validate_percentile_index(idx, width) when is_integer(idx) and idx >= 0 and idx < width, do: :ok

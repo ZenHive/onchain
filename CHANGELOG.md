@@ -32,6 +32,26 @@ Completed roadmap tasks.
   green run on both endpoints is what the portability claim rests on.
 
 
+### Fixed
+
+- **`Onchain.Fees.suggest_fees/2` no longer raises on malformed `eth_feeHistory`
+  payloads.** The function advertises `{:ok, _} | {:error, term}`, but three
+  inputs escaped that contract and crashed the caller instead — confirmed live
+  against the module before the fix:
+
+  | Input | Was | Now |
+  |---|---|---|
+  | `base_fee_per_gas: []` | `ArithmeticError` | `{:error, :no_base_fee_data}` |
+  | `base_fee_per_gas: nil` | `FunctionClauseError` | `{:error, :no_base_fee_data}` |
+  | ragged `reward` rows, index present in row 1 but absent in row 2 | `ArgumentError` in `round/1` | `{:error, {:percentile_index_out_of_range, idx, width}}` |
+
+  `base_fee_per_gas` is now fetched through a guarded clause (a non-numeric last
+  entry reports `{:error, {:invalid_base_fee, value}}`), and the reward width is
+  taken from the **narrowest** row rather than the first, so a non-conforming
+  node returning ragged columns yields an error tuple instead of a `nil` reaching
+  `round/1` mid-map. Uniform rows — the specified and overwhelmingly common shape
+  — are unaffected, so the change is backward compatible.
+
 ### Changed
 
 - **`cartouche` 0.7.1 → 0.8.0 and `hieroglyph` 1.6.2 → 1.7.0 in the lock.**

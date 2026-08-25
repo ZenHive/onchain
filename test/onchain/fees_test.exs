@@ -120,6 +120,66 @@ defmodule Onchain.FeesTest do
       assert {:error, :no_reward_data} = Fees.suggest_fees(h)
     end
 
+    test "error: base_fee_per_gas is empty" do
+      h = %FeeHistory{
+        oldest_block: 1,
+        base_fee_per_gas: [],
+        gas_used_ratio: [0.5],
+        reward: [[1000]]
+      }
+
+      assert {:error, :no_base_fee_data} = Fees.suggest_fees(h)
+    end
+
+    test "error: base_fee_per_gas is nil" do
+      h = %FeeHistory{
+        oldest_block: 1,
+        base_fee_per_gas: nil,
+        gas_used_ratio: [0.5],
+        reward: [[1000]]
+      }
+
+      assert {:error, :no_base_fee_data} = Fees.suggest_fees(h)
+    end
+
+    test "error: last base_fee_per_gas entry is not a number" do
+      h = %FeeHistory{
+        oldest_block: 1,
+        base_fee_per_gas: [100, "0x1a"],
+        gas_used_ratio: [0.5],
+        reward: [[1000]]
+      }
+
+      assert {:error, {:invalid_base_fee, "0x1a"}} = Fees.suggest_fees(h)
+    end
+
+    test "error: ragged reward rows bound the index by the narrowest row" do
+      # A non-conforming node returns fewer columns for one block. The index is valid
+      # for the first row but absent from the second — previously this crashed in
+      # round(nil) mid-map instead of returning an error tuple.
+      h = history([10, 20], [[1000, 2000], [1500]])
+
+      assert {:error, {:percentile_index_out_of_range, 1, 1}} =
+               Fees.suggest_fees(h, percentile_index: 1)
+    end
+
+    test "ragged reward rows still resolve an index every row carries" do
+      h = history([10, 20], [[1000, 2000], [1500]])
+
+      assert {:ok, {20, 1250, 1274}} = Fees.suggest_fees(h)
+    end
+
+    test "error: a reward row is not a list" do
+      h = %FeeHistory{
+        oldest_block: 1,
+        base_fee_per_gas: [100, 110],
+        gas_used_ratio: [0.5],
+        reward: [[10], :garbage]
+      }
+
+      assert {:error, :no_reward_data} = Fees.suggest_fees(h)
+    end
+
     test "error: percentile_index out of range" do
       h = history([100], [[10, 20]])
 
