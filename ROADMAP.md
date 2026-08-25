@@ -83,7 +83,7 @@
 | Task 85 `[P]` | 🔄 | 🎁 **rpc_composition** · Onchain.RPC block-level reads — receipts, transaction counts, transactions by index, and the block access list [D:4/B:7/U:6 → Eff:1.62] 🚀 |
 | Task 86 `[P]` | ⬜ | 🎁 **rpc_composition** · Onchain.RPC.get_storage_values — eth_getStorageValues batched multi-account slot reads [D:3/B:6/U:5 → Eff:1.83] 🚀 |
 | Task 87 | ⬜ | 🎁 **differential_testing** · 🔒 Mutation-adequacy campaign over the signing, key and address surface [D:5/B:8/U:3 → Eff:1.1] 📋 |
-| Task 88 | 🔄 | 🎁 **abi_decode_hardening** · 🔒 Expose hieroglyph's strict decode mode through the Onchain.ABI, Contract and Log decode surface [D:4/B:7/U:6 → Eff:1.62] 🚀 |
+| Task 88 | ✅ | 🎁 **abi_decode_hardening** · 🔒 Expose hieroglyph's strict decode mode through the Onchain.ABI, Contract and Log decode surface [D:4/B:7/U:6 → Eff:1.62] 🚀 |
 | Task 89 | ⬜ | 🎁 **signer_backend_contract** · 🔒 Route Onchain.Signer.sign_transaction through cartouche's {backend, config} carrier instead of the legacy MFA [D:3/B:7/U:6 → Eff:2.17] 🎯 |
 | Task 90 | ⬜ | 🎁 **subscription_hardening** · HTTP log/block/pending polling over Cartouche.Filter, so subscribers work on the RPC URL this library defaults to [D:5/B:6/U:5 → Eff:1.1] 📋 |
 | Task 91 | ⬜ | 🎁 **node_portability** · Normalize node-capability refusals into typed errors instead of passing the raw JSON-RPC code through [D:3/B:7/U:7 → Eff:2.33] 🎯 |

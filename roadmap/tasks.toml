@@ -836,7 +836,7 @@ scored_at = "2026-08-23"
 id = 88
 phase = 12
 bundle = "abi_decode_hardening"
-status = "in_progress"
+status = "done"
 title = "Expose hieroglyph's strict decode mode through the Onchain.ABI, Contract and Log decode surface"
 scores = { d = 4, b = 7, u = 6 }
 markers = ["security"]
@@ -853,9 +853,16 @@ This is a published package whose consumers decode bytes they do not control: re
 
 Dispatch trigger: public API change on the family's core package, on the decode path every money-handling consumer sits on.
 """
+implemented = "Landed by grok via merge-train; reviewer-approved (run run-1787623766261-0173b997, 3d7513524dd57489eeb3064c119612fe5bcb0277)."
+delivered_by = "grok"
+verified = true
+verified_by = "cursor"
+verification_ref = "harness-run:run-1787623766261-0173b997"
 created_at = "2026-08-25"
 started_at = "2026-08-25"
 scored_at = "2026-08-25"
+done_at = "2026-08-25"
+shipped_in = "3d7513524dd57489eeb3064c119612fe5bcb0277"
 
 [[task]]
 id = 89
