@@ -790,7 +790,7 @@ status = "pending"
 title = "Onchain.RPC.get_storage_values — eth_getStorageValues batched multi-account slot reads"
 scores = { d = 3, b = 6, u = 5 }
 markers = ["parallel"]
-acceptance_criteria = ["Onchain.RPC.get_storage_values is exposed through the existing codegen/specs path with the api/3 declaration and bang variant the module's conventions require", "A live test reads several slots across at least two mainnet contracts at a pinned block and asserts each returned value equals what get_storage_at returns for the same account and slot, proving the batched and single-slot routes agree", "The representation of a never-written slot is established against the live node and pinned by a test", "A request naming an account with no code pins the node's actual observed response", "If the node does not implement the method the test flunks naming the method and the node's error rather than skipping", "mix ci passes"]
+acceptance_criteria = ["The wrapper is portable or explicitly marked node-privileged: a hosted endpoint's refusal of eth_getStorageValues is pinned by a test, and the task either builds the batched read on a method consumers can actually call or documents in the moduledoc and CHANGELOG that this read requires a node serving it, naming the observed hosted-provider error. Shipping a wrapper that only works on this repo's node without saying so is a failure of this criterion", "Onchain.RPC.get_storage_values is exposed through the existing codegen/specs path with the api/3 declaration and bang variant the module's conventions require", "A live test reads several slots across at least two mainnet contracts at a pinned block and asserts each returned value equals what get_storage_at returns for the same account and slot, proving the batched and single-slot routes agree", "The representation of a never-written slot is established against the live node and pinned by a test", "A request naming an account with no code pins the node's actual observed response", "If the node does not implement the method the test flunks naming the method and the node's error rather than skipping", "mix ci passes"]
 out_of_scope = ["EIP-1967 proxy-slot helpers or any storage-layout decoding built on top of this read", "Changing eth_getStorageAt", "eth_getProof"]
 files_to_modify = ["lib/onchain/rpc.ex"]
 assignee = "grok"
@@ -803,6 +803,15 @@ The natural consumers already exist here: proxy-implementation detection reads E
 The method is present in the vendored `priv/specs/openrpc-v1.0.0-beta.4.json`, so it should go through the existing `Onchain.RPC.Codegen` / `Onchain.RPC.Specs` path rather than being hand-rolled. It is a recent spec addition and client support is uneven — establish what the live node actually returns, including how it represents a slot that has never been written, before pinning a shape.
 
 Keep `eth_getStorageAt` as it is; this is an addition beside it, not a replacement, and the two must agree slot-for-slot.
+
+Portability finding (2026-08-25, orchestrator QA pass — read this before choosing the construction). This task's premise that spec presence implies availability does not hold. `eth_getStorageValues` IS in the vendored `openrpc-v1.0.0-beta.4.json`, and it is still refused by the endpoint most consumers use:
+
+- Alchemy mainnet -> `-32600` `"Unsupported method: eth_getStorageValues on ETH_MAINNET"` (an `eth_blockNumber` sanity call on the same URL in the same session succeeded, so this is a method refusal, not transport)
+- our reth archive node -> `-32602` `"Invalid params"` for the `[account, [slot], block]` shape, i.e. it knows the method but takes a different signature — establish the real signature against the node before pinning anything
+
+So OpenRPC membership satisfies rule 1 of `node-portability.md` and buys nothing for rule 2. This is the same trap `base_fee/1` already sidestepped by reading `baseFeePerGas` from the pending block header instead of calling Erigon's `eth_baseFee`, and the same one `eth_getBlockAccessList` walked into when task 85 landed a wrapper Alchemy will not serve.
+
+The portable construction exists and should be preferred: `eth_getStorageAt` is universally served, and many slots across many accounts can be read in one round trip via a JSON-RPC batch or via `Onchain.Multicall`, which is what the "fifteen requests today" motivation in this body actually needs. Treat `eth_getStorageValues` as an optional fast path behind a capability check rather than the primary route — and note that task 91 (typed refusals) and task 92 (`eth_capabilities`) in this same bundle are the machinery for that check.
 """
 created_at = "2026-08-23"
 scored_at = "2026-08-23"
@@ -940,6 +949,14 @@ Today none of those are distinguishable to a caller. `grep` over `lib/` finds no
 Give `Onchain.RPC` a single place where a node refusal is classified before it reaches the caller, so the three cases above become distinct, matchable error terms rather than one raw map. The classification belongs on the shared `do_rpc` result path so every wrapper — the codegen'd ones, the hand-written ones, and the `call/3` passthrough — inherits it without each having to opt in. `-32601` is the JSON-RPC 2.0 standard "Method not found" code; the others are node-specific, so treat the standard code as the reliable signal and pin the non-standard ones from observed responses rather than from assumption. A code this library does not recognize must keep passing through unchanged — the goal is to name the cases that are actually distinguishable, never to flatten every error into a guess.
 
 Then document the resulting contract in the module's moduledoc, because the point of this task is that a consumer on a weaker node can write a branch instead of a string match.
+
+Measured evidence (2026-08-25, orchestrator QA pass) — three real refusals observed while reviewing the RPC surface. Each was taken against Alchemy mainnet with an `eth_blockNumber` sanity call succeeding on the same URL in the same session, so these are method refusals, not transport failures:
+
+- `eth_getBlockAccessList` -> `-32600` `"Unsupported method: eth_getBlockAccessList on ETH_MAINNET"`
+- `eth_getStorageValues` -> `-32600` `"Unsupported method: eth_getStorageValues on ETH_MAINNET"`
+- `eth_baseFee` -> `-32600` (already recorded in the `base_fee/1` portability note in `lib/onchain/rpc.ex`)
+
+Note the code. Alchemy answers `-32600` (JSON-RPC "Invalid Request"), NOT the `-32601` "Method not found" this body names as the reliable standard signal. A classifier keyed only on `-32601` would be blind on the most common consumer endpoint. This is an observation to pin, not a licence to read `-32600` as universally meaning "unsupported": it is a generic code other nodes use for genuinely malformed requests, so the message has to carry part of the signal. Our own reth node answers `-32602` `"Invalid params"` for `eth_getStorageValues` — a third code for the same underlying "you cannot use this here". Pin what each endpoint actually returns rather than unifying them by assumption.
 """
 created_at = "2026-08-25"
 scored_at = "2026-08-25"
