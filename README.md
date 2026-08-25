@@ -50,8 +50,8 @@ node, and anything that only works there is treated as a bug.
 
 Everything in `Onchain.RPC`, `Onchain.ERC20`, `Onchain.ERC721`, `Onchain.ERC1155`,
 `Onchain.Contract`, `Onchain.Log`, `Onchain.Block`, `Onchain.Multicall` and `Onchain.ENS`
-uses standard methods and needs no special endpoint. Two things depend on what your
-provider serves:
+uses standard methods and needs no special endpoint. These surfaces depend on what
+your provider serves:
 
 | Surface | Requirement | Symptom without it |
 | --- | --- | --- |

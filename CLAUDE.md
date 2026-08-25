@@ -211,7 +211,9 @@ Update **all affected `.md` files** after completing any roadmap task. This is p
 | MEV relay (`mev_integration_test.exs`) | `MEV_RELAY_URL` (`https://rpc.flashbots.net`) | No `MEV_AUTH_HEADER` — Flashbots' `signature required` reply is itself the valid JSON-RPC round-trip the test asserts. |
 | Node-capability refusals (`rpc/node_refusal_integration_test.exs`) | `ETHEREUM_API_URL` (archive `-32601`) plus `ETHEREUM_LIMITED_RPC_URL` or `ETHEREUM_ALCHEMY_URL` (hosted `-32600` / `-32001`) | Flunks with the exact export commands when the limited URL is unset. |
 
-Run all three:
+Run differential + AA + MEV (do **not** point `ETHEREUM_API_URL` at Alchemy
+when running the node-refusal suite — that suite pins archive `-32601` on
+`rpc_url!/0` and hosted refusals on `limited_rpc_url!/0`):
 
 ```bash
 ONCHAIN_DIFFERENTIAL_TESTS=1 ETHEREUM_API_URL="$ETHEREUM_ALCHEMY_URL" \

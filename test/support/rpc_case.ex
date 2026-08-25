@@ -4,11 +4,13 @@ defmodule Onchain.RPCCase do
   # Resolves RPC URL from env vars. Used by all integration tests needing RPC.
 
   @doc false
+  @spec rpc_url() :: String.t() | nil
   def rpc_url do
     System.get_env("ETHEREUM_API_URL") || System.get_env("ETH_RPC_URL")
   end
 
   @doc false
+  @spec rpc_url!() :: String.t()
   def rpc_url! do
     rpc_url() || flunk_missing_rpc()
   end
@@ -28,11 +30,13 @@ defmodule Onchain.RPCCase do
   # Hosted / plan-limited endpoint used to pin node-capability refusals. The
   # default ETHEREUM_API_URL in this repo is the archive node, which implements
   # methods a consumer's Alchemy/Infura URL refuses.
+  @spec limited_rpc_url() :: String.t() | nil
   def limited_rpc_url do
     System.get_env("ETHEREUM_LIMITED_RPC_URL") || System.get_env("ETHEREUM_ALCHEMY_URL")
   end
 
   @doc false
+  @spec limited_rpc_url!() :: String.t()
   def limited_rpc_url! do
     limited_rpc_url() || flunk_missing_limited_rpc()
   end

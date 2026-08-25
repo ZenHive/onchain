@@ -12,6 +12,7 @@ defmodule Onchain.RPC.NodeRefusalIntegrationTest do
   # the same URL in the same session, so these are method/capability refusals,
   # not transport failures.
   @alchemy_unsupported_access_list "Unsupported method: eth_getBlockAccessList on ETH_MAINNET"
+  @alchemy_base_fee_unavailable "eth_baseFee is not available on the ETH_MAINNET. For more information see our docs: https://docs.alchemy.com/alchemy/documentation/apis/ethereum"
   @alchemy_trace_tier "trace_block is not available on the Free tier - upgrade to Pay As You Go, or Enterprise for access."
   @alchemy_unable "Unable to complete request at this time."
 
@@ -37,6 +38,13 @@ defmodule Onchain.RPC.NodeRefusalIntegrationTest do
 
       assert {:error, {:method_not_found, %{code: -32_600, message: @alchemy_unsupported_access_list}}} =
                RPC.call("eth_getBlockAccessList", [Onchain.Hex.from_integer(@historical_block)], opts)
+    end
+
+    test "Alchemy refuses eth_baseFee as {:method_not_found, map}" do
+      opts = limited_opts()
+
+      assert {:error, {:method_not_found, %{code: -32_600, message: @alchemy_base_fee_unavailable}}} =
+               RPC.call("eth_baseFee", [], opts)
     end
 
     test "Alchemy Free-tier trace_block is {:namespace_unavailable, map}" do
