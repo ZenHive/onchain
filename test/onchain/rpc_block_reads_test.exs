@@ -15,6 +15,9 @@ defmodule Onchain.RPC.BlockReadsTest do
     assert receipt.transaction_index == @transaction_index
     assert receipt.block_number == @block_number
     assert receipt.gas_used == 21_000
+
+    assert {:ok, nil} = RPC.get_block_receipts(@block_hash, rpc_opts(nil))
+    assert_request("eth_getBlockReceipts", [@block_hash])
   end
 
   test "block transaction count wrappers normalize inputs and nullable quantities" do
@@ -78,6 +81,9 @@ defmodule Onchain.RPC.BlockReadsTest do
 
     assert {:ok, ^access_list} = RPC.get_block_access_list(@block_hash, rpc_opts(access_list))
     assert_request("eth_getBlockAccessList", [@block_hash])
+
+    assert {:ok, nil} = RPC.get_block_access_list(@block_number, rpc_opts(nil))
+    assert_request("eth_getBlockAccessList", ["0x10"])
   end
 
   test "block read validation rejects malformed block hashes and indexes" do
@@ -117,6 +123,16 @@ defmodule Onchain.RPC.BlockReadsTest do
              )
 
     assert transaction_message =~ "unexpected block transaction response"
+
+    assert {:error, {:rpc_error, %{message: access_list_message}}} =
+             RPC.get_block_access_list(@block_number, rpc_opts("not-a-list"))
+
+    assert access_list_message =~ "unexpected block access list response"
+
+    assert {:error, {:rpc_error, %{message: access_list_entry_message}}} =
+             RPC.get_block_access_list(@block_number, rpc_opts([nil]))
+
+    assert access_list_entry_message =~ "unexpected block access list response"
   end
 
   test "bang variants unwrap successful block reads" do

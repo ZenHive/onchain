@@ -26,7 +26,9 @@ defmodule Onchain.RPC do
   - Address validation: `{:error, {:invalid_address, input}}`
   - Data validation: `{:error, {:invalid_data, input}}`
   - Block validation: `{:error, {:invalid_block, input}}`
+  - Block hash validation: `{:error, {:invalid_block_hash, input}}`
   - Tx hash validation: `{:error, {:invalid_tx_hash, input}}` (must be 32 bytes)
+  - Transaction index validation: `{:error, {:invalid_transaction_index, input}}`
   - RPC/network errors: `{:error, {:rpc_error, map}}`
 
   For RPC errors, the map always has at least a `:message` key. JSON-RPC error
@@ -683,7 +685,11 @@ defmodule Onchain.RPC do
 
   @spec get_block_access_list(integer() | String.t(), keyword()) ::
           {:ok, [map()] | nil} | {:error, term()}
-  defrpc(:get_block_access_list, method: "eth_getBlockAccessList", arg: :block)
+  defrpc(:get_block_access_list,
+    method: "eth_getBlockAccessList",
+    arg: :block,
+    decode: :block_access_list
+  )
 
   api(:get_block_access_list!, "Fetch an EIP-7928 block access list. Raises on error.",
     params: [
@@ -1702,6 +1708,21 @@ defmodule Onchain.RPC do
 
   defp decode_transaction_result({:ok, result}), do: unexpected_rpc_result("block transaction", result)
   defp decode_transaction_result({:error, _reason} = error), do: error
+
+  @doc false
+  @spec decode_block_access_list_result({:ok, term()} | {:error, term()}) ::
+          {:ok, [map()] | nil} | {:error, term()}
+  defp decode_block_access_list_result({:ok, nil}), do: {:ok, nil}
+
+  defp decode_block_access_list_result({:ok, entries}) when is_list(entries) do
+    if Enum.all?(entries, &is_map/1),
+      do: {:ok, entries},
+      else: unexpected_rpc_result("block access list", entries)
+  end
+
+  defp decode_block_access_list_result({:ok, result}), do: unexpected_rpc_result("block access list", result)
+
+  defp decode_block_access_list_result({:error, _reason} = error), do: error
 
   @spec unexpected_rpc_result(String.t(), term()) :: {:error, {:rpc_error, map()}}
   defp unexpected_rpc_result(label, result) do

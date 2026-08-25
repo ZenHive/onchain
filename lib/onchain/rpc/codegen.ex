@@ -52,11 +52,21 @@ defmodule Onchain.RPC.Codegen do
           "block references and optional transaction indexes."
     ],
     decode: [
-      type: {:in, [nil, :hex_unsigned, :nullable_hex_unsigned, :receipt_list, :transaction]},
+      type:
+        {:in,
+         [
+           nil,
+           :hex_unsigned,
+           :nullable_hex_unsigned,
+           :receipt_list,
+           :transaction,
+           :block_access_list
+         ]},
       default: nil,
       doc:
         "Result decoder. nil leaves the raw result untouched; :hex_unsigned uses cartouche; " <>
-          "nullable quantities, receipt lists, and transactions use Onchain's existing parsers."
+          "nullable quantities, receipt lists, and transactions use Onchain's existing parsers; " <>
+          ":block_access_list keeps the node's camelCase EIP-7928 maps."
     ]
   ]
 
@@ -79,13 +89,13 @@ defmodule Onchain.RPC.Codegen do
     decode = Keyword.fetch!(opts, :decode)
     ensure_known_method!(method)
 
-    rpc_opts =
-      case decode do
-        nil -> quote(do: to_rpc_opts(opts))
-        d -> quote(do: Keyword.put(to_rpc_opts(opts), :decode, unquote(d)))
-      end
-
     if arg in [:none, :address, :data] do
+      rpc_opts =
+        case decode do
+          nil -> quote(do: to_rpc_opts(opts))
+          d -> quote(do: Keyword.put(to_rpc_opts(opts), :decode, unquote(d)))
+        end
+
       build_rpc(name, method, arg, rpc_opts)
     else
       build_block_rpc(name, method, arg, decode)
@@ -227,6 +237,9 @@ defmodule Onchain.RPC.Codegen do
 
       :transaction ->
         quote(do: decode_transaction_result(unquote(rpc_call)))
+
+      :block_access_list ->
+        quote(do: decode_block_access_list_result(unquote(rpc_call)))
     end
   end
 end
