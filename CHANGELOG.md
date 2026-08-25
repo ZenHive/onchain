@@ -4,6 +4,27 @@ Completed roadmap tasks.
 
 ---
 
+## Unreleased
+
+### Changed
+
+- **`cartouche` 0.7.1 → 0.8.0 and `hieroglyph` 1.6.2 → 1.7.0 in the lock.**
+  Both resolve inside the existing `{:cartouche, "~> 0.6"}` requirement, so no
+  bound moved and no `Onchain` signature changed. hieroglyph 1.7.0 carries two
+  wire-format corrections this package inherits without touching a line of it:
+  a static `T[k]` argument is now counted as `k` head slots rather than one, so
+  `Onchain.ABI.encode_call/2` on a signature mixing a fixed static array with a
+  dynamic argument (`foo(bytes,address[3])`) emits solc's `0x80` tail offset
+  where it previously emitted `0x40` — invisible to a round-trip through this
+  library, because the decoder consumes tails sequentially and discards the
+  offset, and visible to every external reader; and anonymous events now decode
+  instead of returning `{:error, {:topics_length_mismatch, _}}`, which reaches
+  `Onchain.Log` and `Onchain.Transfer` for any log whose event is declared
+  `anonymous`. Suite green on the bump (831 tests); offline only —
+  `:integration` and `:differential` were not run.
+
+---
+
 ## v0.13.0 — zen_websocket 0.7 (2026-08-22)
 
 Narrows a runtime requirement, which is a minor bump for consumers even though
