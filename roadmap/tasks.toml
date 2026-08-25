@@ -86,6 +86,11 @@ phase = 12
 order = 8
 description = "Adopt cartouche 0.8.0's enforced signer-backend contracts on the transaction signing path."
 
+[bundles.node_portability]
+phase = 12
+order = 9
+description = "Make the library legible on the nodes consumers actually run — hosted, pruned, namespace-limited — rather than only on this repo's full archive node."
+
 # ============================================================================
 # Phase 7 — DEX Infrastructure
 # ============================================================================
@@ -894,6 +899,86 @@ cartouche 0.8.0 completed the HTTP sibling for exactly this: `Cartouche.Filter` 
 Add an HTTP polling facade over `Cartouche.Filter` covering the same three kinds, delivering messages the way `Subscription` delivers its `eth_subscribe` notifications so a consumer can move between transports without rewriting its receive loop. Lean on cartouche's `terminate/2` for the uninstall rather than tracking filter ids here — the leak it closes is the reason to delegate. `Onchain.Subscription` itself is not modified; the WebSocket path stays exactly as it is.
 
 Depends on task 89 only for the lock: `Cartouche.Filter`'s block and pending kinds do not exist below cartouche 0.8.0, and 89 is what lands that bump.
+"""
+created_at = "2026-08-25"
+scored_at = "2026-08-25"
+
+[[task]]
+id = 91
+phase = 12
+bundle = "node_portability"
+status = "pending"
+title = "Normalize node-capability refusals into typed errors instead of passing the raw JSON-RPC code through"
+scores = { d = 3, b = 7, u = 7 }
+acceptance_criteria = ["A method the node does not implement returns a distinct, documented error term rather than the raw {:rpc_error, map} — verified by a live call to a real endpoint that genuinely refuses the method, with the observed code and message recorded in the test", "A method whose namespace the provider has disabled and a call whose historical state has been pruned are each pinned against a real endpoint that actually produces them; if the response for one of these is indistinguishable from another case at the wire level, the task records that finding and does not invent a distinction the node does not make", "An RPC error code the classifier does not recognize reaches the caller byte-identical to today, proven by a test asserting the existing shape is unchanged", "The classification happens once on the shared result path, so a codegen'd wrapper, a hand-written wrapper and Onchain.RPC.call/3 all return the same classified term for the same refusal — asserted for one method through all three routes", "Tests that need a limited endpoint flunk with the exact env var and setup instructions when it is not configured, and never silently skip", "The moduledoc documents each classified error term and what a caller should do about it", "mix ci passes"]
+out_of_scope = ["Retrying, falling back to another endpoint, or any automatic degradation — this task only makes the refusal legible, it does not react to it", "Probing what the node supports ahead of a call — that is the eth_config / eth_capabilities task in this bundle", "Changing the success-path return shape of any existing method"]
+files_to_modify = ["lib/onchain/rpc.ex"]
+touches = ["lib/onchain/rpc.ex", "lib/onchain/rpc/helpers.ex", "test/onchain/rpc_test.exs"]
+assignee = "cursor"
+model = "cursor-grok-4.6-high"
+body = """
+This library develops and tests against a full archive node reachable at `localhost:8545` (see the `ethereum-rpc` section of CLAUDE.md), which serves the `trace`, `debug`, `eth`, `net` and `web3` namespaces and retains all historical state. That node is not representative of what consumers run. Someone taking this package as a dependency is typically pointed at Alchemy, Infura, a public endpoint, or a self-hosted pruned node, where three things routinely differ: a method is not implemented at all, an entire namespace is disabled by the provider's plan, or the method exists but the state it needs was pruned.
+
+Today none of those are distinguishable to a caller. `grep` over `lib/` finds no handling of `-32601`, no `:method_not_found`, and no `:unsupported` anywhere, so every one of these surfaces as an opaque `{:error, {:rpc_error, %{code: -32601, message: "the method ... does not exist/is not available"}}}` that a caller has to string-match on. CLAUDE.md already records the concrete consequence for the pruned case: a hosted endpoint answers `-32001 Unable to complete request` for a historical-block `eth_feeHistory` at block 20,000,000, depending on plan and load, and that is documented as prose rather than as something the library reports in a form a caller can branch on.
+
+Give `Onchain.RPC` a single place where a node refusal is classified before it reaches the caller, so the three cases above become distinct, matchable error terms rather than one raw map. The classification belongs on the shared `do_rpc` result path so every wrapper — the codegen'd ones, the hand-written ones, and the `call/3` passthrough — inherits it without each having to opt in. `-32601` is the JSON-RPC 2.0 standard "Method not found" code; the others are node-specific, so treat the standard code as the reliable signal and pin the non-standard ones from observed responses rather than from assumption. A code this library does not recognize must keep passing through unchanged — the goal is to name the cases that are actually distinguishable, never to flatten every error into a guess.
+
+Then document the resulting contract in the module's moduledoc, because the point of this task is that a consumer on a weaker node can write a branch instead of a string match.
+"""
+created_at = "2026-08-25"
+scored_at = "2026-08-25"
+
+[[task]]
+id = 92
+phase = 12
+bundle = "node_portability"
+status = "pending"
+title = "Onchain.RPC node introspection — eth_config and eth_capabilities so a consumer can discover what their node actually serves"
+scores = { d = 4, b = 7, u = 6 }
+acceptance_criteria = ["eth_config/1 and eth_capabilities/1 are exposed on Onchain.RPC following the module's existing conventions, returning cartouche's Configuration and Capabilities structs rather than onchain-local re-decodings", "Both are verified against the live archive node with a test that asserts domain meaning — a specific known chain id and fork identifier from eth_config, and a concrete retention boundary from eth_capabilities — not merely that a struct came back", "Both are also exercised against a second, non-archive endpoint, and the real observed response is pinned: a genuine capabilities report if the node serves one, or its actual refusal if it does not. A node that does not implement the method is recorded as such rather than skipped", "A documented, tested example shows a caller reading the retention window from eth_capabilities and deciding whether a historical query is servable before issuing it — this is the consumer-facing point of the task and a test asserts the decision is correct for both a servable and an unservable block", "The README and the module's moduledoc table cover both methods and the pre-flight retention check", "Tests requiring an endpoint flunk with the exact env vars and setup instructions when it is unset, never skip silently", "mix ci passes"]
+out_of_scope = ["eth_baseFee and eth_blobBaseFee — also new in cartouche 0.8.0, but thin quantity reads with no capability-negotiation story; blob fee estimation in particular has no consumer here, since this package has no blob-transaction support", "Automatically routing, retrying or degrading based on what the node reports — this task exposes the facts, it does not act on them", "Caching the capability report across calls", "Cartouche.Filter and the filter-lifecycle methods — task 90 owns those"]
+files_to_modify = ["lib/onchain/rpc.ex"]
+touches = ["lib/onchain/rpc.ex", "test/onchain/rpc_test.exs", "README.md"]
+assignee = "codex"
+model = "gpt-5.6-sol"
+body = """
+cartouche 0.8.0 added `Cartouche.RPC.eth_config/1` and `Cartouche.RPC.eth_capabilities/1`, both already deserializing into structs (`Cartouche.RPC.Configuration`, `Cartouche.RPC.Capabilities`) and both ignoring unknown fields so a newer node revision does not break the decoder. Neither is exposed through `Onchain.RPC`. Expose them, and treat the consumer's node — not ours — as the case that matters.
+
+`eth_config` is EIP-7910: the node's current, next and last fork configuration, with `activationTime`, `chainId`, `forkId`, and the named precompile and system-contract addresses. `eth_capabilities` reports the node's effective historical-data retention — its head, `oldestBlock`, and `deleteStrategy` per resource. Together they answer the two questions a consumer of this library cannot currently ask before making a call: which fork rules is this node on, and how far back can it actually serve.
+
+That second question is the load-bearing one here. This repo's own integration suites depend on an archive node and CLAUDE.md records what happens without one — a hosted endpoint answering `-32001 Unable to complete request` for a historical-block `eth_feeHistory` at block 20,000,000, depending on plan and load. A consumer hitting that has no way to distinguish "this node cannot serve block 20,000,000" from "this call is wrong". `eth_capabilities` is the method that makes it answerable in advance, so the wrappers must come with a documented way to use them for exactly that: read the retention window, compare it against the block you are about to query, and decide before you spend the round trip.
+
+Follow the module's existing conventions — the codegen/specs path where the method is in the vendored spec, the `api/3` declarations, and the bang variants its neighbours have. Return cartouche's structs rather than re-deserializing into onchain-local shapes; the substrate already owns that decoding and duplicating it would give the family two representations to keep in sync.
+
+Both methods are recent and support is uneven, which is the situation this task exists to make legible: verify against more than one endpoint and pin what each actually does, including a node that does not implement them at all.
+"""
+created_at = "2026-08-25"
+scored_at = "2026-08-25"
+depends_on = [91]
+
+[[task]]
+id = 93
+phase = 12
+bundle = "rpc_composition"
+status = "pending"
+title = "Onchain.RPC.create_access_list — compute the EIP-2930 access list that Signer.build_transaction already accepts but cannot produce"
+scores = { d = 4, b = 6, u = 5 }
+acceptance_criteria = ["create_access_list is exposed on Onchain.RPC following the module's existing conventions, including the api/3 declaration and bang variant its neighbours have", "A live call against the archive node returns an access list for a call that touches known storage, and a test asserts the specific addresses and storage keys returned — not merely that a non-empty list came back", "The returned list is passed unmodified into Onchain.Signer.build_transaction/3 as :access_list in a test, producing a valid signed transaction — proving the shapes line up without caller-side reshaping", "The gas saving is demonstrated rather than asserted: a test compares eth_estimateGas for the same call with and without the access list and records both numbers", "The case where the node returns both an access list and an execution error is pinned against a live reverting call, and the documented return shape for it is asserted", "What a second, non-archive endpoint does with the method is recorded — a real result or its real refusal, never a skip", "The moduledoc documents the method, the partial-failure shape, and the build_transaction handoff", "mix ci passes"]
+out_of_scope = ["eth_getBlockAccessList — the EIP-7928 block-level read, owned by task 85; do not conflate the two methods", "Automatically computing an access list inside build_transaction or send_transaction — the caller decides whether the extra round trip is worth it", "Adding EIP-2930 type-1 transaction support; the access list here rides on the existing EIP-1559 V2 transaction"]
+files_to_modify = ["lib/onchain/rpc.ex"]
+touches = ["lib/onchain/rpc.ex", "lib/onchain/signer.ex", "test/onchain/rpc_test.exs"]
+assignee = "grok"
+model = "grok-4.6"
+body = """
+`Onchain.Signer.build_transaction/3` already takes an `:access_list` option and passes it straight into `Cartouche.Transaction.V2.new/…`, so a transaction carrying an access list is constructible today. Nothing in this package can compute one. A caller wanting the gas saving on a storage-heavy call has to hand-assemble the `{address, storage_keys}` pairs or go find another tool, which in practice means the option is there and unused.
+
+cartouche 0.8.0 closed the upstream half: `Cartouche.RPC.create_access_list/2` wraps `eth_createAccessList`, reuses the existing call-object encoding, and returns a `V_2930`-ready `{address, storage_keys}` list plus `gas_used`, retaining an optional execution-error string for the case where the node still produced a usable list despite the call reverting. Task 85 explicitly deferred this method to a separate filing (its out_of_scope names it, distinguishing it from the block-level `eth_getBlockAccessList`), and that upstream dependency is now satisfied — this is the onchain-side wrapper that makes the round trip usable end to end.
+
+Expose it on `Onchain.RPC` following the module's conventions, and make the connection to the signer real rather than implied: the returned list must be directly usable as `build_transaction`'s `:access_list` without the caller reshaping it. If it is not directly usable, that mismatch is the actual finding and the task should reconcile the two shapes rather than paper over it with a conversion helper nobody asked for.
+
+The partial-failure case deserves deliberate treatment. `eth_createAccessList` can return both an access list and an execution error at once, which is not a shape the rest of this module's error handling expects. Decide and document what a caller gets in that case, and pin it against a live call that actually produces it — a call that reverts is straightforward to construct against a real contract.
+
+Support for this method varies by provider, so verify it against the archive node and record what a second endpoint does with it, rather than assuming availability. Note that `Onchain.RPC` is gaining a typed classification of node refusals in the node_portability bundle; if that has landed, an unsupported `eth_createAccessList` should surface through it rather than growing a second convention.
 """
 created_at = "2026-08-25"
 scored_at = "2026-08-25"
