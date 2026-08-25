@@ -17,7 +17,6 @@ Shared Ethereum/blockchain library for the portfolio. Provides read (eth_call) a
 @~/.claude/includes/onchain-workspace.md
 @~/.claude/includes/ethereum-rpc.md
 @~/.claude/includes/node-portability.md
-@~/.claude/includes/node-portability.md
 
 <!-- Harness driver contract: onchain is registered with the harness OTP node
      (~/_DATA/code/harness, config/dev.local.exs). The harness MCP server

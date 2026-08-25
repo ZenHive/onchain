@@ -791,6 +791,33 @@ This repo is part of a multi-library portfolio. The boundary is **ephemeral vs d
 - Plain structs with `defstruct` + `@enforce_keys`, no private macro deps
 - Path dependency in consumers: `{:onchain, path: "../onchain"}`
 
+## Node Portability
+
+The family-wide law is `node-portability.md` (`@`-imported above): our archive node is a
+privileged environment, not the reference one, and this is an open-source package whose
+users run Alchemy, Infura, or a pruned Geth. What is specific to this repo:
+
+- **`Onchain.RPC.base_fee/1` is the worked example.** Read the `NOTE (portability):`
+  comment above it in `lib/onchain/rpc.ex` — it records why the wrapper reads
+  `baseFeePerGas` from the **pending** block header instead of calling cartouche's
+  `eth_baseFee` (an Erigon extension Alchemy rejects with `-32600`), and the batch request
+  that proved the two equivalent on reth v2.5.1. That comment tag is the convention:
+  a non-obvious portability decision gets a `NOTE (portability):` comment naming the
+  method, who serves it, and the consumer-visible error.
+- **`defrpc`'s compile-time guard does NOT enforce this.**
+  `Onchain.RPC.Codegen.ensure_known_method!/1` calls `Specs.lookup/1`, which reads the
+  **merged** OpenRPC + `erigon-methods.json` map — a `trace_*` Erigon method passes
+  exactly as `eth_getBalance` does. `eth_baseFee` was rejected only because it is in
+  *neither* file. Standard-vs-extension is a judgment call at review time, not a gate.
+- **There is no multi-endpoint test seam yet.** `Onchain.RPCCase.rpc_url!/0` returns a
+  single string and 17 integration files use it; the dual-endpoint `base_fee`
+  verification was done by manually re-running the suite with a different env var. Until
+  that seam exists, "verified portable" means you ran it against a hosted endpoint by
+  hand and can say which one — see the `node_portability` bundle in `roadmap/tasks.toml`.
+- **Two surfaces legitimately need more than a default endpoint** and are documented as
+  such in `README.md` § "Node compatibility": historical reads need an archive node,
+  and `Onchain.Subscription` needs a WebSocket URL. Adding a third means adding a row.
+
 ## Toolchain & check commands
 
 Canonical gate: **`mix ci`** (= `precommit.full`) — compile `--warnings-as-errors`,
@@ -877,6 +904,8 @@ Update **all affected `.md` files** after completing any roadmap task. This is p
 
 ## Testing
 
+- **A green integration run against `localhost:8545` is not a portability claim** — see
+  `## Node Portability` above before asserting a method works for consumers.
 - Unit tests for all pure functions (hex, address, decimal, math)
 - Integration tests are **excluded by default** (`ExUnit.start(exclude: [:integration])` in test_helper.exs)
 - `mix test.json --quiet` runs only unit tests — no flags needed to skip integration

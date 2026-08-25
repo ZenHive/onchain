@@ -41,6 +41,31 @@ config :cartouche, :ethereum_node, "https://eth-mainnet.g.alchemy.com/v2/YOUR_KE
 
 Or pass the URL per-call to `Onchain.RPC` functions.
 
+## Node compatibility
+
+Onchain is built to run against **any** mainstream Ethereum JSON-RPC endpoint — Alchemy,
+Infura, QuickNode, a self-hosted Geth/reth/Erigon, pruned or archive. That portability is
+a deliberate constraint, not an accident: the maintainers develop against a full archive
+node, and anything that only works there is treated as a bug.
+
+Everything in `Onchain.RPC`, `Onchain.ERC20`, `Onchain.ERC721`, `Onchain.ERC1155`,
+`Onchain.Contract`, `Onchain.Log`, `Onchain.Block`, `Onchain.Multicall` and `Onchain.ENS`
+uses standard methods and needs no special endpoint. Two things depend on what your
+provider serves:
+
+| Surface | Requirement | Symptom without it |
+| --- | --- | --- |
+| Historical reads — any `block` parameter older than ~128 blocks (`eth_call`, `eth_getBalance`, `eth_getProof`, `eth_feeHistory` at an old block) | an **archive** node, or a hosted plan that retains history | `-32001 Unable to complete request`, or a "missing trie node" error, depending on client |
+| `Onchain.Subscription` (`eth_subscribe`) | a **WebSocket** endpoint (`wss://`), which not every plan includes | connection refused, or `-32601 Method not found` over HTTP |
+
+Notably *not* on that list: `Onchain.RPC.base_fee/1` and `blob_base_fee/1`. Both read
+from the block header rather than calling the client-specific `eth_baseFee` /
+`eth_blobBaseFee` extensions, so they work on any EIP-1559 (resp. EIP-4844) node. See the
+`NOTE (portability)` comment in `lib/onchain/rpc.ex` for the equivalence check.
+
+If you hit a method that works on your node but not on a common hosted provider, that's a
+portability bug worth reporting.
+
 ## Quick Start
 
 ```elixir

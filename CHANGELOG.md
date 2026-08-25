@@ -71,6 +71,20 @@ Completed roadmap tasks.
 
 ---
 
+### Documentation
+
+- **`README.md` § "Node compatibility"** — states that onchain targets any
+  mainstream JSON-RPC endpoint by design, and names the only two surfaces that
+  need more: historical reads need an archive node, and `Onchain.Subscription`
+  needs a WebSocket URL. Notes that `base_fee/1` and `blob_base_fee/1` are
+  deliberately *not* on that list, since both read from the block header rather
+  than calling client-specific extensions.
+
+  Companion change outside the package: `CLAUDE.md` gains a **Node Portability**
+  section (and imports the shared `node-portability.md` include), so the rule that
+  our archive node is a privileged environment rather than the reference one is
+  ambient for every agent working in this checkout, not folklore.
+
 ## v0.13.0 — zen_websocket 0.7 (2026-08-22)
 
 Narrows a runtime requirement, which is a minor bump for consumers even though
