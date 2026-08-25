@@ -81,6 +81,11 @@ phase = 12
 order = 7
 description = "Thread hieroglyph decode options (strict mode) through the ABI/Contract/Log decode surface."
 
+[bundles.signer_backend_contract]
+phase = 12
+order = 8
+description = "Adopt cartouche 0.8.0's enforced signer-backend contracts on the transaction signing path."
+
 # ============================================================================
 # Phase 7 — DEX Infrastructure
 # ============================================================================
@@ -841,6 +846,54 @@ hieroglyph has shipped a strict decode mode since 1.5.0: `strict: true` rejects 
 This is a published package whose consumers decode bytes they do not control: responses from whatever RPC endpoint they configure, revert blobs, third-party calldata, and event logs. Thread an optional trailing options keyword through the decode surface as additive arities, forwarding to hieroglyph unchanged. Strict violations surface as tagged tuples consistent with each module's documented error table; bang variants raise. Nothing about the permissive default may change.
 
 Dispatch trigger: public API change on the family's core package, on the decode path every money-handling consumer sits on.
+"""
+created_at = "2026-08-25"
+scored_at = "2026-08-25"
+
+[[task]]
+id = 89
+phase = 12
+bundle = "signer_backend_contract"
+status = "pending"
+title = "Route Onchain.Signer.sign_transaction through cartouche's {backend, config} carrier instead of the legacy MFA"
+scores = { d = 3, b = 7, u = 6 }
+markers = ["security"]
+acceptance_criteria = ["mix.lock resolves cartouche 0.8.0", "sign_transaction/3 dispatches through a {Cartouche.Signer.Curvy, key_bin} carrier rather than {Curvy, :sign, [key_bin]} plus sign_direct/4", "The existing signer tests still recover the expected signer address from the signed V2, demonstrating the signed digest did not change", "A unit test substituting a backend whose algorithm/1 reports :ed25519 fails with a tagged error and produces no signature", "Onchain.AA.sign_user_operation stays on sign_digest/2 and its :raw and :eip191 suites pass unchanged", "mix ci passes"]
+out_of_scope = ["CloudKMS, AWS KMS or any non-Curvy backend as a supported Onchain.Signer option", "Changing Onchain.AA's digest scheme, or rescuing FunctionClauseError on a short digest — no public path can feed one", "Cartouche.Transaction.V4 and EIP-7702", "hieroglyph strict decode — task 88 owns that"]
+assignee = "human"
+body = """
+cartouche 0.8.0 turned two signer-backend contracts from documentation into enforced code: `sign_payload/2` matches an exact 32-byte digest in its function head (Curvy and CloudKMS both), and `Backend.expect_algorithm/3` runs before dispatch so a backend whose `algorithm/1` reports a different curve fails instead of mis-signing.
+
+Neither contract reaches this library's transaction signing, and that is the point of this task. `Onchain.Signer.sign_transaction/3` builds `mfa = {Curvy, :sign, [key_bin]}` and calls `Cartouche.Signer.sign_direct/4` (lib/onchain/signer.ex:205-215). Read against cartouche 0.8.0 on 2026-08-25: `sign_direct/4` does `apply(mod, fun, [message] ++ args)` and emits from there (cartouche lib/cartouche/signer.ex:241-246) — it never calls `expect_algorithm/3` and never calls `sign_payload/2`. Only the `{backend, config}` branch of `backend_sign/4` does both (same file, around 277-283). So bumping the lock to cartouche 0.8.0 buys this path nothing: the new guarantees are structurally unreachable from it.
+
+`Onchain.AA` is already on the new-style path — it calls `CurvySigner.sign_digest/2` on a keccak digest (lib/onchain/aa.ex:596) — but its digests are themselves keccak output, so the 32-byte match is not observable there either. Note the failure mode if a short payload ever did arrive: because the check is a function head and not a guard returning an error tuple, it raises `FunctionClauseError` out of the `with`, it does not surface as `{:error, {:sign_error, _}}`.
+
+Move `sign_transaction/3` onto the `{Cartouche.Signer.Curvy, key_bin}` carrier so cartouche does the keccak, `expect_algorithm/3` runs, and `sign_payload/2` is what signs. The public API does not change: private key in, signed `%V2{}` out. The existing recovery assertions in the signer suite are the oracle that the digest is unchanged — if the recovered address still matches, the message being signed is the same one as before.
+
+This task also carries the `mix deps.update cartouche` that lands 0.8.0 in the lock, because the carrier does not exist below it. Note that `mix deps.update cartouche` alone leaves hieroglyph at 1.6.2; update both if 1.7.0 is wanted in the same pass.
+"""
+created_at = "2026-08-25"
+scored_at = "2026-08-25"
+
+[[task]]
+id = 90
+phase = 12
+bundle = "subscription_hardening"
+status = "pending"
+title = "HTTP log/block/pending polling over Cartouche.Filter, so subscribers work on the RPC URL this library defaults to"
+scores = { d = 5, b = 6, u = 5 }
+depends_on = [89]
+acceptance_criteria = ["A poller can be started with kind: :log | :block | :pending and delivers the matching payloads to its subscriber", "Stopping the poller uninstalls the node-side filter — asserted rather than assumed, since the leak this closes is per-restart", "A kind: :log poller substitutes for a Subscription {:logs, filter} consumer against an HTTP rpc_url on a known mainnet Transfer log, asserted on address and topic0 rather than on shape", "kind: :block and kind: :pending each have a test that receives a hash list", "The delivered message shapes are documented next to Onchain.Subscription's, so a caller can see which transport gives which", "mix ci passes"]
+out_of_scope = ["Modifying or replacing Onchain.Subscription — the WebSocket path is unchanged", "Named Onchain.RPC wrappers for cartouche 0.8.0's node-custody methods (accounts, coinbase, fill_transaction, sign, sign_transaction, send_transaction) — Onchain.RPC.call/3 already passes any method through, so wrappers are ergonomics with no capability behind them; file separately if a caller actually wants them", "eth_createAccessList, eth_baseFee, eth_blobBaseFee, eth_config and eth_capabilities — other 0.8.0 additions, unrelated to filters", "hieroglyph strict decode — task 88 owns that"]
+assignee = "human"
+body = """
+`Onchain.Subscription` is WebSocket-only — it documents `:new_heads`, `:pending_transactions` and `{:logs, filter_map}` and drives them through `eth_subscribe` (lib/onchain/subscription.ex:3 and 205). The default RPC URL this library ships is HTTP Infura (lib/onchain/rpc.ex:121). So a caller who takes the default and follows the subscription docs has no working path, and the only log retrieval left is `Transfer.fetch/2`, a one-shot `eth_get_logs` (lib/onchain/transfer.ex:247-254) rather than anything that keeps delivering.
+
+cartouche 0.8.0 completed the HTTP sibling for exactly this: `Cartouche.Filter` takes `kind: :log | :block | :pending`, delivers `{:event, :log}` for log filters and `{:hashes, hashes}` for the other two, recovers from an expired filter on all three kinds, and uninstalls the node-side filter in `terminate/2` so a supervised restart no longer registers an abandoned filter per cycle. Nothing in this repo starts it.
+
+Add an HTTP polling facade over `Cartouche.Filter` covering the same three kinds, delivering messages the way `Subscription` delivers its `eth_subscribe` notifications so a consumer can move between transports without rewriting its receive loop. Lean on cartouche's `terminate/2` for the uninstall rather than tracking filter ids here — the leak it closes is the reason to delegate. `Onchain.Subscription` itself is not modified; the WebSocket path stays exactly as it is.
+
+Depends on task 89 only for the lock: `Cartouche.Filter`'s block and pending kinds do not exist below cartouche 0.8.0, and 89 is what lands that bump.
 """
 created_at = "2026-08-25"
 scored_at = "2026-08-25"
