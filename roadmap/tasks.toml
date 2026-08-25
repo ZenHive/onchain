@@ -750,7 +750,7 @@ scored_at = "2026-08-17"
 id = 85
 phase = 12
 bundle = "rpc_composition"
-status = "in_progress"
+status = "done"
 title = "Onchain.RPC block-level reads — receipts, transaction counts, transactions by index, and the block access list"
 scores = { d = 4, b = 7, u = 6 }
 markers = ["parallel"]
@@ -771,9 +771,16 @@ All six are present in the vendored `priv/specs/openrpc-v1.0.0-beta.4.json`, so 
 
 `eth_getBlockAccessList` is recent and client support is uneven — verify against the live node what it actually returns before pinning a shape, and record the observation.
 """
+implemented = "Landed by codex via merge-train; reviewer-approved (run run-1787623789150-bfda45c6, fce343cefaa9eada19900ef931056ff0bfe9376a)."
+delivered_by = "codex"
+verified = true
+verified_by = "cursor"
+verification_ref = "harness-run:run-1787623789150-bfda45c6"
 created_at = "2026-08-23"
 started_at = "2026-08-25"
 scored_at = "2026-08-23"
+done_at = "2026-08-25"
+shipped_in = "fce343cefaa9eada19900ef931056ff0bfe9376a"
 
 [[task]]
 id = 86
