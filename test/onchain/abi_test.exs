@@ -312,4 +312,100 @@ defmodule Onchain.ABITest do
       end
     end
   end
+
+  # Hand-built non-canonical payloads exercising hieroglyph's three documented
+  # strict-mode classes. Default (no opts) stays permissive.
+  describe "strict decode mode" do
+    # Non-zero high padding, last byte = 1. Canonical uint8/int8/bool of 1 is 31
+    # zero bytes then 0x01; this puts 0x01 in the high byte as well.
+    @dirty_word <<1>> <> :binary.copy(<<0>>, 30) <> <<1>>
+    @dirty_hex Onchain.Hex.encode(@dirty_word)
+    # Canonical uint256(10) plus an extra 32-byte zero word.
+    @trailing_hex Onchain.Hex.encode(<<10::256, 0::256>>)
+    # (string)/(bytes) head: offset 0x20, length 0xFFFFFFFF, no payload bytes.
+    @overlong_hex Onchain.Hex.encode(<<32::256, 0xFFFFFFFF::256>>)
+
+    defp selector_prefixed(signature, payload_hex) do
+      <<"0x", selector::binary-size(8), _::binary>> = ABI.encode_call!(signature, [1])
+      "0x" <> selector <> String.trim_leading(payload_hex, "0x")
+    end
+
+    test "without opts, dirty integer padding still decodes (permissive default)" do
+      assert {:ok, [n]} = ABI.decode_response("(uint8)", @dirty_hex)
+      assert is_integer(n) and n > 1
+      assert ABI.decode_response("(uint8)", @dirty_hex, []) == ABI.decode_response("(uint8)", @dirty_hex)
+    end
+
+    test "canonical payload succeeds with strict: true" do
+      hex = "0x" <> String.duplicate("0", 62) <> "0a"
+      assert {:ok, [10]} = ABI.decode_response("(uint256)", hex, strict: true)
+      assert [10] = ABI.decode_response!("(uint256)", hex, strict: true)
+    end
+
+    test "rejects non-zero high padding on bool, uint, and int" do
+      padding_uint = {:non_canonical_padding, %{type: {:uint, 8}}}
+      padding_int = {:non_canonical_padding, %{type: {:int, 8}}}
+
+      assert {:error, {:decode_error, {:strict_violation, ^padding_uint}}} =
+               ABI.decode_response("(uint8)", @dirty_hex, strict: true)
+
+      assert {:error, {:decode_error, {:strict_violation, ^padding_uint}}} =
+               ABI.decode_response("(bool)", @dirty_hex, strict: true)
+
+      assert {:error, {:decode_error, {:strict_violation, ^padding_int}}} =
+               ABI.decode_response("(int8)", @dirty_hex, strict: true)
+
+      assert ABI.decode_types("(uint8)", @dirty_hex, strict: true) ==
+               ABI.decode_response("(uint8)", @dirty_hex, strict: true)
+    end
+
+    test "rejects trailing bytes after the declared payload" do
+      assert {:error, {:decode_error, {:strict_violation, {:trailing_bytes, 32}}}} =
+               ABI.decode_response("(uint256)", @trailing_hex, strict: true)
+    end
+
+    test "rejects string/bytes length prefixes that exceed available data" do
+      string_detail = {:length_out_of_bounds, %{type: :string, length: 4_294_967_295, available: 0}}
+      bytes_detail = {:length_out_of_bounds, %{type: :bytes, length: 4_294_967_295, available: 0}}
+
+      assert {:error, {:decode_error, {:strict_violation, ^string_detail}}} =
+               ABI.decode_response("(string)", @overlong_hex, strict: true)
+
+      assert {:error, {:decode_error, {:strict_violation, ^bytes_detail}}} =
+               ABI.decode_response("(bytes)", @overlong_hex, strict: true)
+    end
+
+    test "decode_call/3 and decode_error/3 wrap strict_violation in {:decode_error, _}" do
+      dirty_call = selector_prefixed("foo(uint8)", @dirty_hex)
+      dirty_revert = selector_prefixed("Err(uint8)", @dirty_hex)
+      padding = {:non_canonical_padding, %{type: {:uint, 8}}}
+
+      assert {:error, {:decode_error, {:strict_violation, ^padding}}} =
+               ABI.decode_call("foo(uint8)", dirty_call, strict: true)
+
+      assert {:error, {:decode_error, {:strict_violation, ^padding}}} =
+               ABI.decode_error(dirty_revert, ["Err(uint8)"], strict: true)
+    end
+
+    test "bang variants raise on strict_violation" do
+      dirty_call = selector_prefixed("foo(uint8)", @dirty_hex)
+      dirty_revert = selector_prefixed("Err(uint8)", @dirty_hex)
+
+      assert_raise RuntimeError, ~r/strict_violation/, fn ->
+        ABI.decode_response!("(uint8)", @dirty_hex, strict: true)
+      end
+
+      assert_raise RuntimeError, ~r/strict_violation/, fn ->
+        ABI.decode_types!("(uint8)", @dirty_hex, strict: true)
+      end
+
+      assert_raise MatchError, fn ->
+        ABI.decode_call!("foo(uint8)", dirty_call, strict: true)
+      end
+
+      assert_raise MatchError, fn ->
+        ABI.decode_error!(dirty_revert, ["Err(uint8)"], strict: true)
+      end
+    end
+  end
 end

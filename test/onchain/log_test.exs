@@ -315,4 +315,63 @@ defmodule Onchain.LogTest do
       assert {:error, {:decode_error, _}} = Log.decode_event(@valid_log, "Evt(uint256 $amount)")
     end
   end
+
+  describe "decode_event/3 — strict decode" do
+    @dirty_word <<1>> <> :binary.copy(<<0>>, 30) <> <<1>>
+    @dirty_hex Onchain.Hex.encode(@dirty_word)
+    @trailing_hex Onchain.Hex.encode(<<10::256, 0::256>>)
+    @overlong_hex Onchain.Hex.encode(<<32::256, 0xFFFFFFFF::256>>)
+
+    test "canonical log still decodes with strict: true" do
+      {:ok, topic0} = Log.event_topic("Deposit(uint256)")
+      data = encode_event_data("f(uint256)", [99])
+      log = %{topics: [topic0], data: data}
+
+      assert {:ok, %{uint256: 99}} = Log.decode_event(log, "Deposit(uint256)", strict: true)
+    end
+
+    test "rejects non-zero high padding on a non-indexed uint8" do
+      {:ok, topic0} = Log.event_topic("Tiny(uint8)")
+      log = %{topics: [topic0], data: @dirty_hex}
+      padding = {:non_canonical_padding, %{type: {:uint, 8}}}
+
+      assert {:error, {:decode_error, {:strict_violation, ^padding}}} =
+               Log.decode_event(log, "Tiny(uint8 value)", strict: true)
+    end
+
+    test "rejects non-zero high padding on an indexed uint8" do
+      {:ok, topic0} = Log.event_topic("Tiny(uint8)")
+      log = %{topics: [topic0, @dirty_hex], data: "0x"}
+      padding = {:non_canonical_padding, %{type: {:uint, 8}}}
+
+      assert {:error, {:decode_error, {:strict_violation, ^padding}}} =
+               Log.decode_event(log, "Tiny(uint8 indexed value)", strict: true)
+    end
+
+    test "rejects trailing bytes after the declared payload" do
+      {:ok, topic0} = Log.event_topic("Deposit(uint256)")
+      log = %{topics: [topic0], data: @trailing_hex}
+
+      assert {:error, {:decode_error, {:strict_violation, {:trailing_bytes, 32}}}} =
+               Log.decode_event(log, "Deposit(uint256 value)", strict: true)
+    end
+
+    test "rejects a string length prefix that exceeds available data" do
+      {:ok, topic0} = Log.event_topic("Note(string)")
+      log = %{topics: [topic0], data: @overlong_hex}
+      detail = {:length_out_of_bounds, %{type: :string, length: 4_294_967_295, available: 0}}
+
+      assert {:error, {:decode_error, {:strict_violation, ^detail}}} =
+               Log.decode_event(log, "Note(string value)", strict: true)
+    end
+
+    test "bang variant raises on strict_violation" do
+      {:ok, topic0} = Log.event_topic("Tiny(uint8)")
+      log = %{topics: [topic0], data: @dirty_hex}
+
+      assert_raise RuntimeError, ~r/strict_violation/, fn ->
+        Log.decode_event!(log, "Tiny(uint8 value)", strict: true)
+      end
+    end
+  end
 end

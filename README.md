@@ -95,7 +95,7 @@ balance = Onchain.ERC20.balance_of!(usdc, "0xYourAddress")
 | Module | Purpose |
 |--------|---------|
 | `Onchain.Hex` | Hex encoding/decoding (hex<->binary, hex<->integer, 0x prefix) |
-| `Onchain.ABI` | ABI encoding/decoding for contract calls (`encode_call/2`, `decode_response/2`, `decode_types/2`, `decode_call/3` for selector-prefixed calldata, `decode_error/2` for Solidity 0.8.4+ custom-error revert data) |
+| `Onchain.ABI` | ABI encoding/decoding for contract calls (`encode_call/2`, `decode_response/3`, `decode_types/3`, `decode_call/3` for selector-prefixed calldata, `decode_error/3` for Solidity 0.8.4+ custom-error revert data). Optional trailing keyword is forwarded to hieroglyph; `strict: true` rejects non-canonical payloads as `{:error, {:decode_error, {:strict_violation, detail}}}` |
 | `Onchain.Address` | Address validation, EIP-55 checksum, normalization |
 | `Onchain.Decimal` | Decimal precision helpers (to_decimal, div_pow10, to_basis_points) |
 | `Onchain.Fees` | EIP-1559 fee recommendation (`suggest_fees/2`) over `Cartouche.FeeHistory.t()` — pure function, returns `{base_fee, max_priority, max_fee}` |

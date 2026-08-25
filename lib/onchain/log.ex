@@ -17,6 +17,8 @@ defmodule Onchain.Log do
   - Invalid signature: `{:error, {:invalid_signature, input}}`
   - Topic mismatch: `{:error, {:decode_error, {:topic_mismatch, [expected: ..., got: ...]}}}`
   - Decode errors: `{:error, {:decode_error, reason}}`
+  - Strict decode: `{:error, {:decode_error, {:strict_violation, detail}}}` when
+    `strict: true` rejected a non-canonical payload. Bang variants raise.
 
   ## Security — signature is a trust boundary
 
@@ -26,7 +28,7 @@ defmodule Onchain.Log do
   (request body, config supplied by a third party). Atoms are not garbage-collected, so
   routing untrusted signatures here is an atom-table-exhaustion (DoS) vector.
 
-  As a defence-in-depth bound — not a substitute for the contract above — `decode_event/2`
+  As a defence-in-depth bound — not a substitute for the contract above — `decode_event/3`
   rejects signatures with more than `32` params and rejects any segment that is not a
   bounded identifier-shaped token before interning it (`{:error, {:invalid_signature, _}}`).
   This caps the per-call surface; it does not stop an attacker looping distinct valid
@@ -39,8 +41,8 @@ defmodule Onchain.Log do
   |----------|---------|
   | `event_topic/1` | Event signature → keccak256 topic hash |
   | `event_topic!/1` | Same, raises on error |
-  | `decode_event/2` | Raw log + signature → decoded param map |
-  | `decode_event!/2` | Same, raises on error |
+  | `decode_event/3` | Raw log + signature → decoded param map (optional decode opts) |
+  | `decode_event!/3` | Same, raises on error |
   """
 
   use Descripex, namespace: "/log"
@@ -111,6 +113,12 @@ defmodule Onchain.Log do
         kind: :value,
         description:
           ~s{Event signature with indexed markers, e.g. "Transfer(address indexed from, address indexed to, uint256 value)". MUST be developer-controlled — param names are interned as atoms; untrusted signatures are an atom-table DoS vector (see module "Security").}
+      ],
+      opts: [
+        kind: :value,
+        default: [],
+        description:
+          ~s|Forwarded to Onchain.ABI.decode_response/3 and hieroglyph's indexed-value decode. Pass `strict: true` to reject non-canonical payloads (`{:error, {:decode_error, {:strict_violation, detail}}}`).|
       ]
     ],
     returns: %{
@@ -120,18 +128,21 @@ defmodule Onchain.Log do
     }
   )
 
-  @spec decode_event(map(), String.t()) :: {:ok, map()} | {:error, term()}
-  def decode_event(%{topics: [topic0 | _] = topics, data: data}, signature) when is_binary(signature) do
+  @spec decode_event(map(), String.t(), keyword()) :: {:ok, map()} | {:error, term()}
+  def decode_event(log, signature, opts \\ [])
+
+  def decode_event(%{topics: [topic0 | _] = topics, data: data}, signature, opts)
+      when is_binary(signature) and is_list(opts) do
     with {:ok, params} <- parse_event_signature(signature),
          :ok <- verify_topic0(topic0, signature) do
       {indexed, non_indexed} = Enum.split_with(params, fn {_name, _type, indexed?} -> indexed? end)
-      do_decode_event(topics, data, indexed, non_indexed)
+      do_decode_event(topics, data, indexed, non_indexed, opts)
     end
   end
 
-  def decode_event(%{topics: [], data: _data}, _signature), do: {:error, {:decode_error, :missing_event_topic}}
+  def decode_event(%{topics: [], data: _data}, _signature, _opts), do: {:error, {:decode_error, :missing_event_topic}}
 
-  def decode_event(_log, _signature), do: {:error, {:decode_error, :invalid_log_format}}
+  def decode_event(_log, _signature, _opts), do: {:error, {:decode_error, :invalid_log_format}}
 
   # --- decode_event! ---
 
@@ -141,15 +152,20 @@ defmodule Onchain.Log do
       signature: [
         kind: :value,
         description:
-          ~s{Event signature with indexed markers. MUST be developer-controlled — param names are interned as atoms; untrusted signatures are an atom-table DoS vector (see module "Security" and decode_event/2).}
+          ~s{Event signature with indexed markers. MUST be developer-controlled — param names are interned as atoms; untrusted signatures are an atom-table DoS vector (see module "Security" and decode_event/3).}
+      ],
+      opts: [
+        kind: :value,
+        default: [],
+        description: "Forwarded to decode_event/3 (e.g. `strict: true`)"
       ]
     ],
     returns: %{type: :map, description: "Map with atom keys for each decoded parameter"}
   )
 
-  @spec decode_event!(map(), String.t()) :: map()
-  def decode_event!(log, signature) do
-    case decode_event(log, signature) do
+  @spec decode_event!(map(), String.t(), keyword()) :: map()
+  def decode_event!(log, signature, opts \\ []) do
+    case decode_event(log, signature, opts) do
       {:ok, result} -> result
       {:error, reason} -> raise "decode_event failed: #{inspect(reason)}"
     end
@@ -278,30 +294,37 @@ defmodule Onchain.Log do
 
   @doc false
   # Decodes indexed params from topics and non-indexed from data.
-  @spec do_decode_event(list(), String.t() | nil, list(), list()) ::
+  @spec do_decode_event(list(), String.t() | nil, list(), list(), keyword()) ::
           {:ok, map()} | {:error, term()}
-  defp do_decode_event(topics, data, indexed, non_indexed) do
+  defp do_decode_event(topics, data, indexed, non_indexed, opts) do
     # topics[0] is the event signature hash, indexed params start at topics[1]
     indexed_topics = Enum.drop(topics, 1)
 
-    indexed_result =
-      indexed
-      |> Enum.zip(indexed_topics)
-      |> Enum.map(fn {{name, type, _}, topic_hex} ->
-        {name, decode_indexed_param(topic_hex, type)}
-      end)
-
-    non_indexed_result = decode_non_indexed_params(data, non_indexed)
-
-    case non_indexed_result do
-      {:ok, decoded_pairs} ->
-        result = Map.new(indexed_result ++ decoded_pairs)
-        {:ok, result}
-
-      error ->
-        error
+    with {:ok, indexed_result} <- decode_indexed_params(indexed, indexed_topics, opts),
+         {:ok, decoded_pairs} <- decode_non_indexed_params(data, non_indexed, opts) do
+      {:ok, Map.new(indexed_result ++ decoded_pairs)}
     end
   end
+
+  @doc false
+  @spec decode_indexed_params(list(), list(), keyword()) ::
+          {:ok, [{atom(), term()}]} | {:error, term()}
+  defp decode_indexed_params(indexed, topics, opts) do
+    indexed
+    |> Enum.zip(topics)
+    |> Enum.reduce_while([], fn {{name, type, _}, topic_hex}, acc ->
+      case decode_indexed_param(topic_hex, type, opts) do
+        {:ok, value} -> {:cont, [{name, value} | acc]}
+        {:error, _} = err -> {:halt, err}
+      end
+    end)
+    |> reverse_indexed()
+  end
+
+  @doc false
+  @spec reverse_indexed(term()) :: {:ok, [{atom(), term()}]} | {:error, term()}
+  defp reverse_indexed({:error, _} = err), do: err
+  defp reverse_indexed(acc), do: {:ok, Enum.reverse(acc)}
 
   # Indexed dynamic types (string, bytes, arrays, tuples) are stored as keccak256(value)
   # in topics. The original value is not recoverable — return the raw topic hash.
@@ -311,24 +334,34 @@ defmodule Onchain.Log do
   # Decodes a single indexed param from a 32-byte topic.
   # Dynamic types (string, bytes, arrays, tuples) return the raw topic hash
   # since Solidity stores keccak256(value) for these, not the value itself.
-  @spec decode_indexed_param(String.t(), String.t()) :: term()
-  defp decode_indexed_param(topic_hex, type) do
+  @spec decode_indexed_param(String.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, term()}
+  defp decode_indexed_param(topic_hex, type, opts) do
     if dynamic_indexed_type?(type) do
-      topic_hex
+      {:ok, topic_hex}
     else
       binary = Onchain.Hex.decode!(topic_hex)
+      decode_static_indexed_value(binary, type, opts)
+    end
+  end
 
-      case type do
-        "address" ->
-          # Address is right-padded in 32 bytes — take last 20
-          <<_::binary-size(12), addr::binary-size(20)>> = binary
-          Onchain.Address.checksum!(addr)
+  @doc false
+  # Address is right-padded in 32 bytes — take last 20. Other static value types
+  # (uint256, int256, bool, bytes32, …) decode as a single ABI word.
+  @spec decode_static_indexed_value(binary(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, term()}
+  defp decode_static_indexed_value(binary, "address", _opts) do
+    <<_::binary-size(12), addr::binary-size(20)>> = binary
+    {:ok, Onchain.Address.checksum!(addr)}
+  end
 
-        _value_type ->
-          # uint256, int256, bool, bytes32, etc. — decode as ABI value
-          [value] = ABI.decode("(#{type})", binary)
-          value
-      end
+  defp decode_static_indexed_value(binary, type, opts) do
+    case ABI.decode("(#{type})", binary, opts) do
+      {:error, {:strict_violation, _} = reason} ->
+        {:error, {:decode_error, reason}}
+
+      [value] ->
+        {:ok, value}
     end
   end
 
@@ -342,18 +375,18 @@ defmodule Onchain.Log do
 
   @doc false
   # Decodes non-indexed params from the data field.
-  @spec decode_non_indexed_params(String.t() | nil, list()) ::
+  @spec decode_non_indexed_params(String.t() | nil, list(), keyword()) ::
           {:ok, [{atom(), term()}]} | {:error, term()}
-  defp decode_non_indexed_params(_data, []), do: {:ok, []}
+  defp decode_non_indexed_params(_data, [], _opts), do: {:ok, []}
 
-  defp decode_non_indexed_params(nil, _params), do: {:error, {:decode_error, :missing_data_field}}
+  defp decode_non_indexed_params(nil, _params, _opts), do: {:error, {:decode_error, :missing_data_field}}
 
-  defp decode_non_indexed_params("0x", _params), do: {:error, {:decode_error, :empty_data_field}}
+  defp decode_non_indexed_params("0x", _params, _opts), do: {:error, {:decode_error, :empty_data_field}}
 
-  defp decode_non_indexed_params(data, params) do
+  defp decode_non_indexed_params(data, params, opts) do
     type_sig = "(" <> Enum.map_join(params, ",", fn {_name, type, _} -> type end) <> ")"
 
-    case Onchain.ABI.decode_response(type_sig, data) do
+    case Onchain.ABI.decode_response(type_sig, data, opts) do
       {:ok, values} ->
         pairs =
           params

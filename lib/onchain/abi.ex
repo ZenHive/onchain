@@ -19,6 +19,11 @@ defmodule Onchain.ABI do
   `decode_types/2` when the input is arbitrary ABI-encoded bytes
   (mempool calldata, custom payloads). They behave identically.
 
+  Decode functions accept an optional trailing keyword forwarded unchanged to
+  hieroglyph (`ABI.decode/3`, `ABI.decode_call/3`, `ABI.decode_error/3`).
+  `strict: true` rejects non-canonical payloads; `decode_structs: true` returns
+  a named-field map. The default (no opts / `strict: false`) stays permissive.
+
   ## Error Format
 
   - Encode errors: `{:error, {:encode_error, reason}}`
@@ -27,6 +32,10 @@ defmodule Onchain.ABI do
   Where `reason` is either:
   - A string from the upstream exception message
   - A tuple like `{:invalid_hex, hex_data}` preserving the original hex error
+  - `{:strict_violation, detail}` when `strict: true` rejected a non-canonical
+    payload (non-zero high padding on bool/uint/int, trailing bytes after the
+    declared payload, or a string/bytes length prefix that exceeds the available
+    data). Bang variants raise.
 
   ## Functions
 
@@ -34,14 +43,14 @@ defmodule Onchain.ABI do
   |----------|---------|
   | `encode_call/2` | Function signature + params → hex calldata |
   | `encode_call!/2` | Same, raises on error |
-  | `decode_response/2` | Type signature + hex data → decoded values |
-  | `decode_response!/2` | Same, raises on error |
-  | `decode_types/2` | Alias of `decode_response/2` for non-RPC callers |
-  | `decode_types!/2` | Alias of `decode_response!/2`, raises on error |
+  | `decode_response/3` | Type signature + hex data → decoded values (optional decode opts) |
+  | `decode_response!/3` | Same, raises on error |
+  | `decode_types/3` | Alias of `decode_response/3` for non-RPC callers |
+  | `decode_types!/3` | Alias of `decode_response!/3`, raises on error |
   | `decode_call/3` | Selector-prefixed calldata → decoded function args (forwards opts) |
   | `decode_call!/3` | Same, raises on error |
-  | `decode_error/2` | Solidity 0.8.4+ custom-error revert data → `%{error, args}` |
-  | `decode_error!/2` | Same, raises on error |
+  | `decode_error/3` | Solidity 0.8.4+ custom-error revert data → `%{error, args}` (optional decode opts) |
+  | `decode_error!/3` | Same, raises on error |
   """
 
   use Descripex, namespace: "/abi"
@@ -112,20 +121,27 @@ defmodule Onchain.ABI do
         description:
           ~s{Tuple type signature wrapped in parentheses, e.g. "(uint256)" or "(uint256,bool)". Bare comma-separated types like "uint256,bool" are NOT accepted and raise an unhelpful upstream error.}
       ],
-      hex_data: [kind: :value, description: "0x-prefixed hex string of ABI-encoded data"]
+      hex_data: [kind: :value, description: "0x-prefixed hex string of ABI-encoded data"],
+      opts: [
+        kind: :value,
+        default: [],
+        description:
+          ~s|Forwarded to hieroglyph's `ABI.decode/3`. Pass `strict: true` to reject non-canonical padding, trailing bytes, and over-long dynamic length prefixes (`{:error, {:decode_error, {:strict_violation, detail}}}`). Pass `decode_structs: true` for a named-field map instead of a positional list.|
+      ]
     ],
     returns: %{
-      type: "{:ok, list} | {:error, {:decode_error, reason}}",
-      description: "List of decoded values"
+      type: "{:ok, list | map} | {:error, {:decode_error, reason}}",
+      description:
+        "List of decoded values (or map when `decode_structs: true`). `reason` may be `{:strict_violation, detail}` when `strict: true`."
     }
   )
 
-  @spec decode_response(String.t(), String.t()) ::
-          {:ok, list()} | {:error, {:decode_error, term()}}
-  def decode_response(type_signature, hex_data) do
+  @spec decode_response(String.t(), String.t(), keyword()) ::
+          {:ok, list() | map()} | {:error, {:decode_error, term()}}
+  def decode_response(type_signature, hex_data, opts \\ []) do
     case Onchain.Hex.decode(hex_data) do
       {:ok, binary} ->
-        {:ok, ABI.decode(type_signature, binary)}
+        wrap_decoded(ABI.decode(type_signature, binary, opts))
 
       {:error, {:invalid_hex, _} = reason} ->
         {:error, {:decode_error, reason}}
@@ -143,54 +159,75 @@ defmodule Onchain.ABI do
         description:
           ~s{Tuple type signature wrapped in parentheses, e.g. "(uint256)" or "(uint256,bool)". Bare comma-separated types are NOT accepted.}
       ],
-      hex_data: [kind: :value, description: "0x-prefixed hex string of ABI-encoded data"]
+      hex_data: [kind: :value, description: "0x-prefixed hex string of ABI-encoded data"],
+      opts: [
+        kind: :value,
+        default: [],
+        description: "Forwarded to hieroglyph's `ABI.decode/3` (e.g. `strict: true`)"
+      ]
     ],
-    returns: %{type: :list, description: "List of decoded values"}
+    returns: %{type: :union, description: "List of decoded values (or map when `decode_structs: true`)"}
   )
 
-  @spec decode_response!(String.t(), String.t()) :: list()
-  def decode_response!(type_signature, hex_data) do
-    ABI.decode(type_signature, Onchain.Hex.decode!(hex_data))
+  @spec decode_response!(String.t(), String.t(), keyword()) :: list() | map()
+  def decode_response!(type_signature, hex_data, opts \\ []) do
+    case ABI.decode(type_signature, Onchain.Hex.decode!(hex_data), opts) do
+      {:error, {:strict_violation, _} = reason} ->
+        raise "decode_response failed: #{inspect({:decode_error, reason})}"
+
+      decoded ->
+        decoded
+    end
   end
 
   # --- decode_types ---
 
-  api(:decode_types, "Decode arbitrary ABI-encoded hex data. Alias of decode_response/2.",
+  api(:decode_types, "Decode arbitrary ABI-encoded hex data. Alias of decode_response/3.",
     params: [
       type_signature: [
         kind: :value,
         description:
           ~s{Tuple type signature wrapped in parentheses, e.g. "(uint256)" or "(uint256,bool)". Bare comma-separated types are NOT accepted.}
       ],
-      hex_data: [kind: :value, description: "0x-prefixed hex string of ABI-encoded data"]
+      hex_data: [kind: :value, description: "0x-prefixed hex string of ABI-encoded data"],
+      opts: [
+        kind: :value,
+        default: [],
+        description: "Forwarded to decode_response/3 (e.g. `strict: true`)"
+      ]
     ],
     returns: %{
-      type: "{:ok, list} | {:error, {:decode_error, reason}}",
+      type: "{:ok, list | map} | {:error, {:decode_error, reason}}",
       description:
-        "List of decoded values. Identical to decode_response/2 — use this name when the input isn't an RPC response (mempool calldata, custom ABI payloads)."
+        "List of decoded values. Identical to decode_response/3 — use this name when the input isn't an RPC response (mempool calldata, custom ABI payloads)."
     }
   )
 
-  @spec decode_types(String.t(), String.t()) ::
-          {:ok, list()} | {:error, {:decode_error, term()}}
-  def decode_types(type_signature, hex_data), do: decode_response(type_signature, hex_data)
+  @spec decode_types(String.t(), String.t(), keyword()) ::
+          {:ok, list() | map()} | {:error, {:decode_error, term()}}
+  def decode_types(type_signature, hex_data, opts \\ []), do: decode_response(type_signature, hex_data, opts)
 
   # --- decode_types! ---
 
-  api(:decode_types!, "Decode arbitrary ABI-encoded hex data. Alias of decode_response!/2.",
+  api(:decode_types!, "Decode arbitrary ABI-encoded hex data. Alias of decode_response!/3.",
     params: [
       type_signature: [
         kind: :value,
         description:
           ~s{Tuple type signature wrapped in parentheses, e.g. "(uint256)" or "(uint256,bool)". Bare comma-separated types are NOT accepted.}
       ],
-      hex_data: [kind: :value, description: "0x-prefixed hex string of ABI-encoded data"]
+      hex_data: [kind: :value, description: "0x-prefixed hex string of ABI-encoded data"],
+      opts: [
+        kind: :value,
+        default: [],
+        description: "Forwarded to decode_response!/3 (e.g. `strict: true`)"
+      ]
     ],
-    returns: %{type: :list, description: "List of decoded values"}
+    returns: %{type: :union, description: "List of decoded values (or map when `decode_structs: true`)"}
   )
 
-  @spec decode_types!(String.t(), String.t()) :: list()
-  def decode_types!(type_signature, hex_data), do: decode_response!(type_signature, hex_data)
+  @spec decode_types!(String.t(), String.t(), keyword()) :: list() | map()
+  def decode_types!(type_signature, hex_data, opts \\ []), do: decode_response!(type_signature, hex_data, opts)
 
   # --- decode_call ---
 
@@ -209,13 +246,13 @@ defmodule Onchain.ABI do
         kind: :value,
         default: [],
         description:
-          ~s{Forwarded to hieroglyph's `ABI.decode_call/3`. Pass `decode_structs: true` for a named-field map instead of a positional list.}
+          ~s|Forwarded to hieroglyph's `ABI.decode_call/3`. Pass `decode_structs: true` for a named-field map instead of a positional list. Pass `strict: true` to reject non-canonical payloads (`{:error, {:decode_error, {:strict_violation, detail}}}`).|
       ]
     ],
     returns: %{
       type: "{:ok, list | map} | {:error, {:decode_error, reason}}",
       description:
-        ~s|List of args (or map when `decode_structs: true`). Error reasons: `:calldata_too_short`, `:selector_mismatch`, `:no_function_name`, `{:invalid_hex, _}`, or upstream exception message string.|
+        ~s|List of args (or map when `decode_structs: true`). Error reasons: `:calldata_too_short`, `:selector_mismatch`, `:no_function_name`, `{:invalid_hex, _}`, `{:strict_violation, detail}`, or upstream exception message string.|
     }
   )
 
@@ -226,8 +263,7 @@ defmodule Onchain.ABI do
          {:ok, decoded} <- ABI.decode_call(signature_or_selector, binary, opts) do
       {:ok, decoded}
     else
-      {:error, {:invalid_hex, _} = reason} -> {:error, {:decode_error, reason}}
-      {:error, atom} when is_atom(atom) -> {:error, {:decode_error, atom}}
+      {:error, reason} -> {:error, {:decode_error, reason}}
     end
   rescue
     e in @abi_errors -> {:error, {:decode_error, Exception.message(e)}}
@@ -248,7 +284,7 @@ defmodule Onchain.ABI do
       opts: [
         kind: :value,
         default: [],
-        description: "Forwarded to hieroglyph's `ABI.decode_call/3` (e.g. `decode_structs: true`)"
+        description: "Forwarded to hieroglyph's `ABI.decode_call/3` (e.g. `decode_structs: true`, `strict: true`)"
       ]
     ],
     returns: %{
@@ -278,25 +314,30 @@ defmodule Onchain.ABI do
         kind: :value,
         description:
           ~s{List of candidate error signatures like ["InsufficientBalance(uint256,uint256)", "Unauthorized()"] (or hieroglyph FunctionSelector structs). The first one whose 4-byte selector matches the prefix of `hex_revert_data` decodes the args.}
+      ],
+      opts: [
+        kind: :value,
+        default: [],
+        description:
+          ~s|Forwarded to hieroglyph's `ABI.decode_error/3`. Pass `strict: true` to reject non-canonical payloads (`{:error, {:decode_error, {:strict_violation, detail}}}`).|
       ]
     ],
     returns: %{
       type: "{:ok, %{error: name, args: list}} | {:error, {:decode_error, reason}}",
       description:
-        ~s|Map with the matched error name (or `nil`) and decoded args. Error reasons: `:calldata_too_short`, `:no_match`, `{:invalid_hex, _}`, or upstream exception message string.|
+        ~s|Map with the matched error name (or `nil`) and decoded args. Error reasons: `:calldata_too_short`, `:no_match`, `{:invalid_hex, _}`, `{:strict_violation, detail}`, or upstream exception message string.|
     }
   )
 
-  @spec decode_error(String.t(), [String.t() | ABI.FunctionSelector.t()]) ::
-          {:ok, %{error: String.t() | nil, args: list()}}
+  @spec decode_error(String.t(), [String.t() | ABI.FunctionSelector.t()], keyword()) ::
+          {:ok, %{error: String.t() | nil, args: list() | map()}}
           | {:error, {:decode_error, term()}}
-  def decode_error(hex_revert_data, error_definitions) do
+  def decode_error(hex_revert_data, error_definitions, opts \\ []) do
     with {:ok, binary} <- Onchain.Hex.decode(hex_revert_data),
-         {:ok, decoded} <- ABI.decode_error(binary, error_definitions) do
+         {:ok, decoded} <- ABI.decode_error(binary, error_definitions, opts) do
       {:ok, decoded}
     else
-      {:error, {:invalid_hex, _} = reason} -> {:error, {:decode_error, reason}}
-      {:error, atom} when is_atom(atom) -> {:error, {:decode_error, atom}}
+      {:error, reason} -> {:error, {:decode_error, reason}}
     end
   rescue
     e in @abi_errors -> {:error, {:decode_error, Exception.message(e)}}
@@ -310,6 +351,11 @@ defmodule Onchain.ABI do
       error_definitions: [
         kind: :value,
         description: "List of candidate error signatures or FunctionSelector structs"
+      ],
+      opts: [
+        kind: :value,
+        default: [],
+        description: "Forwarded to hieroglyph's `ABI.decode_error/3` (e.g. `strict: true`)"
       ]
     ],
     returns: %{
@@ -318,10 +364,15 @@ defmodule Onchain.ABI do
     }
   )
 
-  @spec decode_error!(String.t(), [String.t() | ABI.FunctionSelector.t()]) ::
-          %{error: String.t() | nil, args: list()}
-  def decode_error!(hex_revert_data, error_definitions) do
-    {:ok, decoded} = ABI.decode_error(Onchain.Hex.decode!(hex_revert_data), error_definitions)
+  @spec decode_error!(String.t(), [String.t() | ABI.FunctionSelector.t()], keyword()) ::
+          %{error: String.t() | nil, args: list() | map()}
+  def decode_error!(hex_revert_data, error_definitions, opts \\ []) do
+    {:ok, decoded} = ABI.decode_error(Onchain.Hex.decode!(hex_revert_data), error_definitions, opts)
     decoded
   end
+
+  @doc false
+  @spec wrap_decoded(term()) :: {:ok, list() | map()} | {:error, {:decode_error, term()}}
+  defp wrap_decoded({:error, {:strict_violation, _} = reason}), do: {:error, {:decode_error, reason}}
+  defp wrap_decoded(decoded), do: {:ok, decoded}
 end
