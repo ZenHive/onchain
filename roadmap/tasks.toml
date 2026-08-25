@@ -835,7 +835,7 @@ scored_at = "2026-08-23"
 id = 88
 phase = 12
 bundle = "abi_decode_hardening"
-status = "pending"
+status = "in_progress"
 title = "Expose hieroglyph's strict decode mode through the Onchain.ABI, Contract and Log decode surface"
 scores = { d = 4, b = 7, u = 6 }
 markers = ["security"]
@@ -853,6 +853,7 @@ This is a published package whose consumers decode bytes they do not control: re
 Dispatch trigger: public API change on the family's core package, on the decode path every money-handling consumer sits on.
 """
 created_at = "2026-08-25"
+started_at = "2026-08-25"
 scored_at = "2026-08-25"
 
 [[task]]
