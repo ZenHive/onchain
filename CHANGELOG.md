@@ -8,6 +8,39 @@ Completed roadmap tasks.
 
 ### Added
 
+- **Node-capability refusals are classified into typed errors on the shared
+  `Onchain.RPC` result path.** Previously a node that does not implement a
+  method, a hosted plan that gates a namespace, and a node that cannot complete
+  a request all arrived as the same opaque `{:error, {:rpc_error, map}}`, so a
+  consumer had to pattern-match raw JSON-RPC codes and provider prose to tell
+  "your node can't do this" from "your call was wrong."
+
+  `do_rpc/3` now classifies, so a codegen'd wrapper, a hand-written wrapper and
+  `call/3` all return the same tag:
+
+  | Tag | Meaning |
+  | --- | --- |
+  | `{:method_not_found, map}` | the node does not implement the method |
+  | `{:namespace_unavailable, map}` | the plan gates the namespace (Alchemy Free-tier `trace_*`) |
+  | `{:unavailable, map}` | the node cannot complete the request (pruned history) |
+
+  `-32601` classifies unconditionally. `-32600` and `-32001` are message-scoped,
+  because both are overloaded in practice — patterns pinned from responses
+  observed live on Alchemy mainnet and reth v2.5.1 on 2026-08-25, not inferred.
+  Anything unrecognized still arrives as `{:error, {:rpc_error, map}}`, and
+  retry semantics are unchanged (classification runs after the retry loop).
+
+  Two findings the classifier deliberately encodes rather than papers over:
+  `-32001` is **not** uniquely pruned history — Alchemy answers it for some
+  unimplemented Erigon methods too, identical at the wire — and reth's `-32602`
+  for an unimplemented method is indistinguishable from a genuine bad-params
+  error, so it is left unclassified. `test/onchain/rpc/node_refusal_integration_test.exs`
+  pins both against the live endpoints.
+
+  Adds `Onchain.RPCCase.limited_rpc_url!/0` (`ETHEREUM_LIMITED_RPC_URL` or
+  `ETHEREUM_ALCHEMY_URL`), the first test seam that reaches a deliberately
+  unprivileged endpoint — a real refusal or its real result, never a skip.
+
 - **`Onchain.RPC.base_fee/1` and `Onchain.RPC.blob_base_fee/1`** (plus `!`
   variants) — the two fee reads cartouche 0.8.0 added, exposed here in the shape
   a consumer can actually run.

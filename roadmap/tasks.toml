@@ -932,7 +932,7 @@ scored_at = "2026-08-25"
 id = 91
 phase = 12
 bundle = "node_portability"
-status = "in_progress"
+status = "done"
 title = "Normalize node-capability refusals into typed errors instead of passing the raw JSON-RPC code through"
 scores = { d = 3, b = 7, u = 7 }
 acceptance_criteria = ["A method the node does not implement returns a distinct, documented error term rather than the raw {:rpc_error, map} — verified by a live call to a real endpoint that genuinely refuses the method, with the observed code and message recorded in the test", "A method whose namespace the provider has disabled and a call whose historical state has been pruned are each pinned against a real endpoint that actually produces them; if the response for one of these is indistinguishable from another case at the wire level, the task records that finding and does not invent a distinction the node does not make", "An RPC error code the classifier does not recognize reaches the caller byte-identical to today, proven by a test asserting the existing shape is unchanged", "The classification happens once on the shared result path, so a codegen'd wrapper, a hand-written wrapper and Onchain.RPC.call/3 all return the same classified term for the same refusal — asserted for one method through all three routes", "Tests that need a limited endpoint flunk with the exact env var and setup instructions when it is not configured, and never silently skip", "The moduledoc documents each classified error term and what a caller should do about it", "mix ci passes"]
@@ -958,9 +958,16 @@ Measured evidence (2026-08-25, orchestrator QA pass) — three real refusals obs
 
 Note the code. Alchemy answers `-32600` (JSON-RPC "Invalid Request"), NOT the `-32601` "Method not found" this body names as the reliable standard signal. A classifier keyed only on `-32601` would be blind on the most common consumer endpoint. This is an observation to pin, not a licence to read `-32600` as universally meaning "unsupported": it is a generic code other nodes use for genuinely malformed requests, so the message has to carry part of the signal. Our own reth node answers `-32602` `"Invalid params"` for `eth_getStorageValues` — a third code for the same underlying "you cannot use this here". Pin what each endpoint actually returns rather than unifying them by assumption.
 """
+implemented = "Onchain.RPC.do_rpc/3 classifies node-capability refusals into {:method_not_found,_} / {:namespace_unavailable,_} / {:unavailable,_}; -32601 unconditional, -32600 and -32001 message-scoped from live Alchemy+reth responses; -32602 deliberately unclassified. Adds Onchain.RPCCase.limited_rpc_url!/0 and a hosted-endpoint refusal integration suite."
+delivered_by = "cursor"
+verified = true
+verified_by = "grok"
+verification_ref = "harness-run:run-1787626360342-a74c77ae"
 created_at = "2026-08-25"
 started_at = "2026-08-25"
 scored_at = "2026-08-25"
+done_at = "2026-08-25"
+shipped_in = "88197ebd7fd4cae1dcc71a4c70e4caa25aad853c"
 
 [[task]]
 id = 92
