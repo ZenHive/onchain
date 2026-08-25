@@ -87,6 +87,18 @@ defmodule Onchain.RPC do
   | `syncing!/1` | Same, raises on error |
   | `get_block_by_number/2` | Fetch block by number or tag → atom-keyed decoded map (same conventions as `get_transaction_by_hash`) |
   | `get_block_by_number!/2` | Same, raises on error |
+  | `get_block_receipts/2` | Fetch every receipt in a block → parsed receipt maps |
+  | `get_block_receipts!/2` | Same, raises on error |
+  | `get_block_transaction_count_by_hash/2` | Transaction count for a block hash |
+  | `get_block_transaction_count_by_hash!/2` | Same, raises on error |
+  | `get_block_transaction_count_by_number/2` | Transaction count for a block number or tag |
+  | `get_block_transaction_count_by_number!/2` | Same, raises on error |
+  | `get_transaction_by_block_hash_and_index/3` | Fetch one transaction by block hash and position |
+  | `get_transaction_by_block_hash_and_index!/3` | Same, raises on error |
+  | `get_transaction_by_block_number_and_index/3` | Fetch one transaction by block number/tag and position |
+  | `get_transaction_by_block_number_and_index!/3` | Same, raises on error |
+  | `get_block_access_list/2` | Fetch an EIP-7928 block access list |
+  | `get_block_access_list!/2` | Same, raises on error |
   | `chain_id/1` | Network chain ID |
   | `chain_id!/1` | Same, raises on error |
   | `eth_get_logs/2` | Fetch event logs by filter |
@@ -466,6 +478,223 @@ defmodule Onchain.RPC do
       {:error, reason} -> raise "get_block_by_number failed: #{inspect(reason)}"
     end
   end
+
+  # --- block-level reads ---
+
+  api(:get_block_receipts, "Fetch every receipt in a block (eth_getBlockReceipts).",
+    params: [
+      block: [
+        kind: :value,
+        description: "Block number, tag, or 0x-prefixed 32-byte block hash"
+      ],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{
+      type: "{:ok, [map] | nil} | {:error, term}",
+      description: "Parsed receipt maps matching get_transaction_receipt/2, or nil when the block is unknown"
+    }
+  )
+
+  @spec get_block_receipts(integer() | String.t(), keyword()) ::
+          {:ok, [map()] | nil} | {:error, term()}
+  defrpc(:get_block_receipts,
+    method: "eth_getBlockReceipts",
+    arg: :block,
+    decode: :receipt_list
+  )
+
+  api(:get_block_receipts!, "Fetch every receipt in a block. Raises on error.",
+    params: [
+      block: [kind: :value, description: "Block number, tag, or 0x-prefixed 32-byte block hash"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{type: "[map] | nil", description: "Parsed receipt maps or nil"}
+  )
+
+  @spec get_block_receipts!(integer() | String.t(), keyword()) :: [map()] | nil
+  defrpc_bang(:get_block_receipts, args: [:block])
+
+  api(
+    :get_block_transaction_count_by_hash,
+    "Get a block's transaction count by hash (eth_getBlockTransactionCountByHash).",
+    params: [
+      block_hash: [kind: :value, description: "0x-prefixed 32-byte block hash"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{
+      type: "{:ok, non_neg_integer | nil} | {:error, term}",
+      description: "Transaction count, or nil when the block is unknown"
+    }
+  )
+
+  @spec get_block_transaction_count_by_hash(String.t(), keyword()) ::
+          {:ok, non_neg_integer() | nil} | {:error, term()}
+  defrpc(:get_block_transaction_count_by_hash,
+    method: "eth_getBlockTransactionCountByHash",
+    arg: :block_hash,
+    decode: :nullable_hex_unsigned
+  )
+
+  api(
+    :get_block_transaction_count_by_hash!,
+    "Get a block's transaction count by hash. Raises on error.",
+    params: [
+      block_hash: [kind: :value, description: "0x-prefixed 32-byte block hash"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{type: "non_neg_integer | nil", description: "Transaction count or nil"}
+  )
+
+  @spec get_block_transaction_count_by_hash!(String.t(), keyword()) ::
+          non_neg_integer() | nil
+  defrpc_bang(:get_block_transaction_count_by_hash, args: [:block_hash])
+
+  api(
+    :get_block_transaction_count_by_number,
+    "Get a block's transaction count by number or tag (eth_getBlockTransactionCountByNumber).",
+    params: [
+      block: [kind: :value, description: "Block number, tag, or 0x-prefixed quantity"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{
+      type: "{:ok, non_neg_integer | nil} | {:error, term}",
+      description: "Transaction count, or nil when the block is unknown"
+    }
+  )
+
+  @spec get_block_transaction_count_by_number(integer() | String.t(), keyword()) ::
+          {:ok, non_neg_integer() | nil} | {:error, term()}
+  defrpc(:get_block_transaction_count_by_number,
+    method: "eth_getBlockTransactionCountByNumber",
+    arg: :block,
+    decode: :nullable_hex_unsigned
+  )
+
+  api(
+    :get_block_transaction_count_by_number!,
+    "Get a block's transaction count by number or tag. Raises on error.",
+    params: [
+      block: [kind: :value, description: "Block number, tag, or 0x-prefixed quantity"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{type: "non_neg_integer | nil", description: "Transaction count or nil"}
+  )
+
+  @spec get_block_transaction_count_by_number!(integer() | String.t(), keyword()) ::
+          non_neg_integer() | nil
+  defrpc_bang(:get_block_transaction_count_by_number, args: [:block])
+
+  api(
+    :get_transaction_by_block_hash_and_index,
+    "Fetch a transaction by block hash and position (eth_getTransactionByBlockHashAndIndex).",
+    params: [
+      block_hash: [kind: :value, description: "0x-prefixed 32-byte block hash"],
+      transaction_index: [kind: :value, description: "Zero-based non-negative integer or 0x quantity"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{
+      type: "{:ok, map | nil} | {:error, term}",
+      description: "Parsed transaction map, or nil when the block or index is unknown"
+    }
+  )
+
+  @spec get_transaction_by_block_hash_and_index(String.t(), non_neg_integer() | String.t(), keyword()) ::
+          {:ok, map() | nil} | {:error, term()}
+  defrpc(:get_transaction_by_block_hash_and_index,
+    method: "eth_getTransactionByBlockHashAndIndex",
+    arg: :block_hash_and_index,
+    decode: :transaction
+  )
+
+  api(
+    :get_transaction_by_block_hash_and_index!,
+    "Fetch a transaction by block hash and position. Raises on error.",
+    params: [
+      block_hash: [kind: :value, description: "0x-prefixed 32-byte block hash"],
+      transaction_index: [kind: :value, description: "Zero-based non-negative integer or 0x quantity"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{type: "map | nil", description: "Parsed transaction map or nil"}
+  )
+
+  @spec get_transaction_by_block_hash_and_index!(
+          String.t(),
+          non_neg_integer() | String.t(),
+          keyword()
+        ) :: map() | nil
+  defrpc_bang(:get_transaction_by_block_hash_and_index, args: [:block_hash, :transaction_index])
+
+  api(
+    :get_transaction_by_block_number_and_index,
+    "Fetch a transaction by block number/tag and position (eth_getTransactionByBlockNumberAndIndex).",
+    params: [
+      block: [kind: :value, description: "Block number, tag, or 0x-prefixed quantity"],
+      transaction_index: [kind: :value, description: "Zero-based non-negative integer or 0x quantity"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{
+      type: "{:ok, map | nil} | {:error, term}",
+      description: "Parsed transaction map, or nil when the block or index is unknown"
+    }
+  )
+
+  @spec get_transaction_by_block_number_and_index(
+          integer() | String.t(),
+          non_neg_integer() | String.t(),
+          keyword()
+        ) :: {:ok, map() | nil} | {:error, term()}
+  defrpc(:get_transaction_by_block_number_and_index,
+    method: "eth_getTransactionByBlockNumberAndIndex",
+    arg: :block_and_index,
+    decode: :transaction
+  )
+
+  api(
+    :get_transaction_by_block_number_and_index!,
+    "Fetch a transaction by block number/tag and position. Raises on error.",
+    params: [
+      block: [kind: :value, description: "Block number, tag, or 0x-prefixed quantity"],
+      transaction_index: [kind: :value, description: "Zero-based non-negative integer or 0x quantity"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{type: "map | nil", description: "Parsed transaction map or nil"}
+  )
+
+  @spec get_transaction_by_block_number_and_index!(
+          integer() | String.t(),
+          non_neg_integer() | String.t(),
+          keyword()
+        ) :: map() | nil
+  defrpc_bang(:get_transaction_by_block_number_and_index, args: [:block, :transaction_index])
+
+  api(:get_block_access_list, "Fetch an EIP-7928 block access list (eth_getBlockAccessList).",
+    params: [
+      block: [
+        kind: :value,
+        description: "Block number, tag, or 0x-prefixed 32-byte block hash"
+      ],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{
+      type: "{:ok, [map] | nil} | {:error, term}",
+      description: "Raw camelCase EIP-7928 account-access entries, or nil when unavailable"
+    }
+  )
+
+  @spec get_block_access_list(integer() | String.t(), keyword()) ::
+          {:ok, [map()] | nil} | {:error, term()}
+  defrpc(:get_block_access_list, method: "eth_getBlockAccessList", arg: :block)
+
+  api(:get_block_access_list!, "Fetch an EIP-7928 block access list. Raises on error.",
+    params: [
+      block: [kind: :value, description: "Block number, tag, or 0x-prefixed 32-byte block hash"],
+      opts: [kind: :value, default: [], description: "Options: :rpc_url, :timeout"]
+    ],
+    returns: %{type: "[map] | nil", description: "Raw camelCase account-access entries or nil"}
+  )
+
+  @spec get_block_access_list!(integer() | String.t(), keyword()) :: [map()] | nil
+  defrpc_bang(:get_block_access_list, args: [:block])
 
   # --- chain_id ---
 
@@ -1410,6 +1639,74 @@ defmodule Onchain.RPC do
   end
 
   defp put_block_param(_result, _key, error_label, other), do: {:error, {:invalid_filter, {error_label, other}}}
+
+  @doc false
+  @spec ensure_block_hash(term()) :: {:ok, String.t()} | {:error, term()}
+  defp ensure_block_hash(block_hash) do
+    case ensure_tx_hash(block_hash) do
+      {:ok, hash} -> {:ok, hash}
+      {:error, {:invalid_tx_hash, input}} -> {:error, {:invalid_block_hash, input}}
+    end
+  end
+
+  @doc false
+  @spec normalize_transaction_index(term()) :: {:ok, String.t()} | {:error, term()}
+  defp normalize_transaction_index(index) when is_integer(index) and index >= 0,
+    do: {:ok, Onchain.Hex.from_integer(index)}
+
+  defp normalize_transaction_index("0x" <> _ = index) do
+    if Onchain.Hex.valid?(index),
+      do: {:ok, index},
+      else: {:error, {:invalid_transaction_index, index}}
+  end
+
+  defp normalize_transaction_index(index), do: {:error, {:invalid_transaction_index, index}}
+
+  @doc false
+  @spec decode_nullable_quantity_result({:ok, term()} | {:error, term()}) ::
+          {:ok, non_neg_integer() | nil} | {:error, term()}
+  defp decode_nullable_quantity_result({:ok, nil}), do: {:ok, nil}
+
+  defp decode_nullable_quantity_result({:ok, quantity}) when is_binary(quantity) do
+    case Onchain.Hex.to_integer(quantity) do
+      {:ok, count} -> {:ok, count}
+      {:error, _reason} -> unexpected_rpc_result("block transaction count", quantity)
+    end
+  end
+
+  defp decode_nullable_quantity_result({:ok, result}), do: unexpected_rpc_result("block transaction count", result)
+
+  defp decode_nullable_quantity_result({:error, _reason} = error), do: error
+
+  @doc false
+  @spec decode_receipt_list_result({:ok, term()} | {:error, term()}) ::
+          {:ok, [map()] | nil} | {:error, term()}
+  defp decode_receipt_list_result({:ok, nil}), do: {:ok, nil}
+
+  defp decode_receipt_list_result({:ok, receipts}) when is_list(receipts) do
+    if Enum.all?(receipts, &is_map/1),
+      do: {:ok, Enum.map(receipts, &parse_receipt/1)},
+      else: unexpected_rpc_result("block receipts", receipts)
+  end
+
+  defp decode_receipt_list_result({:ok, result}), do: unexpected_rpc_result("block receipts", result)
+  defp decode_receipt_list_result({:error, _reason} = error), do: error
+
+  @doc false
+  @spec decode_transaction_result({:ok, term()} | {:error, term()}) ::
+          {:ok, map() | nil} | {:error, term()}
+  defp decode_transaction_result({:ok, nil}), do: {:ok, nil}
+
+  defp decode_transaction_result({:ok, transaction}) when is_map(transaction),
+    do: {:ok, parse_transaction_map(transaction)}
+
+  defp decode_transaction_result({:ok, result}), do: unexpected_rpc_result("block transaction", result)
+  defp decode_transaction_result({:error, _reason} = error), do: error
+
+  @spec unexpected_rpc_result(String.t(), term()) :: {:error, {:rpc_error, map()}}
+  defp unexpected_rpc_result(label, result) do
+    {:error, {:rpc_error, %{message: "unexpected #{label} response: #{inspect(result)}"}}}
+  end
 
   @doc false
   # Parses a raw transaction receipt map from the RPC response into atom-keyed map.

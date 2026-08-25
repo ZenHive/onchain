@@ -404,6 +404,35 @@ defmodule Onchain.RPCTest do
         RPC.get_transaction_receipt!("no_prefix")
       end
     end
+
+    test "returns the same parsed receipt shape as the non-bang variant" do
+      tx_hash = "0x" <> String.duplicate("ab", 32)
+
+      raw_receipt = %{
+        "transactionHash" => tx_hash,
+        "transactionIndex" => "0x2",
+        "blockHash" => "0x" <> String.duplicate("cd", 32),
+        "blockNumber" => "0x10",
+        "from" => "0x" <> String.duplicate("11", 20),
+        "to" => nil,
+        "cumulativeGasUsed" => "0x5208",
+        "gasUsed" => "0x5208",
+        "effectiveGasPrice" => "0x3b9aca00",
+        "status" => "0x1",
+        "contractAddress" => nil,
+        "logs" => [],
+        "type" => "0x2"
+      }
+
+      opts = [rpc_url: "http://stub.invalid", req_options: [plug: rpc_result_plug(raw_receipt)]]
+
+      assert {:ok, parsed} = RPC.get_transaction_receipt(tx_hash, opts)
+      assert parsed == RPC.get_transaction_receipt!(tx_hash, opts)
+      assert parsed.transaction_hash == tx_hash
+      assert parsed.transaction_index == 2
+      assert parsed.block_number == 16
+      assert parsed.gas_used == 21_000
+    end
   end
 
   describe "get_transaction_count/2 input validation" do
@@ -543,6 +572,35 @@ defmodule Onchain.RPCTest do
       assert_raise RuntimeError, ~r/get_transaction_by_hash failed/, fn ->
         RPC.get_transaction_by_hash!("no_prefix")
       end
+    end
+
+    test "returns the same parsed transaction shape as the non-bang variant" do
+      tx_hash = "0x" <> String.duplicate("ab", 32)
+
+      raw_transaction = %{
+        "hash" => tx_hash,
+        "nonce" => "0x3",
+        "blockHash" => "0x" <> String.duplicate("cd", 32),
+        "blockNumber" => "0x10",
+        "transactionIndex" => "0x2",
+        "from" => "0x" <> String.duplicate("11", 20),
+        "to" => "0x" <> String.duplicate("22", 20),
+        "value" => "0x4",
+        "gas" => "0x5208",
+        "gasPrice" => "0x3b9aca00",
+        "input" => "0x",
+        "type" => "0x0",
+        "chainId" => "0x1"
+      }
+
+      opts = [rpc_url: "http://stub.invalid", req_options: [plug: rpc_result_plug(raw_transaction)]]
+
+      assert {:ok, parsed} = RPC.get_transaction_by_hash(tx_hash, opts)
+      assert parsed == RPC.get_transaction_by_hash!(tx_hash, opts)
+      assert parsed.hash == tx_hash
+      assert parsed.nonce == 3
+      assert parsed.block_number == 16
+      assert parsed.gas == 21_000
     end
   end
 
@@ -768,6 +826,13 @@ defmodule Onchain.RPCTest do
       assert_raise RuntimeError, ~r/blob_base_fee failed/, fn ->
         RPC.blob_base_fee!(rpc_url: "http://localhost:1")
       end
+    end
+  end
+
+  defp rpc_result_plug(result) do
+    fn conn ->
+      %{"id" => id} = conn |> Req.Test.raw_body() |> IO.iodata_to_binary() |> Jason.decode!()
+      Req.Test.json(conn, %{"jsonrpc" => "2.0", "id" => id, "result" => result})
     end
   end
 end

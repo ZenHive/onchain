@@ -12,16 +12,26 @@ defmodule Onchain.RPCCodegenTest do
     :eth_get_code,
     :blob_base_fee
   ]
+  @block_wrappers [
+    :get_block_receipts,
+    :get_block_transaction_count_by_hash,
+    :get_block_transaction_count_by_number,
+    :get_transaction_by_block_hash_and_index,
+    :get_transaction_by_block_number_and_index,
+    :get_block_access_list
+  ]
 
-  test "uniform RPC wrappers are declared through defrpc codegen" do
+  test "uniform and block RPC wrappers are declared through defrpc codegen" do
     ast =
       @rpc_source
       |> File.read!()
       |> Code.string_to_quoted!()
 
+    wrappers = @uniform_wrappers ++ @block_wrappers
+
     assert imports_rpc_codegen?(ast)
-    assert Enum.sort(@uniform_wrappers) == Enum.sort(macro_call_names(ast, :defrpc))
-    assert Enum.sort(@uniform_wrappers) == Enum.sort(macro_call_names(ast, :defrpc_bang))
+    assert Enum.sort(wrappers) == Enum.sort(macro_call_names(ast, :defrpc))
+    assert Enum.sort(wrappers) == Enum.sort(macro_call_names(ast, :defrpc_bang))
   end
 
   defp imports_rpc_codegen?(ast) do

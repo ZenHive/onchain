@@ -30,6 +30,19 @@ defmodule Onchain.RPC.SpecsTest do
     assert 78 = length(openrpc_methods)
   end
 
+  test "loads every block-level read used by RPC codegen" do
+    methods = [
+      "eth_getBlockReceipts",
+      "eth_getBlockTransactionCountByHash",
+      "eth_getBlockTransactionCountByNumber",
+      "eth_getTransactionByBlockHashAndIndex",
+      "eth_getTransactionByBlockNumberAndIndex",
+      "eth_getBlockAccessList"
+    ]
+
+    assert Enum.all?(methods, &is_map(Specs.lookup(&1)))
+  end
+
   test "loads scraped Erigon trace and otterscan methods" do
     assert %{description: description, params: [], returns: %{}} = Specs.lookup("trace_call")
     assert String.contains?(description, "Erigon")

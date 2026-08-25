@@ -9,12 +9,13 @@ defmodule Onchain.RPC.Codegen do
   # as macros so the shape is declared once rather than hand-copied per wrapper:
   #
   #   * `defrpc/2` — the read function for wrappers whose body reduces to
-  #     "(optionally validate a single arg) → do_rpc → maybe decode".
+  #     "validate positional args → do_rpc → maybe decode".
   #   * `defrpc_bang/2` — the `name!` variant that unwraps `{:ok, v}` / raises on error.
   #
-  # Wrappers with bespoke bodies (nested-map params, multi-clause dispatch,
-  # response post-parsing, filter whitelists, deserialization) stay hand-written
-  # in `Onchain.RPC`; they still use `defrpc_bang/2` for their mechanical bang.
+  # Wrappers outside the declared validator/decoder shapes (nested-map params,
+  # multi-clause dispatch, filter whitelists, bespoke deserialization) stay
+  # hand-written in `Onchain.RPC`; they still use `defrpc_bang/2` for their
+  # mechanical bang.
   # This mirrors Ecto/Phoenix codegen: a narrow macro for the common case, plain
   # functions for the outliers — rather than growing one macro past its contract.
   #
@@ -32,17 +33,30 @@ defmodule Onchain.RPC.Codegen do
       doc: "JSON-RPC method name, e.g. \"eth_getBalance\"."
     ],
     arg: [
-      type: {:in, [:none, :address, :data]},
+      type:
+        {:in,
+         [
+           :none,
+           :address,
+           :data,
+           :block,
+           :block_hash,
+           :block_and_index,
+           :block_hash_and_index
+         ]},
       default: :none,
       doc:
         "Leading positional argument shape. :none → no args (params []); " <>
           ":address → validated address + normalized :block option (params [hex_addr, block]); " <>
-          ":data → 0x-hex gate on the raw value (params [data])."
+          ":data → 0x-hex gate on the raw value (params [data]); block shapes normalize " <>
+          "block references and optional transaction indexes."
     ],
     decode: [
-      type: {:in, [nil, :hex_unsigned]},
+      type: {:in, [nil, :hex_unsigned, :nullable_hex_unsigned, :receipt_list, :transaction]},
       default: nil,
-      doc: "Result decoder forwarded to do_rpc/3. nil leaves the raw RPC result untouched."
+      doc:
+        "Result decoder. nil leaves the raw result untouched; :hex_unsigned uses cartouche; " <>
+          "nullable quantities, receipt lists, and transactions use Onchain's existing parsers."
     ]
   ]
 
@@ -71,7 +85,11 @@ defmodule Onchain.RPC.Codegen do
         d -> quote(do: Keyword.put(to_rpc_opts(opts), :decode, unquote(d)))
       end
 
-    build_rpc(name, method, arg, rpc_opts)
+    if arg in [:none, :address, :data] do
+      build_rpc(name, method, arg, rpc_opts)
+    else
+      build_block_rpc(name, method, arg, decode)
+    end
   end
 
   defp ensure_known_method!(method) do
@@ -129,6 +147,86 @@ defmodule Onchain.RPC.Codegen do
           do_rpc(unquote(method), [data], unquote(rpc_opts))
         end
       end
+    end
+  end
+
+  defp build_block_rpc(name, method, :block, decode) do
+    result = block_rpc_result(method, quote(do: [block]), decode)
+
+    quote do
+      def unquote(name)(block, opts \\ []) do
+        with {:ok, block} <- normalize_block(block) do
+          unquote(result)
+        end
+      end
+    end
+  end
+
+  defp build_block_rpc(name, method, :block_hash, decode) do
+    result = block_rpc_result(method, quote(do: [block_hash]), decode)
+
+    quote do
+      def unquote(name)(block_hash, opts \\ []) do
+        with {:ok, block_hash} <- ensure_block_hash(block_hash) do
+          unquote(result)
+        end
+      end
+    end
+  end
+
+  defp build_block_rpc(name, method, :block_and_index, decode) do
+    result = block_rpc_result(method, quote(do: [block, transaction_index]), decode)
+
+    quote do
+      def unquote(name)(block, transaction_index, opts \\ []) do
+        with {:ok, block} <- normalize_block(block),
+             {:ok, transaction_index} <- normalize_transaction_index(transaction_index) do
+          unquote(result)
+        end
+      end
+    end
+  end
+
+  defp build_block_rpc(name, method, :block_hash_and_index, decode) do
+    result = block_rpc_result(method, quote(do: [block_hash, transaction_index]), decode)
+
+    quote do
+      def unquote(name)(block_hash, transaction_index, opts \\ []) do
+        with {:ok, block_hash} <- ensure_block_hash(block_hash),
+             {:ok, transaction_index} <- normalize_transaction_index(transaction_index) do
+          unquote(result)
+        end
+      end
+    end
+  end
+
+  defp block_rpc_result(method, params, decode) do
+    rpc_call =
+      quote do
+        do_rpc(unquote(method), unquote(params), to_rpc_opts(opts))
+      end
+
+    case decode do
+      nil ->
+        rpc_call
+
+      :hex_unsigned ->
+        quote do
+          do_rpc(
+            unquote(method),
+            unquote(params),
+            Keyword.put(to_rpc_opts(opts), :decode, :hex_unsigned)
+          )
+        end
+
+      :nullable_hex_unsigned ->
+        quote(do: decode_nullable_quantity_result(unquote(rpc_call)))
+
+      :receipt_list ->
+        quote(do: decode_receipt_list_result(unquote(rpc_call)))
+
+      :transaction ->
+        quote(do: decode_transaction_result(unquote(rpc_call)))
     end
   end
 end
