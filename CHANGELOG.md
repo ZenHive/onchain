@@ -16,8 +16,9 @@ Completed roadmap tasks.
   "your node can't do this" from "your call was wrong."
 
   `do_rpc/3` and `batch/2` now classify, so a codegen'd wrapper, a hand-written
-  wrapper, `call/3` and a batched call all return the same tag — including when
-  the refusal is a batch response's top-level error rather than one item's:
+  wrapper, `call/3` and a batched call apply the same rules to the same wire
+  response — including when the refusal is a batch response's top-level error
+  rather than one item's:
 
   | Tag | Meaning |
   | --- | --- |
@@ -37,6 +38,15 @@ Completed roadmap tasks.
   for an unimplemented method is indistinguishable from a genuine bad-params
   error, so it is left unclassified. `test/onchain/rpc/node_refusal_integration_test.exs`
   pins both against the live endpoints.
+
+  Live-verified via tidewave against Alchemy mainnet on 2026-08-25, which turned
+  up a third asymmetry worth knowing: the *classifier* is uniform across call
+  modes, but the *provider* is not. Historical `eth_feeHistory` answers `-32001`
+  to a single call and a generic `-32000 "Internal error"` to the byte-identical
+  request inside an array batch, so batching can downgrade a classifiable
+  refusal to an unclassifiable one. `-32000 "Internal error"` is left
+  unclassified on purpose — it is indistinguishable from a genuine internal
+  failure. Issue capability probes as single calls.
 
   Adds `Onchain.RPCCase.limited_rpc_url!/0` (`ETHEREUM_LIMITED_RPC_URL` or
   `ETHEREUM_ALCHEMY_URL`), the first test seam that reaches a deliberately

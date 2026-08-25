@@ -61,8 +61,11 @@ your provider serves:
 | Methods the node does not implement (`eth_getBlockAccessList`, `eth_baseFee`, …) | a node that serves them, or a portable construction (`base_fee/1` reads the block header instead of `eth_baseFee`) | `{:error, {:method_not_found, map}}` |
 
 Each of those error terms is classified on the shared `Onchain.RPC` result path
-so a codegen'd wrapper, a hand-written wrapper, `call/3` and `batch/2` return
-the same tag. Unrecognized JSON-RPC codes still arrive as `{:error, {:rpc_error, map}}`.
+so a codegen'd wrapper, a hand-written wrapper, `call/3` and `batch/2` apply the
+same rules to the same wire response. Note that a provider may not send the same
+wire response in both modes — Alchemy reports pruned history as `-32001` to a
+single call but as a generic `-32000 "Internal error"` inside an array batch, so
+a batched capability probe can come back unclassified. Unrecognized JSON-RPC codes still arrive as `{:error, {:rpc_error, map}}`.
 See `Onchain.RPC`'s moduledoc § "Node-capability refusals" for the pinned
 message shapes and for the finding that `-32001` is **not** uniquely pruned
 history (Alchemy answers it for some unimplemented methods too).

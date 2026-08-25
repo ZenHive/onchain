@@ -77,5 +77,38 @@ defmodule Onchain.RPC.NodeRefusalIntegrationTest do
     end
   end
 
+  describe "call mode changes the provider's wire response" do
+    # The classifier is uniform across call modes; the provider is not. Observed
+    # live on Alchemy mainnet 2026-08-25 — the byte-identical eth_feeHistory
+    # request answers -32001 as a single call and a generic -32000 "Internal
+    # error" inside a JSON-RPC array batch, alone or alongside a healthy call.
+    # -32000 "Internal error" stays unclassified on purpose: it is
+    # indistinguishable from a genuine internal failure, and the classifier does
+    # not invent a distinction the node declines to make.
+    test "pruned eth_feeHistory is {:unavailable, map} single but unclassified batched" do
+      opts = limited_opts()
+      params = ["0x1", Onchain.Hex.from_integer(@historical_block), [50]]
+
+      assert {:error, {:unavailable, %{code: -32_001, message: @alchemy_unable}}} =
+               RPC.call("eth_feeHistory", params, opts)
+
+      assert {:error, {:rpc_error, %{code: -32_000, message: "Internal error"}}} =
+               RPC.batch([{"eth_feeHistory", params}], opts)
+
+      assert {:error, {:rpc_error, %{code: -32_000, message: "Internal error"}}} =
+               RPC.batch([{"eth_blockNumber", []}, {"eth_feeHistory", params}], opts)
+    end
+
+    test "a batched capability refusal the provider reports identically still classifies" do
+      opts = limited_opts()
+
+      assert {:error, {:method_not_found, %{code: -32_600, message: @alchemy_base_fee_unavailable}}} =
+               RPC.batch([{"eth_blockNumber", []}, {"eth_baseFee", []}], opts)
+
+      assert {:error, {:namespace_unavailable, %{code: -32_600, message: @alchemy_trace_tier}}} =
+               RPC.batch([{"trace_block", [Onchain.Hex.from_integer(@historical_block)]}], opts)
+    end
+  end
+
   defp limited_opts, do: [rpc_url: Onchain.RPCCase.limited_rpc_url!()]
 end

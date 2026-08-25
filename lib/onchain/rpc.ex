@@ -45,10 +45,21 @@ defmodule Onchain.RPC do
   that namespace on the current plan, or the node cannot complete the request
   (historical state pruned, method the gateway does not route, transient
   overload). Classification runs once on the shared `do_rpc/3` result path and
-  again on `batch/2`'s decode path, so a codegen'd wrapper, a hand-written
-  wrapper, `call/3` and a batched call all return the same term for the same
-  refusal — including when the refusal is the batch response's top-level error
-  rather than one item's. Unrecognized codes keep `{:error, {:rpc_error, map}}`
+  again on `batch/2`'s decode path (both item-level and top-level batch errors),
+  so a codegen'd wrapper, a hand-written wrapper, `call/3` and a batched call
+  apply the same rules to the same wire response.
+
+  The classifier is uniform; the provider's wire response is not. Verified live
+  on Alchemy mainnet 2026-08-25: historical `eth_feeHistory` at block 20_000_000
+  answers `-32001 "Unable to complete request at this time."` as a single call
+  (classified `{:unavailable, map}`), but the byte-identical request inside a
+  JSON-RPC array batch answers `-32000 "Internal error"` — alone or alongside a
+  healthy call — which stays `{:rpc_error, map}`. That is not a gap in the
+  classifier: `-32000 "Internal error"` is indistinguishable from a genuine
+  internal failure, and tagging it would invent a distinction the node does not
+  make. Batching can therefore downgrade a classifiable refusal to an
+  unclassifiable one; when a caller needs the capability signal, issue that
+  probe as a single call. Unrecognized codes keep `{:error, {:rpc_error, map}}`
   unchanged — the classifier names distinguishable cases, it does not guess.
 
   Each classified map retains the observed `:code` and `:message` (and `:data`
