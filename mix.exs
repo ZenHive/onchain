@@ -58,11 +58,15 @@ defmodule Onchain.MixProject do
       # `descripex` narrows to `~> 0.12.0`, matching what this package now
       # declares directly. 0.7.0 widens `JsonRpc.build_request/2`'s spec to
       # accept positional lists, which is what let the `@dialyzer` suppression
-      # in `Onchain.Subscription` go away. Three-segment (caps at < 0.8.0)
-      # because zen_websocket has now shipped three consecutive minors it
-      # labels breaking for consumers — a two-segment `~> 0.7` would absorb the
-      # fourth one silently.
-      {:zen_websocket, "~> 0.7.0"},
+      # in `Onchain.Subscription` go away. 0.8.0 is a documentation-accuracy
+      # release — no runtime change reaches this package: the three defects it
+      # fixes (`send_message/2` takes an encoded binary, `heartbeat_interval` is
+      # not a connect option, non-`connect/2` start paths need an explicit
+      # `:handler`) are all things `Onchain.Subscription` already did correctly.
+      # Three-segment (caps at < 0.9.0) because zen_websocket keeps shipping
+      # minors it labels breaking for consumers — a two-segment `~> 0.8` would
+      # absorb the next one silently.
+      {:zen_websocket, "~> 0.8.0"},
 
       # Dev/test tooling
       # Req.Test plug-based transport stubbing (req's :plug is optional);

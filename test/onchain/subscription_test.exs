@@ -85,9 +85,10 @@ defmodule Onchain.SubscriptionTest do
     end
   end
 
-  # zen_websocket 0.4.x delivers JSON text frames as decoded maps to the handler.
-  # These tests pin the dispatch path to the new contract.
-  describe "build_internal_handler/2 — zen_websocket 0.4.x contract" do
+  # zen_websocket delivers JSON text frames to the handler already decoded into
+  # maps (introduced in 0.4.x, re-confirmed against 0.8.0's docs pass). These
+  # tests pin the dispatch path to that contract.
+  describe "build_internal_handler/2 — zen_websocket decoded-frame contract" do
     setup do
       agent = start_agent!()
 

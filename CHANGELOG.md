@@ -98,6 +98,24 @@ Completed roadmap tasks.
 
 ### Changed
 
+- **`{:zen_websocket, "~> 0.7.0"}` → `{:zen_websocket, "~> 0.8.0"}`.** 0.8.0 is a
+  documentation-accuracy release: the reference layer (`@doc`/`@spec`, telemetry
+  and `Config` tables) was already correct, and every defect it fixes was in
+  copy-pasteable example code. None of them reached this package —
+  `Onchain.Subscription` already encodes with `Jason.encode!/1` before
+  `Client.send_message/2` (the docs passed raw maps at twelve call sites), never
+  sets the non-existent `heartbeat_interval:` connect option (the real knob is
+  `heartbeat_config`, default `:disabled`), and connects through
+  `Client.connect/2`, the one start path that installs a parent-forwarding
+  handler rather than the discarding default. The rest of 0.8.0 is
+  Descripex-surface metadata (`describe/0` omits Client-owned internal managers;
+  wire-derived inputs reclassified `:value` → `:exchange_data`), a generated
+  `@spec` on `defrpc` functions, and 16 previously-unrun doctests. No runtime
+  dependency of zen_websocket moved. The bound stays three-segment (now
+  `< 0.9.0`) because zen_websocket keeps shipping minors it labels breaking for
+  consumers. Suite green on the bump (885 tests, dialyzer clean); offline only —
+  `:integration` and `:differential` were not run.
+
 - **`cartouche` 0.7.1 → 0.8.0 and `hieroglyph` 1.6.2 → 1.7.0 in the lock.**
   Both resolve inside the existing `{:cartouche, "~> 0.6"}` requirement, so no
   bound moved and no `Onchain` signature changed. hieroglyph 1.7.0 carries two
