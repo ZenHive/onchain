@@ -66,7 +66,7 @@ defmodule Onchain.Contract do
   )
 
   @spec call(String.t() | binary(), String.t(), list(), String.t(), keyword()) ::
-          {:ok, list()} | {:error, term()}
+          {:ok, list() | map()} | {:error, term()}
   def call(address, signature, params, return_type, opts \\ []) do
     with {:ok, addr_bin} <- Address.validate(address),
          {:ok, calldata} <- ABI.encode_call(signature, params),
@@ -108,7 +108,7 @@ defmodule Onchain.Contract do
     }
   )
 
-  @spec call!(String.t() | binary(), String.t(), list(), String.t(), keyword()) :: list()
+  @spec call!(String.t() | binary(), String.t(), list(), String.t(), keyword()) :: list() | map()
   def call!(address, signature, params, return_type, opts \\ []) do
     case call(address, signature, params, return_type, opts) do
       {:ok, values} -> values

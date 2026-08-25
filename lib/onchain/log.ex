@@ -346,7 +346,7 @@ defmodule Onchain.Log do
   end
 
   @doc false
-  # Address is right-padded in 32 bytes — take last 20. Other static value types
+  # Address is left-padded in 32 bytes — take last 20. Other static value types
   # (uint256, int256, bool, bytes32, …) decode as a single ABI word.
   @spec decode_static_indexed_value(binary(), String.t(), keyword()) ::
           {:ok, term()} | {:error, term()}
