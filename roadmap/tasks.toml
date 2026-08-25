@@ -76,6 +76,11 @@ phase = 12
 order = 6
 description = "ERC standard parsers/evaluators (ERC-7730 clear-signing descriptors)."
 
+[bundles.abi_decode_hardening]
+phase = 12
+order = 7
+description = "Thread hieroglyph decode options (strict mode) through the ABI/Contract/Log decode surface."
+
 # ============================================================================
 # Phase 7 — DEX Infrastructure
 # ============================================================================
@@ -815,3 +820,27 @@ Confirmed 2026-08-24 on muex 0.8.3 (released the same day; Oeditus/muex#20 close
 """
 created_at = "2026-08-23"
 scored_at = "2026-08-23"
+
+[[task]]
+id = 88
+phase = 12
+bundle = "abi_decode_hardening"
+status = "pending"
+title = "Expose hieroglyph's strict decode mode through the Onchain.ABI, Contract and Log decode surface"
+scores = { d = 4, b = 7, u = 6 }
+markers = ["security"]
+acceptance_criteria = ["Onchain.ABI.decode_response, decode_types, decode_error and their bang variants accept an optional trailing keyword list forwarded to hieroglyph; existing arity call sites compile and behave unchanged", "Onchain.Contract.call and Onchain.Log.decode_event accept and forward decode options the same way", "With strict: true, each violation class hieroglyph documents — non-zero high padding on bool/uint/int, trailing bytes after the declared payload, length prefix exceeding available data — surfaces as a tagged error tuple consistent with each module's documented error table, asserted by unit tests with hand-built non-canonical payloads", "Default behavior without opts is byte-identical to today, demonstrated by the existing suites passing unmodified", "api() blocks and moduledoc error tables document the option", "mix ci passes"]
+out_of_scope = ["Making strict decoding a default anywhere — defaults stay permissive", "onchain_aave's adoption of strict decoding — its own roadmap tracks that", "New strict semantics beyond what hieroglyph implements"]
+touches = ["lib/onchain/abi.ex", "lib/onchain/contract.ex", "lib/onchain/log.ex", "test/onchain/abi_test.exs", "test/onchain/contract_test.exs", "test/onchain/log_test.exs", "CHANGELOG.md"]
+cross_repo = [{ repo = "onchain_aave", task_id = 65, relation = "related" }]
+assignee = "grok"
+model = "grok-4.6"
+body = """
+hieroglyph has shipped a strict decode mode since 1.5.0: `strict: true` rejects non-canonical ABI payloads — non-zero high padding on bool/uint/int, trailing bytes after the declared payload, string/bytes length prefixes exceeding the available data — as `{:error, {:strict_violation, detail}}` from ABI.decode/3, ABI.decode_call/3, ABI.decode_event/4 and ABI.decode_error/3. Through this library's wrappers the mode is unreachable except via decode_call: Onchain.ABI.decode_response/2 and decode_error/2 take no options and call hieroglyph without any, and Onchain.Contract.call and Onchain.Log.decode_event give the caller no way to pass options either (verified by reading lib/onchain/abi.ex and lib/onchain/log.ex, 2026-08-25; decode_call/3 already forwards opts).
+
+This is a published package whose consumers decode bytes they do not control: responses from whatever RPC endpoint they configure, revert blobs, third-party calldata, and event logs. Thread an optional trailing options keyword through the decode surface as additive arities, forwarding to hieroglyph unchanged. Strict violations surface as tagged tuples consistent with each module's documented error table; bang variants raise. Nothing about the permissive default may change.
+
+Dispatch trigger: public API change on the family's core package, on the decode path every money-handling consumer sits on.
+"""
+created_at = "2026-08-25"
+scored_at = "2026-08-25"
