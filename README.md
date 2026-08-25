@@ -55,8 +55,17 @@ provider serves:
 
 | Surface | Requirement | Symptom without it |
 | --- | --- | --- |
-| Historical reads — any `block` parameter older than ~128 blocks (`eth_call`, `eth_getBalance`, `eth_getProof`, `eth_feeHistory` at an old block) | an **archive** node, or a hosted plan that retains history | `-32001 Unable to complete request`, or a "missing trie node" error, depending on client |
-| `Onchain.Subscription` (`eth_subscribe`) | a **WebSocket** endpoint (`wss://`), which not every plan includes | connection refused, or `-32601 Method not found` over HTTP |
+| Historical reads — any `block` parameter older than ~128 blocks (`eth_call`, `eth_getBalance`, `eth_getProof`, `eth_feeHistory` at an old block) | an **archive** node, or a hosted plan that retains history | `{:error, {:unavailable, map}}` (`-32001 Unable to complete request` on Alchemy), or a "missing trie node" error, depending on client |
+| `Onchain.Subscription` (`eth_subscribe`) | a **WebSocket** endpoint (`wss://`), which not every plan includes | connection refused, or `{:error, {:method_not_found, map}}` over HTTP |
+| `trace_*` / `debug_*` on a free hosted plan | a plan that serves that namespace | `{:error, {:namespace_unavailable, map}}` (Alchemy: `-32600` "...not available on the Free tier") |
+| Methods the node does not implement (`eth_getBlockAccessList`, `eth_baseFee`, …) | a node that serves them, or a portable construction (`base_fee/1` reads the block header instead of `eth_baseFee`) | `{:error, {:method_not_found, map}}` |
+
+Each of those error terms is classified on the shared `Onchain.RPC` result path
+so a codegen'd wrapper, a hand-written wrapper, and `call/3` return the same
+tag. Unrecognized JSON-RPC codes still arrive as `{:error, {:rpc_error, map}}`.
+See `Onchain.RPC`'s moduledoc § "Node-capability refusals" for the pinned
+message shapes and for the finding that `-32001` is **not** uniquely pruned
+history (Alchemy answers it for some unimplemented methods too).
 
 Notably *not* on that list: `Onchain.RPC.base_fee/1` and `blob_base_fee/1`. Both read
 from the block header rather than calling the client-specific `eth_baseFee` /

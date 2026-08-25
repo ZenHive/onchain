@@ -30,10 +30,58 @@ defmodule Onchain.RPC do
   - Tx hash validation: `{:error, {:invalid_tx_hash, input}}` (must be 32 bytes)
   - Transaction index validation: `{:error, {:invalid_transaction_index, input}}`
   - RPC/network errors: `{:error, {:rpc_error, map}}`
+  - Method the node does not implement: `{:error, {:method_not_found, map}}`
+  - Namespace disabled on the provider plan: `{:error, {:namespace_unavailable, map}}`
+  - Node could not complete the request: `{:error, {:unavailable, map}}`
 
   For RPC errors, the map always has at least a `:message` key. JSON-RPC error
   responses from the node include `:code`; network/transport errors are wrapped
   with `inspect/1` as the message.
+
+  ### Node-capability refusals
+
+  A weaker node than this repo's archive endpoint routinely refuses a call for
+  one of three reasons: the method is not implemented, the provider has disabled
+  that namespace on the current plan, or the node cannot complete the request
+  (historical state pruned, method the gateway does not route, transient
+  overload). Classification runs once on the shared `do_rpc/3` result path, so
+  a codegen'd wrapper, a hand-written wrapper, and `call/3` all return the same
+  term for the same refusal. Unrecognized codes keep `{:error, {:rpc_error, map}}`
+  unchanged — the classifier names distinguishable cases, it does not guess.
+
+  Each classified map retains the observed `:code` and `:message` (and `:data`
+  when the node sent it). Branch on the tag; inspect the map when you need the
+  wire detail.
+
+  - `{:error, {:method_not_found, map}}` — this node does not implement the
+    method. The reliable standard signal is JSON-RPC `-32601` ("Method not
+    found"). Hosted providers often misuse `-32600` ("Invalid Request") instead:
+    Alchemy mainnet answers `-32600` `"Unsupported method: <method> on ETH_MAINNET"`
+    and `-32600` `"eth_baseFee is not available on the ETH_MAINNET..."`. Those
+    two message shapes are pinned from live responses; a bare `-32600` without
+    them still passes through as `{:rpc_error, map}`, because other nodes use
+    that code for genuinely malformed requests. Callers should pick a portable
+    construction (see `base_fee/1`) or a different method.
+
+  - `{:error, {:namespace_unavailable, map}}` — the method exists but this
+    provider plan has disabled the namespace. Observed on Alchemy mainnet as
+    `-32600` `"<method> is not available on the Free tier - upgrade to Pay As
+    You Go, or Enterprise for access."` for `trace_*` and `debug_*`. Callers
+    should use a plan that serves the namespace, or avoid it.
+
+  - `{:error, {:unavailable, map}}` — the node refused to complete a request it
+    otherwise accepts. Observed on Alchemy mainnet as HTTP 503 / `-32001`
+    `"Unable to complete request at this time."` for `eth_feeHistory` at block
+    20_000_000, while `eth_feeHistory` at `"latest"` succeeds on the same URL.
+    The identical wire error is also returned for some unimplemented methods
+    (`erigon_getHeaderByNumber`), so this is **not** a unique pruned-history
+    signal — treat it as "this node cannot serve this request". Callers that
+    need historical state should retry against an archive endpoint.
+
+  Codes the classifier does not name, including `-32602` ("Invalid params" —
+  also what reth answers for `eth_getStorageValues` with empty params, which is
+  indistinguishable from a genuine bad-params error), reach the caller as
+  `{:error, {:rpc_error, map}}` exactly as before.
 
   ### Revert errors (`code: 3`)
 
@@ -137,6 +185,11 @@ defmodule Onchain.RPC do
   @default_retry_backoff_ms 100
   @no_retry_max_retries 0
   @no_backoff_ms 0
+  # JSON-RPC 2.0 / observed hosted-provider refusal codes. Message patterns for
+  # -32600 and -32001 are pinned from live Alchemy mainnet responses (2026-08-25).
+  @jsonrpc_invalid_request -32_600
+  @jsonrpc_method_not_found -32_601
+  @jsonrpc_unable_to_complete -32_001
 
   # --- eth_call ---
 
@@ -1242,7 +1295,7 @@ defmodule Onchain.RPC do
   @spec do_rpc(String.t(), list(), keyword()) :: {:ok, term()} | {:error, term()}
   defp do_rpc(method, params, opts) do
     :telemetry.span(@rpc_request_event, %{method: method}, fn ->
-      result = do_rpc_with_retry(method, params, opts)
+      result = method |> do_rpc_with_retry(params, opts) |> classify_node_refusal()
       {result, rpc_request_stop_metadata(method, result)}
     end)
   end
@@ -1302,6 +1355,88 @@ defmodule Onchain.RPC do
   @spec retryable_rpc_error?({:error, {:rpc_error, map()}}) :: boolean()
   defp retryable_rpc_error?({:error, {:rpc_error, %{code: _}}}), do: false
   defp retryable_rpc_error?({:error, {:rpc_error, _}}), do: true
+
+  # Classify distinguishable node-capability refusals. Unrecognized shapes,
+  # including a `%Req.Response{}` whose body is not a JSON-RPC error, pass
+  # through byte-identical. Alchemy answers method-not-found as HTTP 400 with a
+  # JSON-RPC body (cartouche surfaces that as `%Req.Response{}` rather than
+  # decoding it), so the body is unwrapped only when the result is classified.
+  @spec classify_node_refusal({:ok, term()} | {:error, term()}) :: {:ok, term()} | {:error, term()}
+  defp classify_node_refusal({:ok, _} = ok), do: ok
+
+  defp classify_node_refusal({:error, {:rpc_error, map}} = err) when is_map(map) do
+    case jsonrpc_error_fields(map) do
+      {:ok, code, message, fields} ->
+        case refusal_tag(code, message) do
+          nil -> err
+          tag -> {:error, {tag, fields}}
+        end
+
+      :error ->
+        err
+    end
+  end
+
+  defp classify_node_refusal(other), do: other
+
+  @spec jsonrpc_error_fields(map()) :: {:ok, integer(), String.t(), map()} | :error
+  defp jsonrpc_error_fields(%{code: code, message: message} = map) when is_integer(code) and is_binary(message) do
+    {:ok, code, message, map}
+  end
+
+  defp jsonrpc_error_fields(%Req.Response{body: body}) when is_binary(body) do
+    decode_jsonrpc_error_body(body)
+  end
+
+  defp jsonrpc_error_fields(_), do: :error
+
+  @spec decode_jsonrpc_error_body(binary()) :: {:ok, integer(), String.t(), map()} | :error
+  defp decode_jsonrpc_error_body(body) do
+    case Jason.decode(body) do
+      {:ok, %{"error" => %{"code" => code, "message" => message} = error}}
+      when is_integer(code) and is_binary(message) ->
+        fields = maybe_put_error_field(%{code: code, message: message}, :data, Map.get(error, "data"))
+
+        {:ok, code, message, fields}
+
+      _ ->
+        :error
+    end
+  end
+
+  @spec refusal_tag(integer(), String.t()) :: atom() | nil
+  defp refusal_tag(@jsonrpc_method_not_found, _message), do: :method_not_found
+
+  defp refusal_tag(@jsonrpc_invalid_request, message) when is_binary(message) do
+    cond do
+      namespace_unavailable_message?(message) -> :namespace_unavailable
+      method_not_found_message?(message) -> :method_not_found
+      true -> nil
+    end
+  end
+
+  defp refusal_tag(@jsonrpc_unable_to_complete, message) when is_binary(message) do
+    if unable_to_complete_message?(message), do: :unavailable
+  end
+
+  defp refusal_tag(_code, _message), do: nil
+
+  @spec namespace_unavailable_message?(String.t()) :: boolean()
+  defp namespace_unavailable_message?(message) do
+    down = String.downcase(message)
+    String.contains?(down, "not available on the") and String.contains?(down, "tier")
+  end
+
+  @spec method_not_found_message?(String.t()) :: boolean()
+  defp method_not_found_message?(message) do
+    down = String.downcase(message)
+    String.starts_with?(down, "unsupported method:") or String.contains?(down, "is not available")
+  end
+
+  @spec unable_to_complete_message?(String.t()) :: boolean()
+  defp unable_to_complete_message?(message) do
+    message |> String.downcase() |> String.contains?("unable to complete request")
+  end
 
   @spec sleep_before_retry(non_neg_integer()) :: :ok
   defp sleep_before_retry(@no_backoff_ms), do: :ok

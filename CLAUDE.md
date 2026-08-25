@@ -83,16 +83,23 @@ users run Alchemy, Infura, or a pruned Geth. What is specific to this repo:
   that proved the two equivalent on reth v2.5.1. That comment tag is the convention:
   a non-obvious portability decision gets a `NOTE (portability):` comment naming the
   method, who serves it, and the consumer-visible error.
+- **Node-capability refusals are classified on `Onchain.RPC`'s shared `do_rpc/3`
+  path.** A method the node does not implement is `{:error, {:method_not_found, map}}`,
+  a plan-disabled namespace is `{:error, {:namespace_unavailable, map}}`, and a
+  request the node cannot complete (including historical `eth_feeHistory` on Alchemy)
+  is `{:error, {:unavailable, map}}`. Unrecognized codes stay `{:rpc_error, map}`.
+  Patterns are pinned from live Alchemy + reth responses; `-32001` is not uniquely
+  pruned history. See the module's "Node-capability refusals" section.
 - **`defrpc`'s compile-time guard does NOT enforce this.**
   `Onchain.RPC.Codegen.ensure_known_method!/1` calls `Specs.lookup/1`, which reads the
   **merged** OpenRPC + `erigon-methods.json` map — a `trace_*` Erigon method passes
   exactly as `eth_getBalance` does. `eth_baseFee` was rejected only because it is in
   *neither* file. Standard-vs-extension is a judgment call at review time, not a gate.
-- **There is no multi-endpoint test seam yet.** `Onchain.RPCCase.rpc_url!/0` returns a
-  single string and 17 integration files use it; the dual-endpoint `base_fee`
-  verification was done by manually re-running the suite with a different env var. Until
-  that seam exists, "verified portable" means you ran it against a hosted endpoint by
-  hand and can say which one — see the `node_portability` bundle in `roadmap/tasks.toml`.
+- **Limited-endpoint tests use `Onchain.RPCCase.limited_rpc_url!/0`**
+  (`ETHEREUM_LIMITED_RPC_URL` or `ETHEREUM_ALCHEMY_URL`) and flunk with setup
+  instructions when unset. Success-path dual-endpoint verification still has no
+  automatic seam — `rpc_url!/0` returns a single string — so a portability claim
+  on a *successful* read still means you ran it against a hosted endpoint by hand.
 - **Two surfaces legitimately need more than a default endpoint** and are documented as
   such in `README.md` § "Node compatibility": historical reads need an archive node,
   and `Onchain.Subscription` needs a WebSocket URL. Adding a third means adding a row.
@@ -127,7 +134,7 @@ lib/onchain/
   abi.ex            # encode_call/2, decode_response/2, decode_types/2, decode_call/3, decode_error/2
   decimal.ex        # to_decimal/2, to_basis_points/1, div_pow10/2
   fees.ex           # suggest_fees/2 — EIP-1559 fee recommendation over Cartouche.FeeHistory.t()
-  rpc.ex            # eth_call, eth_estimateGas, eth_getLogs, eth_getBalance, receipts, nonces, syncing, fee_history, base_fee (portable, via the block header), blob_base_fee, get_proof, generic call/3 passthrough
+  rpc.ex            # eth_call, eth_estimateGas, eth_getLogs, eth_getBalance, receipts, nonces, syncing, fee_history, base_fee (portable, via the block header), blob_base_fee, get_proof, generic call/3 passthrough; do_rpc classifies node refusals (:method_not_found / :namespace_unavailable / :unavailable)
   rpc/codegen.ex    # defrpc/defrpc_bang macros — NimbleOptions-backed codegen for uniform RPC wrapper bodies
   rpc/helpers.ex    # shared RPC helpers; parse_block_response/1, parse_transaction_map/1; do_rpc enriches revert maps with :data hex for decode_error/2
   signer.ex         # key management, transaction signing
@@ -202,6 +209,7 @@ Update **all affected `.md` files** after completing any roadmap task. This is p
 | Differential RPC (`:differential`) | `ONCHAIN_DIFFERENTIAL_TESTS=1` + mainnet `ETHEREUM_API_URL` | Compares `Onchain.RPC` vs `Cartouche.RPC` against one mainnet URL. Reads historical block `20_000_000` → needs archive. |
 | AA bundler (`aa_integration_test.exs`) | `BUNDLER_RPC_URL` | Read-only ERC-4337 calls. Alchemy serves these on its standard node URL. |
 | MEV relay (`mev_integration_test.exs`) | `MEV_RELAY_URL` (`https://rpc.flashbots.net`) | No `MEV_AUTH_HEADER` — Flashbots' `signature required` reply is itself the valid JSON-RPC round-trip the test asserts. |
+| Node-capability refusals (`rpc/node_refusal_integration_test.exs`) | `ETHEREUM_API_URL` (archive `-32601`) plus `ETHEREUM_LIMITED_RPC_URL` or `ETHEREUM_ALCHEMY_URL` (hosted `-32600` / `-32001`) | Flunks with the exact export commands when the limited URL is unset. |
 
 Run all three:
 
