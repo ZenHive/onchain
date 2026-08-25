@@ -15,8 +15,9 @@ Completed roadmap tasks.
   consumer had to pattern-match raw JSON-RPC codes and provider prose to tell
   "your node can't do this" from "your call was wrong."
 
-  `do_rpc/3` now classifies, so a codegen'd wrapper, a hand-written wrapper and
-  `call/3` all return the same tag:
+  `do_rpc/3` and `batch/2` now classify, so a codegen'd wrapper, a hand-written
+  wrapper, `call/3` and a batched call all return the same tag — including when
+  the refusal is a batch response's top-level error rather than one item's:
 
   | Tag | Meaning |
   | --- | --- |

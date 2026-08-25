@@ -86,6 +86,63 @@ defmodule Onchain.RPC.BatchTest do
                )
     end
 
+    # Same node refusal, same tag, whichever entry point the caller used: batch/2
+    # shares Onchain.RPC's classifier with call/3 rather than re-deriving it.
+    test "an item-level -32601 is classified as {:method_not_found, map}" do
+      StubClient.queue_response(fn _body ->
+        [
+          %{"id" => 1, "jsonrpc" => "2.0", "result" => "0x1"},
+          %{
+            "id" => 2,
+            "jsonrpc" => "2.0",
+            "error" => %{"code" => -32_601, "message" => "Method not found"}
+          }
+        ]
+      end)
+
+      assert {:error, {:method_not_found, %{code: -32_601, message: "Method not found"}}} =
+               RPC.batch(
+                 [{"eth_blockNumber", []}, {"eth_thisMethodDoesNotExistAnywhere", []}],
+                 rpc_url: "http://stub.invalid"
+               )
+    end
+
+    test "an item-level Free-tier trace refusal is {:namespace_unavailable, map}" do
+      message =
+        "trace_block is not available on the Free tier - upgrade to Pay As You Go, or Enterprise for access."
+
+      StubClient.queue_response(fn _body ->
+        [
+          %{
+            "id" => 1,
+            "jsonrpc" => "2.0",
+            "error" => %{"code" => -32_600, "message" => message}
+          }
+        ]
+      end)
+
+      assert {:error, {:namespace_unavailable, %{code: -32_600, message: ^message}}} =
+               RPC.batch([{"trace_block", ["0x1312d00"]}], rpc_url: "http://stub.invalid")
+    end
+
+    test "a top-level batch error is classified the same way as an item-level one" do
+      message = "Unable to complete request at this time."
+
+      StubClient.queue_response(fn _body ->
+        %{
+          "id" => nil,
+          "jsonrpc" => "2.0",
+          "error" => %{"code" => -32_001, "message" => message}
+        }
+      end)
+
+      assert {:error, {:unavailable, %{code: -32_001, message: ^message}}} =
+               RPC.batch(
+                 [{"eth_feeHistory", ["0x1", "0x1312d00", [50]]}],
+                 rpc_url: "http://stub.invalid"
+               )
+    end
+
     test "returns error when batch body contains a non-map response item" do
       StubClient.queue_response(fn _body ->
         [1]

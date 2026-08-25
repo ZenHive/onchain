@@ -44,9 +44,11 @@ defmodule Onchain.RPC do
   one of three reasons: the method is not implemented, the provider has disabled
   that namespace on the current plan, or the node cannot complete the request
   (historical state pruned, method the gateway does not route, transient
-  overload). Classification runs once on the shared `do_rpc/3` result path, so
-  a codegen'd wrapper, a hand-written wrapper, and `call/3` all return the same
-  term for the same refusal. Unrecognized codes keep `{:error, {:rpc_error, map}}`
+  overload). Classification runs once on the shared `do_rpc/3` result path and
+  again on `batch/2`'s decode path, so a codegen'd wrapper, a hand-written
+  wrapper, `call/3` and a batched call all return the same term for the same
+  refusal — including when the refusal is the batch response's top-level error
+  rather than one item's. Unrecognized codes keep `{:error, {:rpc_error, map}}`
   unchanged — the classifier names distinguishable cases, it does not guess.
 
   Each classified map retains the observed `:code` and `:message` (and `:data`
@@ -1523,7 +1525,7 @@ defmodule Onchain.RPC do
         decode_batch_responses(responses, ids)
 
       {:ok, %{"error" => error}} ->
-        {:error, normalize_rpc_error(error)}
+        classify_node_refusal({:error, normalize_rpc_error(error)})
 
       {:ok, other} ->
         {:error, {:rpc_error, %{message: "unexpected batch response: #{inspect(other)}"}}}
@@ -1553,7 +1555,7 @@ defmodule Onchain.RPC do
         {:cont, {:ok, [result | acc]}}
 
       %{"error" => error}, {:ok, _acc} ->
-        {:halt, {:error, normalize_rpc_error(error)}}
+        {:halt, classify_node_refusal({:error, normalize_rpc_error(error)})}
 
       nil, {:ok, _acc} ->
         {:halt, {:error, {:rpc_error, %{message: "missing batch response"}}}}
