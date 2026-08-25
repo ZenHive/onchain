@@ -604,6 +604,11 @@ These firm up as the harness conventions for the stack settle. Fill in from the 
 
 We run our own full archive Ethereum node on `blockwatch-one`. Available across all onchain projects.
 
+**This file is operator infrastructure — how *we* reach *our* node.** It is not a
+statement about what the libraries may assume. Our node is a privileged environment;
+consumers of these open-source packages run Alchemy, Infura, or a pruned Geth. The design
+law for that is `node-portability.md` — read it before wrapping any RPC method.
+
 **Access from Mac:**
 
 Reth binds JSON-RPC to `127.0.0.1` only — an SSH tunnel is the intended access path.
@@ -640,12 +645,19 @@ ETHEREUM_API_URL=http://localhost:8545 mix test.json --quiet --include integrati
 ```
 
 **If RPC connection fails (timeout, connection refused):** check the agent state and the
-log above — that is the whole diagnosis. Do NOT try to fix networking or rebind ports.
-Substituting a public provider is a poor fallback for the archive-dependent suites: a
-hosted endpoint may answer `-32001 Unable to complete request` for historical-block calls
-such as `eth_feeHistory` at block 20,000,000 depending on plan and load. If the agent is
-running and the node still doesn't answer, ask Tito to verify the node is up on
-blockwatch-one.
+log above — that is the whole diagnosis. Do NOT try to fix networking or rebind ports. If
+the agent is running and the node still doesn't answer, ask Tito to verify the node is up
+on blockwatch-one.
+
+**Don't silently swap in a public provider to get the archive-dependent suites green** —
+a hosted endpoint may answer `-32001 Unable to complete request` for historical-block
+calls such as `eth_feeHistory` at block 20,000,000 depending on plan and load, so a red
+run there tells you nothing about the code. That is a statement about *reproducing an
+archive-node test run*, *not* a ranking of endpoints — and it is the whole of its scope.
+For library work the polarity is reversed: the hosted provider is the majority consumer
+environment and our archive node is the outlier, so a hosted endpoint's refusal is
+first-class evidence about the library rather than an obstacle to route around. See
+`node-portability.md`.
 
 ## Sepolia Testnet
 
@@ -662,6 +674,69 @@ mix test.json --quiet --include integration
 ```
 
 No manual setup needed — env vars are already set in the shell profile. Tests that need Sepolia (e.g., MPP EVM integration tests) read these automatically.
+
+<!-- @-import: ~/.claude/includes/node-portability.md -->
+## Node Portability — Our Node Is Privileged, Not the Reference
+
+**We do not develop only against our own node.** These are open-source libraries other
+people run against Alchemy, Infura, pruned Geth, and self-hosted nodes of every shape.
+Our archive node (`localhost:8545`, full-history reth) is a *privileged* environment, not
+the reference one: it serves `trace_*`/`debug_*`, complete history, and client-specific
+extensions most consumer endpoints do not.
+
+Developing only against it silently encodes its capabilities as the library's
+assumptions. The failure is invisible here — it works — and lands on the consumer.
+
+### The four rules
+
+1. **Establish that a method is standard** — present in the vendored OpenRPC spec.
+   Erigon/Geth/provider extensions are not standard however reliably our node answers.
+   (Note: `Onchain.RPC.Codegen.ensure_known_method!/1` reads the *merged* OpenRPC +
+   `erigon-methods.json` map, so it does **not** enforce this distinction. Rule 1 is
+   currently a judgment call, not a compile-time gate.)
+2. **Prefer the portable construction.** If a value is reachable from a standard method,
+   read it that way — `base_fee` via the pending block header's `baseFeePerGas`, not via
+   `eth_baseFee`.
+3. **When only a non-standard method will do, say so in the `@doc`** — name who serves it
+   and the error consumers get without it — and expose a capability probe rather than
+   failing deep in a pipeline (precedent: `Onchain.Trace.available?/1`).
+4. **Verify on a second, unprivileged endpoint before claiming portability.** Green on
+   `localhost:8545` alone proves nothing. A hosted endpoint's *real refusal* is evidence;
+   our node's `{:ok, _}` is not.
+
+### The worked example (2026-08-25)
+
+cartouche 0.8.0's `base_fee/1` calls `eth_baseFee`, an **Erigon extension** absent from
+the vendored OpenRPC spec. Our reth node serves it; Alchemy mainnet answers
+`-32600 "eth_baseFee is not available on the ETH_MAINNET"`. It was caught only by
+hand-probing both endpoints. `Onchain.RPC.base_fee/1` therefore reads `baseFeePerGas`
+from the **pending** block header — portable to any EIP-1559 node, and verified
+equivalent against reth v2.5.1 in a single batch request (`eth_baseFee` == pending
+`baseFeePerGas` == 71_739_926, while `latest` was 68_871_658 — the pending header, not
+the latest one, carries `eth_baseFee`'s "next block" semantics).
+
+The inverse also exists: cartouche ships that same `eth_baseFee` wrapper while defaulting
+`:ethereum_node` to `https://mainnet.infura.io` — a consumer following cartouche's own
+README gets `-32600`.
+
+### Wording to reuse
+
+House idioms, already established in the roadmap tasks — reuse verbatim rather than
+paraphrasing:
+
+- *"a real result or its real refusal, never a skip"*
+- *"the consumer's node — not ours — as the case that matters"*
+- *"the identical green run on both endpoints is what the portability claim rests on"*
+
+### Honest limits
+
+- **No multi-endpoint test seam exists yet.** `Onchain.RPCCase.rpc_url!/0` returns a
+  single string and 17 integration files use it; the dual-endpoint `base_fee`
+  verification was done by manually re-running the whole suite with a different env var.
+  Rule 4 has no tooling today — whoever builds it should build it first.
+- **No CI in any repo** (`.github/workflows` is empty across the stack), so none of this
+  is machine-enforced beyond local `mix ci`. Real enforcement is the reviewer reading
+  `AGENTS.md`.
 
 
 <!-- Harness driver contract: onchain is registered with the harness OTP node
