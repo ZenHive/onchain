@@ -689,11 +689,20 @@ assumptions. The failure is invisible here — it works — and lands on the con
 
 ### The four rules
 
-1. **Establish that a method is standard** — present in the vendored OpenRPC spec.
-   Erigon/Geth/provider extensions are not standard however reliably our node answers.
+1. **Establish that a method is standard** — present in a **tagged release** of the
+   OpenRPC spec, not in `main`. Erigon/Geth/provider extensions are not standard however
+   reliably our node answers. **Read the tag, never the branch:** a method can sit on
+   `execution-apis@main` for months before any release carries it, and re-vendoring from
+   `main` would silently reclassify it as standard — that is exactly how `eth_baseFee`
+   would flip (see the worked example). Spec residency also proves nothing about
+   *availability*: a method merged to the spec and implemented by every major client can
+   still be refused by the endpoint your consumer uses, because hosted providers gate
+   their method allowlists independently. Rule 1 bounds the claim; only rule 4 tests it.
    (Note: `Onchain.RPC.Codegen.ensure_known_method!/1` reads the *merged* OpenRPC +
-   `erigon-methods.json` map, so it does **not** enforce this distinction. Rule 1 is
-   currently a judgment call, not a compile-time gate.)
+   `erigon-methods.json` map, so it does **not** enforce this distinction — and
+   `erigon-methods.json` is a 21-entry `ots_*`/`trace_*` scrape, not an Erigon method
+   census, so it does not carry `eth_*` extensions at all. Rule 1 is currently a judgment
+   call, not a compile-time gate.)
 2. **Prefer the portable construction.** If a value is reachable from a standard method,
    read it that way — `base_fee` via the pending block header's `baseFeePerGas`, not via
    `eth_baseFee`.
@@ -704,12 +713,24 @@ assumptions. The failure is invisible here — it works — and lands on the con
    `localhost:8545` alone proves nothing. A hosted endpoint's *real refusal* is evidence;
    our node's `{:ok, _}` is not.
 
-### The worked example (2026-08-25)
+### The worked example (2026-08-25, sharpened 2026-08-27)
 
-cartouche 0.8.0's `base_fee/1` calls `eth_baseFee`, an **Erigon extension** absent from
-the vendored OpenRPC spec. Our reth node serves it; Alchemy mainnet answers
+cartouche 0.8.0's `base_fee/1` calls `eth_baseFee` — an **Erigon-origin method**
+(erigontech/erigon#11992, 2024-09-18), adopted by reth, Nethermind and go-ethereum
+(v1.17.4) in mid-2026 and **merged into `ethereum/execution-apis` `main` on 2026-06-15**
+(PR #795) — but present in **no tagged spec release** (latest is `v1.0.0-beta.7`,
+2026-06-10, five days *before* the merge), absent from the vendored
+`openrpc-v1.0.0-beta.4.json`, and documented as supported by **neither Alchemy nor
+Infura**. Our reth node serves it; Alchemy mainnet answers
 `-32600 "eth_baseFee is not available on the ETH_MAINNET"`. It was caught only by
-hand-probing both endpoints. `Onchain.RPC.base_fee/1` therefore reads `baseFeePerGas`
+hand-probing both endpoints.
+
+**Why this example is worth more than "extension ⇒ not portable".** Spec residency is a
+*lagging* indicator of node availability and a leading indicator of nothing. Reading the
+spec today gives the **wrong** answer here — `main` says standard, the consumer's endpoint
+says `-32600`. Only the hand-probe gives the right one. That is rule 4's whole case.
+
+`Onchain.RPC.base_fee/1` therefore reads `baseFeePerGas`
 from the **pending** block header — portable to any EIP-1559 node, and verified
 equivalent against reth v2.5.1 in a single batch request (`eth_baseFee` == pending
 `baseFeePerGas` == 71_739_926, while `latest` was 68_871_658 — the pending header, not
@@ -750,6 +771,46 @@ paraphrasing:
      when actually driving harness dispatch:
        Read ~/_DATA/code/harness/skills/harness-driver/SKILL.md -->
 
+
+## Stack boundary — hieroglyph / cartouche / onchain
+
+**Cut on what defines the bytes, not on who calls the node.** Canonical statement lives in
+`cartouche/ROADMAP.md` § "Scope principle"; this is the binding summary.
+
+| Layer | Owns |
+|---|---|
+| **hieroglyph** | The ABI codec. Pure functions over types and bytes. No I/O, no chain identity, no node. |
+| **cartouche** | Everything defined by the **node's wire format**: the JSON-RPC transport, and one wrapper **plus one decoded struct** for every method in a **tagged release** of the `execution-apis` OpenRPC spec — plus transaction envelopes, signing, crypto, hex, and chain ids. |
+| **onchain** (and `onchain_*` siblings) | Everything defined by a **contract, a standard, or an off-node protocol**: ERC-*, ENS, AA, MEV, DEX, Multicall, subscriptions, vendor/bundler/relay namespaces. It **re-presents** cartouche's structs; it never re-derives them. |
+
+Routing, in one read:
+
+- **New `eth_*` / `net_*` wrapper** → cartouche, iff the method is in a **tagged** OpenRPC
+  release. Not in the spec → cartouche only with a `@doc` naming who serves it *and* a
+  capability probe. Vendor/bundler/relay namespace (`eth_sendUserOperation`,
+  `eth_sendBundle`, `eth_sendPrivateTransaction`) → onchain.
+- **Response decoding** → cartouche, always, into a cartouche struct. onchain never
+  re-derives a JSON shape the node emits.
+- **ERC standard** → onchain, or a sibling when domain-heavy (`onchain_aave`).
+- **Chain constants** → cartouche (`Cartouche.Chain`). A chain with a different tx envelope
+  gets its own package (`onchain_tempo`).
+- **Non-EVM chain** → its own package. Not cartouche, not onchain.
+
+**Why the previous rule was reversed (2026-08-27).** The old rule sent "RPC method
+wrappers" to onchain while leaving the transport and the response structs in cartouche.
+That is not a separable cut — `send_rpc/3` takes a `:decode` function, so a wrapper is
+*method string + param normalizer + pointer to a cartouche struct*, two of three parts
+already cartouche's. onchain could not own the decode without owning the struct, so it
+wrote its own. Measured cost: two mutually-incompatible `Block` representations
+(`Cartouche.Block` → struct with raw binaries; `Onchain.RPC.Helpers.parse_block_response/1`
+→ plain map with `0x` strings), ~500 LOC of duplicate decoders, twelve methods wrapped at
+both layers, a `@dialyzer {:no_match, do_rpc: 3}` suppression as the receipt, and
+`Onchain.HTTP` (34 LOC) existing only to escape cartouche's config key. No test can catch
+that class, because no module consumes both. **The old rule did not prevent the
+duplication — it caused it.**
+
+**Migrate lazily, never as a campaign.** When a task ports a method down into cartouche,
+the same task converts onchain's copy into a facade. Do not open a migration project.
 
 ## Portfolio Context
 
